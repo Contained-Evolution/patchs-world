@@ -2,10 +2,11 @@
 // GET /patch/api/state returns { patch, clock }; the browser polls it every few seconds.
 
 // Places on the island. The world side owns their positions; the Worker only uses the IDs.
-export const PLACES = ['hammock', 'shelves', 'pond', 'banana-grove', 'tall-trees', 'beach', 'lookout'];
+// hammock and shelves together are his camp. tall-trees is the jungle forest; pond includes the stream and waterfall.
+export const PLACES = ['hammock', 'shelves', 'pond', 'banana-grove', 'tall-trees', 'beach', 'lookout', 'tide-pools', 'meadow', 'cave'];
 
 // What Patch can be doing. Each maps to an animation or procedural motion in the browser.
-export const ACTIONS = ['idle', 'walk', 'run', 'climb', 'swing', 'swim', 'fish', 'eat', 'sit', 'sleep', 'think', 'write', 'phone', 'wave', 'look'];
+export const ACTIONS = ['idle', 'walk', 'run', 'climb', 'swing', 'swim', 'fish', 'eat', 'sit', 'sleep', 'think', 'write', 'phone', 'wave', 'look', 'explore', 'watch-sky'];
 
 // Needs run from 0 (empty) to 1 (full).
 export const NEEDS = ['hunger', 'energy', 'fun', 'comfort', 'social'];

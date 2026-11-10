@@ -9,8 +9,8 @@ const MAX_CATCH_UP = 2 * 24 * 60 * MINUTE;
 
 // Rough island layout for travel times. The world side places things where it likes.
 const SPOTS = {
-  hammock: [0, 0], shelves: [1, 0], pond: [4, 3], 'banana-grove': [-3, 2],
-  'tall-trees': [2, -4], beach: [6, -1], lookout: [-2, -5],
+  hammock: [0, 0], shelves: [1, 0], 'banana-grove': [-6, 4], 'tall-trees': [4, -7], pond: [7, 5],
+  beach: [13, -1], 'tide-pools': [11, -10], lookout: [-8, -11], meadow: [-10, 1], cave: [-3, -15],
 };
 
 // Change per minute while awake and asleep.
@@ -25,10 +25,14 @@ export const ACTIVITIES = [
   { action: 'eat', place: 'shelves', minutes: [4, 8], effects: { hunger: 0.045, comfort: 0.006 } },
   { action: 'fish', place: 'pond', minutes: [20, 40], effects: { fun: 0.008, hunger: 0.004, comfort: 0.003 }, appeal: 0.4 },
   { action: 'swim', place: 'pond', minutes: [10, 25], effects: { fun: 0.015, comfort: 0.005, energy: -0.0015 }, appeal: 0.5 },
-  { action: 'swing', place: 'tall-trees', minutes: [10, 30], effects: { fun: 0.018, energy: -0.0015 }, appeal: 0.6 },
+  { action: 'swing', place: 'tall-trees', minutes: [10, 25], effects: { fun: 0.018, energy: -0.0015 }, appeal: 0.3 },
   { action: 'climb', place: 'tall-trees', minutes: [8, 18], effects: { fun: 0.012, energy: -0.0015 }, appeal: 0.3 },
-  { action: 'sit', place: 'beach', minutes: [10, 25], effects: { comfort: 0.01, fun: 0.003 }, appeal: 0.3 },
-  { action: 'look', place: 'lookout', minutes: [10, 20], effects: { comfort: 0.006, fun: 0.006, social: 0.003 }, appeal: 0.4 },
+  { action: 'sit', place: 'beach', minutes: [10, 25], effects: { comfort: 0.01, fun: 0.003 }, appeal: 0.45 },
+  { action: 'explore', place: 'tall-trees', minutes: [15, 35], effects: { fun: 0.016, energy: -0.002 }, appeal: 0.5 },
+  { action: 'explore', place: 'cave', minutes: [10, 25], effects: { fun: 0.018, comfort: -0.003, energy: -0.002 }, appeal: 0.5 },
+  { action: 'explore', place: 'tide-pools', minutes: [15, 30], effects: { fun: 0.016, hunger: 0.003 }, appeal: 0.5 },
+  { action: 'watch-sky', place: 'meadow', minutes: [10, 25], effects: { comfort: 0.012, fun: 0.008, social: 0.003 }, appeal: 0.4 },
+  { action: 'look', place: 'lookout', minutes: [10, 20], effects: { comfort: 0.006, fun: 0.006, social: 0.003 }, appeal: 0.5 },
   { action: 'phone', place: 'hammock', minutes: [10, 30], effects: { social: 0.015, fun: 0.006, comfort: 0.003 }, appeal: 0.4 },
   { action: 'think', place: 'hammock', minutes: [5, 15], effects: { comfort: 0.01, social: 0.002 }, appeal: 0.2 },
   { action: 'sleep', place: 'hammock', minutes: [20, 45], effects: { energy: 0.012, comfort: 0.006 }, nap: true },
@@ -40,6 +44,8 @@ const SAYS = {
   swim: ['Splash!', 'The water is warm today!'],
   swing: ['Wheee!', 'Branch to branch to branch!', 'Sam would never catch me now!'],
   climb: ['Higher! Higher!'],
+  explore: ['What is over here?', 'Captain Patch, exploring!', 'Ooh, a shell!'],
+  'watch-sky': ['That cloud looks like a dragon. Sam would say so too.', 'I see a turtle up there!'],
   sit: ['The waves sound like they are whispering.'],
   look: ['I wonder what Sam is doing over there.', 'One day I will go see what is on that land.', 'That cloud looks like a turtle.'],
   phone: ['Let me check my messages!', 'What should I learn about today?'],
@@ -96,7 +102,7 @@ function score(choice, needs, place, recent, random) {
   for (const [need, gain] of Object.entries(choice.effects)) {
     if (gain > 0) value += Math.max(0, 0.9 - needs[need]) ** 2 * gain * 400;
   }
-  if (choice.place !== place) value -= travelMinutes(place, choice.place) * 0.03;
+  if (choice.place !== place) value -= travelMinutes(place, choice.place) * 0.012;
   if (choice.nap && needs.energy > 0.25) value -= 5;
   if (recent.includes(choice.action)) value -= 0.5;
   return value + random() * 0.5;
@@ -150,7 +156,9 @@ function travel(state, from, to, time, random, queued) {
   // Bedtime travel queues nothing; the night rule takes over once he arrives.
   state.queued = queued.minutes ? queued : null;
   const minutes = travelMinutes(from, to);
-  const action = to === 'tall-trees' || from === 'tall-trees' ? 'swing' : state.needs.hunger < 0.2 ? 'run' : 'walk';
+  // Through the forest he sometimes swings; otherwise he walks, or runs when he's very hungry.
+  const forest = to === 'tall-trees' || from === 'tall-trees';
+  const action = state.needs.hunger < 0.2 ? 'run' : forest && random() < 0.5 ? 'swing' : 'walk';
   const speed = action === 'walk' ? 1 : 0.6;
   return start(action, from, time, Math.max(1, Math.round(minutes * speed)), { target: to, effects: { energy: -0.002 } });
 }

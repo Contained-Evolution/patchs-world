@@ -80,10 +80,10 @@ main{max-width:520px;padding:24px}h1{font-weight:normal;font-size:34px;margin:0 
 <p id="now">Checking on Patch…</p>
 <small>His island is still being drawn. He's already living there.</small>
 </main><script>
-const words={eat:'eating',fish:'fishing',swim:'swimming',swing:'swinging through the trees',climb:'climbing',sit:'sitting',look:'looking out over the water',phone:'checking his phone',think:'thinking',sleep:'asleep',walk:'walking',run:'running',idle:'looking around'};
-const places={hammock:'in his hammock',shelves:'by his rope shelves',pond:'at the pond','banana-grove':'in the banana grove','tall-trees':'in the tall trees',beach:'on the beach',lookout:'at the lookout'};
+const words={eat:'eating',fish:'fishing',swim:'swimming',swing:'swinging through the trees',climb:'climbing',sit:'sitting',look:'looking out over the water',phone:'checking his phone',think:'thinking',sleep:'asleep',walk:'walking',run:'running',idle:'looking around',explore:'exploring','watch-sky':'watching the sky'};
+const places={hammock:'in his hammock',shelves:'by his rope shelves',pond:'at the pond','banana-grove':'in the banana grove','tall-trees':'in the tall trees',beach:'on the beach',lookout:'at the lookout','tide-pools':'at the tide pools',meadow:'in the meadow',cave:'at the cave'};
 async function tick(){try{const s=await (await fetch('/patch/api/state',{cache:'no-store'})).json();const p=s.patch;
-const targets={hammock:'to his hammock',shelves:'to his rope shelves',pond:'to the pond','banana-grove':'to the banana grove','tall-trees':'to the tall trees',beach:'to the beach',lookout:'to the lookout'};
+const targets={hammock:'to his hammock',shelves:'to his rope shelves',pond:'to the pond','banana-grove':'to the banana grove','tall-trees':'to the tall trees',beach:'to the beach',lookout:'to the lookout','tide-pools':'to the tide pools',meadow:'to the meadow',cave:'to the cave'};
 const where=p.target?'on his way '+targets[p.target]:places[p.place];
 document.getElementById('now').textContent='Patch is '+(words[p.action]||p.action)+' '+where+'.'+(p.says?' "'+p.says+'"':'');}catch{}}
 tick();setInterval(tick,10000);
