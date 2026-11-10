@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { places, trees, anchorFor, swingRoute, statusText, isLocalPreview } from '../src/world-state.js';
+import { places, paths, groundHeight, walkRoute, swingLoop, trees, anchorFor, swingRoute, statusText, isLocalPreview } from '../src/world-state.js';
 
 test('status describes activity, place and travel', () => {
   assert.equal(statusText({action:'fish', place:'pond'}), 'Patch is fishing at the pond.');
@@ -22,4 +22,23 @@ test('every place pair connects through nearby real tree anchors', () => {
     assert.deepEqual(route[0],anchors[closest(from)]);
     assert.deepEqual(route.at(-1),anchors[closest(to)]);
   }
+});
+
+
+test('all shared places have connected walking paths and lookout is highest', async () => {
+  const { PLACES, ACTIONS } = await import('../../shared/state.js');
+  assert.deepEqual(Object.keys(places).sort(), [...PLACES].sort());
+  for (const from of PLACES) for (const to of PLACES) {
+    assert.deepEqual(paths[from].at(-1), places[from]);
+    assert.deepEqual(walkRoute(from,to).at(-1), places[to]);
+  }
+  for (const id of PLACES.filter(id => id !== 'lookout')) assert.ok(groundHeight(...places.lookout) > groundHeight(...places[id]));
+  assert.ok(ACTIONS.includes('explore') && ACTIONS.includes('watch-sky'));
+  assert.equal(statusText({action:'explore',place:'cave'}), 'Patch is exploring the cave.');
+});
+
+test('in-place swinging cycles through multiple branches', () => {
+  const route=swingLoop();
+  assert.ok(new Set(route.map(a=>a.join(','))).size >= 3);
+  assert.deepEqual(route[0],route.at(-1));
 });
