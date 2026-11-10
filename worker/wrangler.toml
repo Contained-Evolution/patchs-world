@@ -1,0 +1,19 @@
+name = "patchs-world"
+compatibility_date = "2026-10-01"
+main = "index.mjs"
+workers_dev = false
+
+# No public route: Tenari's Worker forwards tenari.world/patch* through a service binding.
+
+[assets]
+directory = "../world/dist"
+binding = "ASSETS"
+run_worker_first = true
+
+[[durable_objects.bindings]]
+name = "PATCH_WORLD"
+class_name = "PatchWorld"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["PatchWorld"]

@@ -1,0 +1,10 @@
+{
+  "name": "patchs-world-worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "dev": "node scripts/prepare.mjs && npx wrangler dev",
+    "deploy": "node scripts/prepare.mjs && npx wrangler deploy"
+  }
+}
