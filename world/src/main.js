@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { sampleState } from '../../shared/state.js';
 import { addScenery } from './scenery.js';
 
@@ -22,7 +23,7 @@ controls.target.set(-8, 2, -3); controls.enableDamping = true; controls.minDista
 const hemi = new THREE.HemisphereLight(0xd9f5ee, 0x496d4c, 2.1); scene.add(hemi);
 const sunLight = new THREE.DirectionalLight(0xffedbe, 2.4); scene.add(sunLight);
 const mat = color => new THREE.MeshStandardMaterial({color, roughness: 1});
-const sand=mat(0xe8d394), grass=mat(0x76aa63), trunk=mat(0x826047), leaf=mat(0x337b4e), leaf2=mat(0x489858), water=mat(0x59b4b4), rock=mat(0x879a85), brown=mat(0x86513a), cream=mat(0xe3ba86);
+const sand=mat(0xe8d394), grass=mat(0x76aa63), trunk=mat(0x826047), leaf=mat(0x337b4e), leaf2=mat(0x489858), water=mat(0x59b4b4), rock=mat(0x879a85);
 // CC0 textures also used by Tenari. Paths remain relative to /patch/.
 const textureLoader = new THREE.TextureLoader();
 function detailTexture(path, repeats) {
@@ -51,10 +52,34 @@ function tree(x,z,h=7,banana=false){cylinder(trunk,x,h/2+.65,z,.24,.4,h);if(bana
 line([5,3,4],[9,3,4]);const hammock=ellipsoid(mat(0xc27555),7,2.1,4,1.9,.25,.65);line([5,3,4],[5.3,2.2,4]);line([9,3,4],[8.7,2.2,4]);
 for(let y of [2,3]){let shelf=mesh(new THREE.BoxGeometry(2,.12,.7),trunk,10,y,1);for(let x of [9.15,10.85])line([x,y,1],[x,5,1]);}ellipsoid(mat(0xe5b545),10,3.3,1,.4,.22,.25);
 const scenery = addScenery(scene);
-// Simple monkey placeholder, replaced when the authored GLB is supplied.
-const patch=new THREE.Group();scene.add(patch);ellipsoid(brown,0,1,0,.6,.75,.45,patch);const head=new THREE.Group();head.position.set(0,1.85,0);patch.add(head);ellipsoid(brown,0,0,0,.6,.55,.52,head);ellipsoid(cream,0,-.12,.43,.42,.3,.2,head);for(let x of [-.55,.55])ellipsoid(cream,x,.05,0,.22,.27,.16,head);for(let x of [-.18,.18])ellipsoid(mat(0x1e2521),x,.08,.49,.055,.07,.035,head);
-const limbs=[];for(const [x,y] of [[-.63,1.3],[.63,1.3],[-.3,.45],[.3,.45]]){let limb=new THREE.Group();limb.position.set(x,y,0);patch.add(limb);ellipsoid(brown,0,-.32,0,.16,.43,.17,limb);limbs.push(limb);}
-const tail=[];for(let i=0;i<7;i++)tail.push(ellipsoid(brown,0,0,0,.12-i*.01,.12-i*.01,.12-i*.01,patch));
+// The branch provides a fixed anchor for Patch's swinging arc.
+const swingAnchor = new THREE.Vector3(2.5, 6.8, -8);
+const branch = cylinder(trunk, 1.8, 6.8, -8, .17, .22, 3); branch.rotation.z = Math.PI / 2;
+const patch = new THREE.Group(); scene.add(patch);
+let mixer, clips = {}, currentAction, currentName, swingStarted = false;
+new GLTFLoader().load(new URL('./assets/patch.glb', document.baseURI).href, gltf => {
+  patch.add(gltf.scene);
+  mixer = new THREE.AnimationMixer(gltf.scene);
+  for (const clip of gltf.animations) {
+    // Locomotion is controlled by the island, not the source animation's travel.
+    const tracks = clip.tracks.map(track => {
+      const copy = track.clone();
+      if (/(?:mixamorig[:_]?Hips).*\.position$/i.test(copy.name) && ['walk','run','swing','swim'].includes(clip.name)) {
+        for (let i = 0; i < copy.values.length; i += 3) { copy.values[i] = copy.values[0]; copy.values[i + 2] = copy.values[2]; }
+      }
+      return copy;
+    });
+    clips[clip.name] = new THREE.AnimationClip(clip.name, clip.duration, tracks);
+  }
+}, undefined, error => { console.error('Unable to load Patch', error); $('#error').hidden = false; });
+function playClip(name, once = false) {
+  if (!mixer || !clips[name] || currentName === name) return;
+  const next = mixer.clipAction(clips[name]);
+  next.reset(); next.enabled = true; next.setLoop(once ? THREE.LoopOnce : THREE.LoopRepeat, once ? 1 : Infinity);
+  next.clampWhenFinished = once;
+  if (currentAction) currentAction.fadeOut(.2);
+  next.fadeIn(.2).play(); currentAction = next; currentName = name;
+}
 const places={'hammock':[7,4],shelves:[10,1],pond:[-3,4],'banana-grove':[-8,-3],'tall-trees':[1,-8],beach:[0,12],lookout:[12,-3]};
 let state=structuredClone(sampleState), live=false, lastLive=0; const start=performance.now();
 async function poll(){try{let r=await fetch('/patch/api/state',{cache:'no-store'});if(!r.ok)throw Error();let next=await r.json();if(!next.patch||!next.clock||!places[next.patch.place])throw Error();state=next;live=true;lastLive=performance.now();}catch{if(performance.now()-lastLive>15000)live=false;}}
@@ -68,9 +93,21 @@ const rainGeo=new THREE.BufferGeometry(),drops=[];for(let i=0;i<500;i++)drops.pu
 let last=performance.now();patch.position.set(-8,.9,-3);const follow=new THREE.Vector3();
 function frame(now){requestAnimationFrame(frame);const dt=Math.min((now-last)/1000,.05);last=now;let t=(now-start)/1000; scenery.update(t);
 if(!live){let n=Math.floor(t/9);state={patch:{...sampleState.patch,action:mockActions[n%mockActions.length],place:ids[Math.floor(n/2)%ids.length],target:ids[(Math.floor(n/2)+1)%ids.length],says:null},clock:{dayFraction:(.38+t/240)%1,weather:['clear','cloudy','rain','storm'][Math.floor(t/60)%4]}};}
-const {action,place,target,says}=state.patch;const dest=places[(action==='walk'||action==='run'||action==='swing')&&places[target]?target:place]||places.beach;let dx=dest[0]-patch.position.x,dz=dest[1]-patch.position.z,dist=Math.hypot(dx,dz);if(dist>.1){let step=Math.min(dist,dt*(action==='run'?4:action==='swing'?3:1.7));patch.position.x+=dx/dist*step;patch.position.z+=dz/dist*step;patch.rotation.y=Math.atan2(dx,dz);}
-patch.position.y=action==='swim'?.55:action==='swing'?2.7+Math.abs(Math.sin(t*2))*.8:action==='climb'?1+Math.abs(Math.sin(t))*2:action==='sleep'&&place==='hammock'?2.2:.9;
-patch.rotation.z=action==='sleep'?Math.PI/2:action==='swing'?Math.sin(t*2)*.3:0;let moving=dist>.15||action==='walk'||action==='run';limbs.forEach((l,i)=>{l.rotation.x=moving?Math.sin(t*(action==='run'?11:6)+(i%2)*Math.PI+(i>1?Math.PI:0))*.7:Math.sin(t*2+i)*.08;});if(action==='wave')limbs[1].rotation.z=2.4+Math.sin(t*6)*.3;if(action==='eat'||action==='write'||action==='phone'||action==='fish')limbs[1].rotation.x=-1.4+Math.sin(t*3)*.25;if(action==='swing'||action==='climb'){limbs[0].rotation.z=-2.4;limbs[1].rotation.z=2.4;}head.rotation.y=Math.sin(t*.8)*.22;tail.forEach((part,i)=>part.position.set(Math.sin(t*2-i*.35)*.18,1-i*.03+Math.sin(i*.4+t)*.1,-.5-i*.18));
+const {action,place,target,says}=state.patch;const dest=places[(action==='walk'||action==='run'||action==='swing')&&places[target]?target:place]||places.beach;let dx=dest[0]-patch.position.x,dz=dest[1]-patch.position.z,dist=Math.hypot(dx,dz);if(action !== 'swing' && dist>.1){let step=Math.min(dist,dt*(action==='run'?4:1.7));patch.position.x+=dx/dist*step;patch.position.z+=dz/dist*step;patch.rotation.y=Math.atan2(dx,dz);}
+if (action === 'swing') {
+  if (!swingStarted && mixer) { swingStarted = true; playClip('swing-start', true); }
+  if (mixer && currentName === 'swing-start' && currentAction.time >= clips['swing-start'].duration) playClip('swing');
+  const angle = Math.sin(t * 1.8) * .6, radius = 1.8;
+  patch.position.set(swingAnchor.x + Math.sin(angle) * radius, swingAnchor.y - Math.cos(angle) * radius, swingAnchor.z);
+  patch.rotation.z = -angle;
+} else {
+  swingStarted = false;
+  patch.position.y = action === 'swim' ? .55 : action === 'climb' ? 2.4 : action === 'sleep' && place === 'hammock' ? 2.2 : .9;
+  patch.rotation.z = 0;
+  const names = { idle:'idle', think:'idle', phone:'idle', write:'idle', look:'look-around', wave:'look-around', walk:'walk', run:'run', climb:'hang', swim:'swim', fish:'sit', sit:'sit', sleep:'sleep', eat:'idle' };
+  playClip(names[action] || 'idle', action === 'sit' || action === 'fish');
+}
+if (mixer) mixer.update(dt);
 $('#bubble').hidden=!says;$('#bubble').textContent=says||'';
 let day=Number.isFinite(state.clock.dayFraction)?state.clock.dayFraction:.5;let daylight=THREE.MathUtils.smoothstep(Math.sin((day-.25)*Math.PI*2),-.12,.2);let weather=state.clock.weather;let overcast=weather==='cloudy'||weather==='rain'||weather==='storm';sky.copy(skyNight).lerp(skyDay,daylight*(overcast?.65:1));scene.background=sky;scene.fog.color.copy(sky);hemi.intensity=.3+daylight*(overcast?1:1.8);sunLight.intensity=daylight*(overcast?.6:2.4);let angle=(day-.25)*Math.PI*2;sun.position.set(Math.cos(angle)*90,Math.sin(angle)*90,0);moon.position.copy(sun.position).multiplyScalar(-1);sunLight.position.copy(sun.position);stars.material.opacity=1-daylight;stars.visible=daylight<.98;clouds.forEach((c,i)=>{c.visible=overcast||i<5;c.position.x+=dt*.14;if(c.position.x>55)c.position.x=-55;});rain.visible=weather==='rain'||weather==='storm';if(rain.visible)rain.position.y=-(t*12%30);
 follow.set(patch.position.x,patch.position.y+1,patch.position.z);let delta=follow.clone().sub(controls.target).multiplyScalar(Math.min(1,dt*2));controls.target.add(delta);camera.position.add(delta);controls.update();renderer.render(scene,camera);}
