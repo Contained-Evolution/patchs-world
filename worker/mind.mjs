@@ -63,6 +63,18 @@ function systemMessage() {
   return { role: 'system', content: `${PERSONA}\n\nYour memories from before the island:\n${childhoodText()}` };
 }
 
+// Needs run 0 (empty) to 1 (full); the model reads them as words so a full tummy never sounds hungry.
+const NEED_WORDS = {
+  hunger: ['starving', 'hungry', 'a little peckish', 'full'],
+  energy: ['exhausted', 'tired', 'okay', 'full of energy'],
+  fun: ['very bored', 'a bit bored', 'having fun', 'having lots of fun'],
+  comfort: ['very uncomfortable', 'a bit restless', 'comfy', 'very cozy'],
+  social: ['very lonely', 'a bit lonely', 'okay', 'happy with company'],
+};
+export function feelings(needs) {
+  return Object.entries(NEED_WORDS).map(([need, words]) => words[Math.min(3, Math.floor((needs[need] ?? 0.5) * 4))]).join(', ');
+}
+
 function dayNotes(body, mind, memories, now) {
   const since = mind.lastWake || now - 60 * MINUTE;
   const log = (body.log || []).filter(entry => entry.at >= since && !entry.target)
@@ -73,7 +85,7 @@ function dayNotes(body, mind, memories, now) {
   return [
     `It is ${clockWords(now)}.`,
     `Right now you are: ${body.activity.action} at the ${body.activity.target || body.activity.place}.`,
-    `How you feel (0 empty, 1 full): ${Object.entries(body.needs).map(([need, value]) => `${need} ${value.toFixed(2)}`).join(', ')}.`,
+    `How you feel: ${feelings(body.needs)}.`,
     log.length ? `What you did since you last stopped to think:\n${log.join('\n')}` : 'Nothing new since you last stopped to think.',
     recentMemories.length ? `Things you remember from the island:\n${recentMemories.join('\n')}` : 'You have no island memories yet. Everything is new.',
     thoughts.length ? `Your recent thoughts:\n${thoughts.join('\n')}` : '',

@@ -56,7 +56,7 @@ export class PatchWorld extends DurableObject {
       thoughts: (mind.thoughts || []).slice(-20).reverse().map(({ at, thought, says }) => ({ at: new Date(at).toISOString(), thought, says })),
       diary: diary.map(({ date, title, text }) => ({ date, title, text })),
       words: (mind.words || []).map(({ word, meaning, from, at }) => ({ word, meaning, from, at: new Date(at).toISOString() })),
-      budget: { month: mind.spend?.month || null, spent: Math.round((mind.spend?.total || 0) * 100) / 100, limit: MONTHLY_BUDGET },
+      budget: { month: mind.spend?.month || null, spent: Math.round((mind.spend?.total || 0) * 10000) / 10000, limit: MONTHLY_BUDGET },
       lastError: mind.lastError && mind.lastError.at > (mind.lastWake || 0) ? { at: new Date(mind.lastError.at).toISOString(), message: mind.lastError.message } : null,
     };
   }

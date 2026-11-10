@@ -74,3 +74,8 @@ test('he wakes 30 to 60 minutes apart, and in the morning after sleeping', () =>
 test('JSON is read even when the model wraps it in words', () => {
   assert.deepEqual(parseJson('Sure! ```json\n{"a":1}\n```'), { a: 1 });
 });
+
+test('needs read as words, so a full tummy is full', async () => {
+  const { feelings } = await import('../mind.mjs');
+  assert.equal(feelings({ hunger: 0.84, energy: 0.1, fun: 0.5, comfort: 0.3, social: 1 }), 'full, exhausted, having fun, a bit restless, happy with company');
+});
