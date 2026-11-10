@@ -3,7 +3,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { sampleState } from '../../shared/state.js';
 import { createIsland } from './island.js';
-import { places, groundHeight, walkRoute, swingRoute, swingLoop, statusText, isLocalPreview } from './world-state.js';
+import { places, groundHeight, walkRoute, swingRoute, swingLoop, statusText, isLocalPreview, safePatch } from './world-state.js';
 
 const $ = s => document.querySelector(s);
 const dialog = $('#map');
@@ -28,9 +28,10 @@ function mesh(geo,material,x=0,y=0,z=0,parent=scene){const m=new THREE.Mesh(geo,
 function ellipsoid(material,x,y,z,sx,sy,sz,parent=scene){const m=mesh(new THREE.SphereGeometry(1,12,8),material,x,y,z,parent);m.scale.set(sx,sy,sz);return m;}
 const scenery = createIsland(scene);
 const patch = new THREE.Group(); scene.add(patch);
-let mixer, clips = {}, currentAction, currentName, swingStarted = false;
+let mixer, headBone, clips = {}, currentAction, currentName;
 new GLTFLoader().load(new URL('./assets/patch.glb', document.baseURI).href, gltf => {
   patch.add(gltf.scene);
+  gltf.scene.traverse(node => { if (node.isBone && /mixamorig[:_]?head$/i.test(node.name)) headBone=node; });
   mixer = new THREE.AnimationMixer(gltf.scene);
   for (const clip of gltf.animations) {
     // Locomotion is controlled by the island, not the source animation's travel.
@@ -60,7 +61,8 @@ async function poll() {
     const response = await fetch('/patch/api/state', {cache:'no-store'});
     if (!response.ok) throw new Error('State unavailable');
     const next = await response.json();
-    if (!next.patch || !next.clock || !Object.hasOwn(places, next.patch.place)) throw new Error('Invalid state');
+    if (!next.patch || !next.clock) throw new Error('Invalid state');
+    next.patch = safePatch(next.patch);
     if (!state) { const [x,z]=places[next.patch.place]; patch.position.set(x,groundHeight(x,z),z); const target=new THREE.Vector3(x,patch.position.y+1,z); camera.position.add(target.clone().sub(controls.target)); controls.target.copy(target); }
     state = next; hasLiveState = true; demo = false;
     $('#connection').hidden = true;
@@ -83,7 +85,7 @@ if (!state) { patch.visible=false; controls.update(); renderer.render(scene,came
 patch.visible=true;
 const {action,place,target,says,since}=state.patch;
 $('#status').textContent = statusText(state.patch);
-const dest=action==='sleep'&&place==='hammock'&&!target?[1.5,2]:action==='swim'&&place==='pond'&&!target?[-13,4]:places[target]||places[place];
+const dest=action==='sleep'&&place==='hammock'&&!target?[1.5,2]:action==='swim'&&place==='pond'&&!target?[18,10]:places[target]||places[place];
 const travel = !!(target && places[target] && ['walk','run','swing'].includes(action));
 const swinging = action === 'swing';
 const key = `${action}|${place}|${target||''}|${since||''}`;
@@ -115,14 +117,17 @@ if (travel || swinging) {
   } else { patch.rotation.z=0; playClip('idle'); }
 } else {
   journey=null;
-  const dx=dest[0]-patch.position.x,dz=dest[1]-patch.position.z,dist=Math.hypot(dx,dz);
-  if(dist>.15){let step=Math.min(dist,dt*1.7);patch.position.x+=dx/dist*step;patch.position.z+=dz/dist*step;patch.rotation.y=Math.atan2(dx,dz);}
+  const exploring=action==='explore';
+  const wander=exploring?[dest[0]+Math.sin(t*.25)*1.2,dest[1]+(place==='cave'?1.2+Math.cos(t*.25)*.6:Math.cos(t*.25)*1.2)]:dest;
+  const dx=wander[0]-patch.position.x,dz=wander[1]-patch.position.z,dist=Math.hypot(dx,dz);
+  if(dist>.15){let step=Math.min(dist,dt*(exploring?.65:1.7));patch.position.x+=dx/dist*step;patch.position.z+=dz/dist*step;patch.rotation.y=Math.atan2(dx,dz);}
   patch.position.y=action==='swim'?.55:action==='climb'?groundHeight(patch.position.x,patch.position.z)+1.5:action==='sleep'&&place==='hammock'?2.2:groundHeight(patch.position.x,patch.position.z);
   patch.rotation.z=0;
-  const names={idle:'idle',think:'idle',phone:'idle',write:'idle',look:'look-around',wave:'look-around',walk:'walk',run:'run',climb:'hang',swim:'swim',fish:'sit',sit:'sit',sleep:'sleep',eat:'idle',explore:'look-around','watch-sky':'look-around'};
-  playClip(names[action]||'idle',action==='sit'||action==='fish');
+  const names={idle:'idle',think:'idle',phone:'idle',write:'idle',look:'look-around',wave:'look-around',walk:'walk',run:'run',climb:'hang',swim:'swim',fish:'sit',sit:'sit',sleep:'sleep',eat:'idle',explore:Math.sin(t*.45)>.55?'look-around':'walk','watch-sky':'sit'};
+  playClip(names[action]||'idle',action==='sit'||action==='fish'||action==='watch-sky');
 }
 if(mixer) mixer.update(dt);
+if(action==='watch-sky' && headBone && currentName==='sit' && currentAction.time >= clips.sit.duration*.8) headBone.rotateX(-1.3);
 $('#bubble').hidden=!says;$('#bubble').textContent=says||'';
 let day=Number.isFinite(state.clock.dayFraction)?state.clock.dayFraction:.5;let daylight=THREE.MathUtils.smoothstep(Math.sin((day-.25)*Math.PI*2),-.12,.2);let weather=state.clock.weather;let overcast=weather==='cloudy'||weather==='rain'||weather==='storm';sky.copy(skyNight).lerp(skyDay,daylight*(overcast?.65:1));scene.background=sky;scene.fog.color.copy(sky);hemi.intensity=.3+daylight*(overcast?1:1.8);sunLight.intensity=daylight*(overcast?.6:2.4);let angle=(day-.25)*Math.PI*2;sun.position.set(Math.cos(angle)*90,Math.sin(angle)*90,0);moon.position.copy(sun.position).multiplyScalar(-1);sunLight.position.copy(sun.position);stars.material.opacity=1-daylight;stars.visible=daylight<.98;clouds.forEach((c,i)=>{c.visible=overcast||i<5;c.position.x+=dt*.14;if(c.position.x>55)c.position.x=-55;});rain.visible=weather==='rain'||weather==='storm';if(rain.visible)rain.position.y=-(t*12%30);
 follow.set(patch.position.x,patch.position.y+1,patch.position.z);let delta=follow.clone().sub(controls.target).multiplyScalar(Math.min(1,dt*8));controls.target.add(delta);camera.position.add(delta);controls.update();scenery.update(camera,follow);renderer.render(scene,camera);}

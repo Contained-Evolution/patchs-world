@@ -1,26 +1,27 @@
-export const places = { hammock:[1,4], shelves:[4,1], pond:[-9,6], 'banana-grove':[-24,-10], 'tall-trees':[-8,-21], beach:[8,25], lookout:[28,-8], 'tide-pools':[29,15], meadow:[9,-15], cave:[22,-15] };
-// Each path leads from camp to its destination. Shared sections are intentional junctions.
+import { ACTIONS } from '../../shared/state.js';
+export const places = { hammock:[0,0], shelves:[2,0], 'banana-grove':[-12,8], 'tall-trees':[8,-14], pond:[14,10], beach:[26,-2], 'tide-pools':[22,-20], lookout:[-16,-22], meadow:[-20,2], cave:[-6,-30] };
+// Footpaths meet at the camp, following the body's relative island layout.
 export const paths = {
-  hammock:[[0,0],[1,4]], shelves:[[0,0],[4,1]], pond:[[0,0],[-5,3],[-9,6]],
-  'banana-grove':[[0,0],[-7,-4],[-15,-8],[-24,-10]],
-  'tall-trees':[[0,0],[-5,-6],[-8,-13],[-8,-21]],
-  beach:[[0,0],[2,8],[5,17],[8,25]],
-  'tide-pools':[[0,0],[8,5],[18,10],[29,15]],
-  meadow:[[0,0],[5,-6],[9,-15]],
-  cave:[[0,0],[5,-6],[12,-12],[22,-15]],
-  lookout:[[0,0],[8,0],[18,-2],[24,-5],[28,-8]],
+  hammock:[[0,0]], shelves:[[0,0],[2,0]],
+  'banana-grove':[[0,0],[-5,3],[-12,8]], 'tall-trees':[[0,0],[4,-6],[8,-14]],
+  pond:[[0,0],[6,5],[14,10]], beach:[[0,0],[9,0],[18,-1],[26,-2]],
+  'tide-pools':[[0,0],[7,-5],[14,-12],[22,-20]],
+  lookout:[[0,0],[-4,-6],[-10,-14],[-16,-22]],
+  meadow:[[0,0],[-9,1],[-20,2]], cave:[[0,0],[-3,-9],[-5,-20],[-6,-30]],
 };
-export const groundHeight = (x,z) => .9 + 5.2 * Math.exp(-(((x-28)/6.5)**2 + ((z+8)/7)**2));
+export const groundHeight = (x,z) => .9 + 5.2 * Math.exp(-(((x+16)/6.5)**2 + ((z+22)/7)**2));
 export const trees = [];
 for(let row=0;row<5;row++) for(let col=0;col<7;col++) {
-  const x=-20+col*4.2+(row%2)*1.2, z=-30+row*4.3;
+  const x=-4+col*4.2+(row%2)*1.2, z=-23+row*4.3;
   trees.push([x,z,8.5+((row*7+col)%4)*.65]);
 }
 export const anchorFor = ([x,z,h]) => [x+1.4,groundHeight(x,z)+h-1,z];
 const distance = (a,b) => Math.hypot(a[0]-b[0],a[1]-b[1]);
 export function walkRoute(from,to) {
   const a=paths[from]||paths.hammock,b=paths[to]||paths.hammock;
-  return [...a.slice(0,-1).reverse(), ...b.slice(1)];
+  const route=[...a.slice(0,-1).reverse(), ...b.slice(1)];
+  if (!route.length) route.push(places[to] || places.hammock);
+  return route;
 }
 export function swingRoute(from,to) {
   const nearest = p => trees.reduce((best,t,i)=>distance(p,t)<distance(p,trees[best])?i:best,0);
@@ -35,3 +36,10 @@ const location={hammock:'in his hammock',shelves:'by his rope shelves',pond:'at 
 const destination={hammock:'his hammock',shelves:'his rope shelves',pond:'the pond','banana-grove':'the banana grove','tall-trees':'the tall trees',beach:'the beach',lookout:'the lookout','tide-pools':'the tide pools',meadow:'the meadow',cave:'the cave'};
 export function statusText(p){if(p.target&&destination[p.target])return `Patch is on his way to ${destination[p.target]}.`;if(p.action==='explore'&&p.place==='cave')return 'Patch is exploring the cave.';return `Patch is ${activity[p.action]||'looking around'} ${location[p.place]||'on the island'}.`;}
 export const isLocalPreview = h => h==='localhost'||/^127(?:\.\d{1,3}){3}$/.test(h)||h==='[::1]'||h.endsWith('.localhost');
+
+export function safePatch(patch) {
+  if (!patch || !Object.hasOwn(places, patch.place) || !ACTIONS.includes(patch.action) || (patch.target && !Object.hasOwn(places,patch.target))) {
+    return { ...(patch || {}), place:'hammock', action:'idle', target:null, says:null };
+  }
+  return patch;
+}

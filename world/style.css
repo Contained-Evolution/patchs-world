@@ -2,3 +2,5 @@
 #status,#connection{width:fit-content;max-width:min(320px,65vw);padding:5px 10px;border-radius:12px;background:#153d38c9;text-shadow:none}#connection{background:#603b2ee8}
 
 .land{transform:none}.map-label{transform:none;font-size:11px}.grove{top:25%;left:4%}.trees{top:6%;left:29%;right:auto}.pond{top:52%;left:17%}.camp{top:54%;left:45%;right:auto}.beach{bottom:6%;left:42%}.lookout{top:31%;right:2%}.meadow{top:22%;left:55%}.cave{top:9%;right:8%}.tide{bottom:19%;right:2%}
+
+.grove{top:60%;left:20%}.trees{top:20%;left:52%}.pond{top:65%;left:60%}.camp{top:48%;left:38%}.beach{top:45%;bottom:auto;left:auto;right:1%}.lookout{top:7%;left:8%;right:auto}.meadow{top:46%;left:4%}.cave{top:3%;left:37%;right:auto}.tide{top:10%;bottom:auto;right:4%}

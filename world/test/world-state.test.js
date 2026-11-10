@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { places, paths, groundHeight, walkRoute, swingLoop, trees, anchorFor, swingRoute, statusText, isLocalPreview } from '../src/world-state.js';
+import { places, paths, groundHeight, walkRoute, swingLoop, trees, anchorFor, swingRoute, statusText, isLocalPreview, safePatch } from '../src/world-state.js';
 
 test('status describes activity, place and travel', () => {
   assert.equal(statusText({action:'fish', place:'pond'}), 'Patch is fishing at the pond.');
@@ -41,4 +41,12 @@ test('in-place swinging cycles through multiple branches', () => {
   const route=swingLoop();
   assert.ok(new Set(route.map(a=>a.join(','))).size >= 3);
   assert.deepEqual(route[0],route.at(-1));
+});
+
+
+test('unknown live places and actions fall back to idle at camp', () => {
+  for (const patch of [{place:'unknown',action:'walk'}, {place:'pond',action:'unknown'}, {place:'pond',action:'walk',target:'unknown'}]) {
+    const safe=safePatch(patch); assert.equal(safe.place,'hammock'); assert.equal(safe.action,'idle'); assert.equal(safe.target,null);
+  }
+  assert.equal(safePatch({place:'cave',action:'explore'}).action,'explore');
 });

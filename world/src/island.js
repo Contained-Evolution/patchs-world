@@ -17,26 +17,26 @@ export function createIsland(scene) {
   let shore=mesh(new THREE.CircleGeometry(1,96),sand,0,.86,0);shore.rotation.x=-Math.PI/2;shore.scale.set(46,37,1);
   let sea=mesh(new THREE.PlaneGeometry(600,600),material(0x438e97),0,.1,0);sea.rotation.x=-Math.PI/2;
   // A separate, inaccessible landmass across the eastern water.
-  oval(material(0x698e7a),118,3,-4,25,7,23);oval(material(0x769981),134,4,-8,22,10,19);
+  oval(material(0x698e7a),-118,3,-4,25,7,23);oval(material(0x769981),-134,4,-8,22,10,19);
   function strip(points,width,mat,heightOffset=.035){for(let i=0;i<points.length-1;i++){const [x,z]=points[i],[xx,zz]=points[i+1],len=Math.hypot(xx-x,zz-z),steps=Math.ceil(len/1.2),v=[],ind=[],nx=-(zz-z)/len*width/2,nz=(xx-x)/len*width/2;for(let j=0;j<=steps;j++){let t=j/steps,cx=x+(xx-x)*t,cz=z+(zz-z)*t;for(let s of [-1,1]){let px=cx+nx*s,pz=cz+nz*s;v.push(px,groundHeight(px,pz)+heightOffset,pz);}}for(let j=0;j<steps;j++){let k=j*2;ind.push(k,k+2,k+1,k+1,k+2,k+3);}const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(v,3));geo.setIndex(ind);geo.computeVertexNormals();mesh(geo,mat);}}
   for(const route of Object.values(paths))strip(route,1.15,pathMat);
   const occluders=[];
   function jungleTree([x,z,h],i){let y=groundHeight(x,z);occluders.push(beam(bark,[x,y,z],[x,y+h,z],.35,.22));let a=anchorFor([x,z,h]);beam(bark,[x,y+h-1,z],a,.18,.13);for(let k=0;k<3;k++)occluders.push(oval(k%2?leaf2:leaf,x+Math.cos(k*2.1)*1.5,y+h+.3,z+Math.sin(k*2.1)*1.5,2.8,1.25,2.5));}
   trees.forEach(jungleTree);
-  function palm(x,z,h,banana=false){let y=groundHeight(x,z);beam(bark,[x,y,z],[x+.3,y+h,z],.23,.13);for(let i=0;i<7;i++){let a=i*Math.PI*2/7,frond=oval(i%2?leaf:leaf2,x+.3+Math.cos(a)*1.25,y+h,z+Math.sin(a)*1.25,2,.12,.42);frond.rotation.y=-a;frond.rotation.z=-.16;}for(let i=0;i<3;i++)oval(banana?flower:darkBark,x+.4+i*.18,y+h-.35,z,.13,banana?.35:.15,.13);}
-  for(let row=0;row<4;row++)for(let col=0;col<5;col++)palm(-31+col*3.6+(row%2),-17+row*3.6,4.8+(col%3)*.35,true);
-  for(let x=-16;x<=22;x+=6)palm(x,29-Math.abs(x)*.12,5.5,false);
+  function palm(x,z,h,banana=false){let y=groundHeight(x,z);occluders.push(beam(bark,[x,y,z],[x+.3,y+h,z],.23,.13));for(let i=0;i<7;i++){let a=i*Math.PI*2/7,frond=oval(i%2?leaf:leaf2,x+.3+Math.cos(a)*1.25,y+h,z+Math.sin(a)*1.25,2,.12,.42);frond.rotation.y=-a;frond.rotation.z=-.16;occluders.push(frond);}for(let i=0;i<3;i++)oval(banana?flower:darkBark,x+.4+i*.18,y+h-.35,z,.13,banana?.35:.15,.13);}
+  for(let row=0;row<4;row++)for(let col=0;col<5;col++)palm(-16+col*2+(row%2)*.5,5+row*2.6,4.8+(col%3)*.35,true);
+  for(let z=-10;z<=20;z+=5)palm(32-Math.abs(z)*.13,z,5.5,false);
   // Camp: hammock and shelves grouped at the center.
   const cord=material(0xcab487),cloth=material(0xc27555);beam(cord,[-1,3,2],[0,2.1,2],.04);beam(cord,[3,2.1,2],[4,3,2],.04);oval(cloth,1.5,2,2,1.7,.22,.6);for(let y of [2,3]){mesh(new THREE.BoxGeometry(2,.12,.7),bark,4,y,1);for(let x of [3.15,4.85])beam(cord,[x,y,1],[x,5,1],.035);}oval(flower,4,3.3,1,.4,.22,.25);
   // Pond, stream and cascade among low rocks.
-  oval(water,-13,.94,4,4.1,.10,2.8);for(let i=0;i<15;i++){let a=i*Math.PI*2/15;oval(rock,-13+Math.cos(a)*4.2,.96,4+Math.sin(a)*2.9,.48,.23,.38);}
-  strip([[-17,-3],[-16,-1],[-15,1],[-13,3]],1.1,water,.07);oval(rock,-17,1.7,-3,2.3,1.1,1.3);let fall=mesh(new THREE.PlaneGeometry(1.15,1.55),white,-17,1.85,-1.85);fall.material.side=THREE.DoubleSide;
+  oval(water,18,.94,10,4.1,.10,2.8);for(let i=0;i<15;i++){let a=i*Math.PI*2/15;oval(rock,18+Math.cos(a)*4.2,.96,10+Math.sin(a)*2.9,.48,.23,.38);}
+  strip([[21,3],[20,5],[19,7],[18,9]],1.1,water,.07);oval(rock,21,1.7,3,2.3,1.1,1.3);let fall=mesh(new THREE.PlaneGeometry(1.15,1.55),white,21,1.85,4.15);fall.material.side=THREE.DoubleSide;
   // Tide pools and cave are recognizable even from the orbit camera.
-  for(let i=0;i<15;i++){let a=i*2.4,r=2+(i%4)*1.1,x=29+Math.cos(a)*r,z=15+Math.sin(a)*r;oval(rock,x,1,z,.7+(i%3)*.25,.35,.6);}for(const [x,z] of [[28,14],[31,16],[27,17]])oval(water,x,.96,z,1.1,.08,.7);
-  oval(rock,22,2.35,-19,4.2,2.2,3);let entrance=oval(dark,22,1.85,-15.98,1.4,1.25,.13);
+  for(let i=0;i<15;i++){let a=i*2.4,r=2+(i%4)*1.1,x=22+Math.cos(a)*r,z=-20+Math.sin(a)*r;oval(rock,x,1,z,.7+(i%3)*.25,.35,.6);}for(const [x,z] of [[21,-21],[24,-19],[20,-18]])oval(water,x,.96,z,1.1,.08,.7);
+  oval(rock,-6,2.35,-34,4.2,2.2,3);let entrance=oval(dark,-6,1.85,-30.98,1.4,1.25,.13);
   // Meadow flowers are sparse, retaining open sky; lookout hill is the highest ground.
-  for(let i=0;i<45;i++){let a=i*2.4,r=1+(i%8)*.8,x=9+Math.cos(a)*r,z=-15+Math.sin(a)*r;oval(flower,x,groundHeight(x,z)+.08,z,.09,.11,.09);}
-  const ly=groundHeight(28,-8);for(let x of [27,29])for(let z of [-9,-7])beam(bark,[x,ly,z],[x,ly+1.1,z],.08);beam(bark,[27,ly+1,-9],[29,ly+1,-9],.07);beam(bark,[27,ly+1,-7],[29,ly+1,-7],.07);
+  for(let i=0;i<45;i++){let a=i*2.4,r=1+(i%8)*.8,x=-20+Math.cos(a)*r,z=2+Math.sin(a)*r;oval(flower,x,groundHeight(x,z)+.08,z,.09,.11,.09);}
+  const ly=groundHeight(-16,-22);for(let x of [-17,-15])for(let z of [-23,-21])beam(bark,[x,ly,z],[x,ly+1.1,z],.08);beam(bark,[-17,ly+1,-23],[-15,ly+1,-23],.07);beam(bark,[-17,ly+1,-21],[-15,ly+1,-21],.07);
   const ray = new THREE.Raycaster(), direction = new THREE.Vector3();
   return { update(camera, target) {
     for (const item of occluders) item.visible=true;
