@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { sampleState } from '../../shared/state.js';
+import { addScenery } from './scenery.js';
 
 const $ = s => document.querySelector(s);
 const dialog = $('#map');
@@ -22,6 +23,18 @@ const hemi = new THREE.HemisphereLight(0xd9f5ee, 0x496d4c, 2.1); scene.add(hemi)
 const sunLight = new THREE.DirectionalLight(0xffedbe, 2.4); scene.add(sunLight);
 const mat = color => new THREE.MeshStandardMaterial({color, roughness: 1});
 const sand=mat(0xe8d394), grass=mat(0x76aa63), trunk=mat(0x826047), leaf=mat(0x337b4e), leaf2=mat(0x489858), water=mat(0x59b4b4), rock=mat(0x879a85), brown=mat(0x86513a), cream=mat(0xe3ba86);
+// CC0 textures also used by Tenari. Paths remain relative to /patch/.
+const textureLoader = new THREE.TextureLoader();
+function detailTexture(path, repeats) {
+  const texture = textureLoader.load(new URL(path, document.baseURI).href);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(...repeats); texture.anisotropy = 4;
+  return texture;
+}
+grass.map = detailTexture('./assets/meadow-grass.jpg', [5, 4]); grass.color.set(0xc1e5ae);
+trunk.map = detailTexture('./assets/pine-bark.jpg', [1, 2]); trunk.color.set(0xc6b6a3);
+rock.map = detailTexture('./assets/rock-boulder-dry.jpg', [1, 1]); rock.color.set(0xc5d3c2);
 function mesh(geo, material, x=0,y=0,z=0, parent=scene){const m=new THREE.Mesh(geo,material);m.position.set(x,y,z);parent.add(m);return m;}
 function ellipsoid(material,x,y,z,sx,sy,sz,parent=scene){const m=mesh(new THREE.SphereGeometry(1,12,8),material,x,y,z,parent);m.scale.set(sx,sy,sz);return m;}
 function cylinder(material,x,y,z,r1,r2,h,parent=scene){return mesh(new THREE.CylinderGeometry(r1,r2,h,8),material,x,y,z,parent)}
@@ -37,6 +50,7 @@ function tree(x,z,h=7,banana=false){cylinder(trunk,x,h/2+.65,z,.24,.4,h);if(bana
 // Hammock and raised shelves.
 line([5,3,4],[9,3,4]);const hammock=ellipsoid(mat(0xc27555),7,2.1,4,1.9,.25,.65);line([5,3,4],[5.3,2.2,4]);line([9,3,4],[8.7,2.2,4]);
 for(let y of [2,3]){let shelf=mesh(new THREE.BoxGeometry(2,.12,.7),trunk,10,y,1);for(let x of [9.15,10.85])line([x,y,1],[x,5,1]);}ellipsoid(mat(0xe5b545),10,3.3,1,.4,.22,.25);
+const scenery = addScenery(scene);
 // Simple monkey placeholder, replaced when the authored GLB is supplied.
 const patch=new THREE.Group();scene.add(patch);ellipsoid(brown,0,1,0,.6,.75,.45,patch);const head=new THREE.Group();head.position.set(0,1.85,0);patch.add(head);ellipsoid(brown,0,0,0,.6,.55,.52,head);ellipsoid(cream,0,-.12,.43,.42,.3,.2,head);for(let x of [-.55,.55])ellipsoid(cream,x,.05,0,.22,.27,.16,head);for(let x of [-.18,.18])ellipsoid(mat(0x1e2521),x,.08,.49,.055,.07,.035,head);
 const limbs=[];for(const [x,y] of [[-.63,1.3],[.63,1.3],[-.3,.45],[.3,.45]]){let limb=new THREE.Group();limb.position.set(x,y,0);patch.add(limb);ellipsoid(brown,0,-.32,0,.16,.43,.17,limb);limbs.push(limb);}
@@ -52,7 +66,7 @@ const sun=mesh(new THREE.SphereGeometry(3,16,12),new THREE.MeshBasicMaterial({co
 const clouds=[];for(let i=0;i<12;i++){let g=new THREE.Group();for(let j=0;j<3;j++)ellipsoid(mat(0xffffff),j*1.8,Math.sin(j)*.5,0,2,1,1.4,g);g.position.set(Math.cos(i*2.4)*45,25+i%4*3,Math.sin(i*2.4)*45);scene.add(g);clouds.push(g);}
 const rainGeo=new THREE.BufferGeometry(),drops=[];for(let i=0;i<500;i++)drops.push((Math.random()-.5)*50,Math.random()*35,(Math.random()-.5)*50);rainGeo.setAttribute('position',new THREE.Float32BufferAttribute(drops,3));const rain=new THREE.Points(rainGeo,new THREE.PointsMaterial({color:0xd6edf2,size:.12,transparent:true,opacity:.7}));scene.add(rain);
 let last=performance.now();patch.position.set(-8,.9,-3);const follow=new THREE.Vector3();
-function frame(now){requestAnimationFrame(frame);const dt=Math.min((now-last)/1000,.05);last=now;let t=(now-start)/1000;
+function frame(now){requestAnimationFrame(frame);const dt=Math.min((now-last)/1000,.05);last=now;let t=(now-start)/1000; scenery.update(t);
 if(!live){let n=Math.floor(t/9);state={patch:{...sampleState.patch,action:mockActions[n%mockActions.length],place:ids[Math.floor(n/2)%ids.length],target:ids[(Math.floor(n/2)+1)%ids.length],says:null},clock:{dayFraction:(.38+t/240)%1,weather:['clear','cloudy','rain','storm'][Math.floor(t/60)%4]}};}
 const {action,place,target,says}=state.patch;const dest=places[(action==='walk'||action==='run'||action==='swing')&&places[target]?target:place]||places.beach;let dx=dest[0]-patch.position.x,dz=dest[1]-patch.position.z,dist=Math.hypot(dx,dz);if(dist>.1){let step=Math.min(dist,dt*(action==='run'?4:action==='swing'?3:1.7));patch.position.x+=dx/dist*step;patch.position.z+=dz/dist*step;patch.rotation.y=Math.atan2(dx,dz);}
 patch.position.y=action==='swim'?.55:action==='swing'?2.7+Math.abs(Math.sin(t*2))*.8:action==='climb'?1+Math.abs(Math.sin(t))*2:action==='sleep'&&place==='hammock'?2.2:.9;
