@@ -128,13 +128,22 @@ function next(state, time) {
     return start('idle', place, time, 3, { says: SAYS.wake[0] });
   }
   const recent = state.recent || [];
-  const best = ACTIVITIES.map(choice => [score(choice, needs, place, recent, random), choice]).sort((a, b) => b[0] - a[0])[0][1];
+  const wanted = state.want && wantedActivity(state.want, place);
+  state.want = null;
+  const best = wanted || ACTIVITIES.map(choice => [score(choice, needs, place, recent, random), choice]).sort((a, b) => b[0] - a[0])[0][1];
   const minutes = best.minutes[0] + Math.floor(random() * (best.minutes[1] - best.minutes[0] + 1));
   const queued = { action: best.action, minutes, effects: best.effects, nap: !!best.nap };
   if (best.place !== place) return travel(state, place, best.place, time, random, queued);
   state.recent = [best.action, ...recent].slice(0, 3);
   if (best.nap) return start('sleep', place, time, minutes, { effects: best.effects, says: SAYS.nap[0], nap: true });
   return start(best.action, place, time, minutes, { effects: best.effects, says: maybeSay(best.action, random) });
+}
+
+// The mind can ask for an activity; it happens next unless it's bedtime.
+export const WANTS = [...new Set(ACTIVITIES.map(choice => choice.nap ? 'nap' : choice.action))];
+function wantedActivity(want, place) {
+  const matches = ACTIVITIES.filter(choice => (choice.nap ? 'nap' : choice.action) === want);
+  return matches.find(choice => choice.place === place) || matches[0] || null;
 }
 
 function travel(state, from, to, time, random, queued) {
@@ -153,6 +162,8 @@ export function newBody(now, seed = 1) {
     activity: start('look', 'beach', now, 5, { says: 'Wow. My very own island.' }),
     queued: null,
     recent: [],
+    want: null,
+    log: [],
   };
 }
 
@@ -167,6 +178,8 @@ export function advance(state, now) {
     const done = state.activity;
     state.needs = applyMinutes(state.needs, done, (done.end - done.start) / MINUTE);
     state.activity = next(state, done.end);
+    const { action, place, target, start: at } = state.activity;
+    state.log = [...(state.log || []), { action, place, target, at }].slice(-40);
     changed = true;
   }
   return changed;

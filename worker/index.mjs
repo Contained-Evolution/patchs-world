@@ -2,6 +2,8 @@
 
 import { DurableObject } from 'cloudflare:workers';
 import { advance, newBody, view } from './body.mjs';
+import { ponder, writeDiary, nextWake, allMemories, MONTHLY_BUDGET } from './mind.mjs';
+import { STARTING_CATEGORIES } from '../shared/memory.js';
 
 const headers = {
   'x-content-type-options': 'nosniff',
@@ -11,16 +13,57 @@ const headers = {
 
 const json = (body, status = 200) => Response.json(body, { status, headers: { ...headers, 'cache-control': 'no-store' } });
 
-// The one Patch. Every visitor reads the same body.
+// The one Patch. Every visitor reads the same body; one alarm runs his mind.
 export class PatchWorld extends DurableObject {
-  async state() {
-    const now = Date.now();
+  async body(now) {
     let body = await this.ctx.storage.get('body');
     let changed = false;
     if (!body) { body = newBody(now, now & 0xffffffff); changed = true; }
     if (advance(body, now)) changed = true;
     if (changed) await this.ctx.storage.put('body', body);
+    return body;
+  }
+
+  async state() {
+    const now = Date.now();
+    const body = await this.body(now);
+    if (this.env.OPENROUTER_API_KEY && !(await this.ctx.storage.getAlarm())) await this.ctx.storage.setAlarm(now + 60000);
     return view(body, now);
+  }
+
+  async alarm() {
+    const now = Date.now();
+    const body = await this.body(now);
+    const stored = await this.ctx.storage.get(['mind', 'memories', 'categories']);
+    const world = { body, mind: stored.get('mind') || {}, memories: stored.get('memories') || [], categories: stored.get('categories') || {} };
+    try {
+      const resting = body.activity.action === 'sleep';
+      if (!resting) await ponder(this.env, world, now);
+      const diary = await writeDiary(this.env, world, now);
+      if (diary) await this.ctx.storage.put(`diary:${diary.date}`, diary);
+    } catch (error) {
+      world.mind.lastError = { at: now, message: String(error.message || error).slice(0, 300) };
+      console.error('Patch could not think:', error);
+    }
+    await this.ctx.storage.put({ body: world.body, mind: world.mind, memories: world.memories, categories: world.categories });
+    await this.ctx.storage.setAlarm(nextWake(world.body, now));
+  }
+
+  async journal() {
+    const mind = (await this.ctx.storage.get('mind')) || {};
+    const diary = [...(await this.ctx.storage.list({ prefix: 'diary:', reverse: true, limit: 14 })).values()];
+    return {
+      thoughts: (mind.thoughts || []).slice(-20).reverse().map(({ at, thought, says }) => ({ at: new Date(at).toISOString(), thought, says })),
+      diary: diary.map(({ date, title, text }) => ({ date, title, text })),
+      words: (mind.words || []).map(({ word, meaning, from, at }) => ({ word, meaning, from, at: new Date(at).toISOString() })),
+      budget: { month: mind.spend?.month || null, spent: Math.round((mind.spend?.total || 0) * 100) / 100, limit: MONTHLY_BUDGET },
+      lastError: mind.lastError && mind.lastError.at > (mind.lastWake || 0) ? { at: new Date(mind.lastError.at).toISOString(), message: mind.lastError.message } : null,
+    };
+  }
+
+  async memory() {
+    const stored = await this.ctx.storage.get(['memories', 'categories']);
+    return { categories: { ...STARTING_CATEGORIES, ...(stored.get('categories') || {}) }, memories: allMemories(stored.get('memories') || []) };
   }
 }
 
@@ -57,6 +100,11 @@ export default {
       if (request.method !== 'GET') return json({ error: 'Method not allowed.' }, 405);
       const patch = env.PATCH_WORLD.get(env.PATCH_WORLD.idFromName('patch'));
       return json(await patch.state());
+    }
+    if (path === '/api/journal' || path === '/api/memory') {
+      if (request.method !== 'GET') return json({ error: 'Method not allowed.' }, 405);
+      const patch = env.PATCH_WORLD.get(env.PATCH_WORLD.idFromName('patch'));
+      return json(path === '/api/journal' ? await patch.journal() : await patch.memory());
     }
     if (path.startsWith('/api/')) return json({ error: 'Not found.' }, 404);
 
