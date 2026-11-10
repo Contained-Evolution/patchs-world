@@ -1,0 +1,5 @@
+Texture sources (CC0):
+meadow-grass.jpg: ambientCG Ground013, https://ambientcg.com/a/Ground013
+pine-bark.jpg: Poly Haven Pine Bark, https://polyhaven.com/a/pine_bark
+rock-boulder-dry.jpg: Poly Haven Rock Boulder Dry, https://polyhaven.com/a/rock_boulder_dry
+These images were resized from the copies used in Tenari.
