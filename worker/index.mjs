@@ -44,8 +44,8 @@ export class PatchWorld extends DurableObject {
 
   // Once: only Patch has a name, so older thoughts, memories and diary entries lose the family's old names.
   async forgetNames() {
-    if (this.renamed || await this.ctx.storage.get('namesForgotten')) { this.renamed = true; return; }
-    const rename = text => typeof text === 'string' ? text.replace(/Sam's/g, "my sister's").replace(/Sam/g, 'my sister').replace(/George/g, 'Dad').replace(/Sally/g, 'Mom').replace(/Tiko/g, 'my friend') : text;
+    if (this.renamed || await this.ctx.storage.get('familyNamesForgotten')) { this.renamed = true; return; }
+    const rename = text => typeof text === 'string' ? text.replace(/\bSam's\b/g, "my sister's").replace(/\bSam\b/g, 'my sister').replace(/\bGeorge\b/g, 'Dad').replace(/\bSally\b/g, 'Mom').replace(/\bTiko\b/g, 'my friend') : text;
     const fix = (item, keys) => { for (const key of keys) item[key] = rename(item[key]); return item; };
     const stored = await this.ctx.storage.get(['mind', 'memories']), mind = stored.get('mind') || {};
     for (const entry of mind.thoughts || []) fix(entry, ['thought', 'says']);
@@ -53,7 +53,7 @@ export class PatchWorld extends DurableObject {
     const memories = (stored.get('memories') || []).map(memory => fix({ ...memory, people: (memory.people || []).map(rename) }, ['title', 'text']));
     const diary = await this.ctx.storage.list({ prefix: 'diary:' });
     for (const entry of diary.values()) fix(entry, ['title', 'text']);
-    await this.ctx.storage.put({ mind, memories, namesForgotten: true, ...Object.fromEntries(diary) });
+    await this.ctx.storage.put({ mind, memories, familyNamesForgotten: true, ...Object.fromEntries(diary) });
     this.renamed = true;
   }
 
