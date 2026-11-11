@@ -1,5 +1,8 @@
-Texture sources (CC0):
-meadow-grass.jpg: ambientCG Ground013, https://ambientcg.com/a/Ground013
-pine-bark.jpg: Poly Haven Pine Bark, https://polyhaven.com/a/pine_bark
-rock-boulder-dry.jpg: Poly Haven Rock Boulder Dry, https://polyhaven.com/a/rock_boulder_dry
-These images were resized from the copies used in Tenari.
+Patch's model: patch.glb, retained from the existing Patch project.
+The viewer combines procedural materials with the newly generated artwork listed below.
+Tropical leaf artwork was newly generated for this project.
+Rainforest canopy artwork was newly generated for this project.
+Volcanic rock texture was newly generated for this project.
+Tropical grass and bark textures were newly generated for this project.
+Wildflower artwork was newly generated for this project.
+Waterfall artwork was newly generated for this project.

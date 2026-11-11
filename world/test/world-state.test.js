@@ -50,3 +50,7 @@ test('unknown live places and actions fall back to idle at camp', () => {
   }
   assert.equal(safePatch({place:'cave',action:'explore'}).action,'explore');
 });
+
+test('swing arcs keep clear of the swing trunks',()=>{
+ const loop=swingLoop();for(let i=1;i<loop.length;i++){const a=loop[i-1],b=loop[i],dx=b[0]-a[0],dz=b[2]-a[2],len=Math.hypot(dx,dz);for(let j=0;j<=40;j++){const t=j/40;let nx=-dz/len,nz=dx/len;if(Math.abs(nx)>.1&&nx<0){nx=-nx;nz=-nz;}const x=a[0]+dx*t+nx*Math.sin(Math.PI*t)*2,z=a[2]+dz*t+nz*Math.sin(Math.PI*t)*2;for(const [tx,tz] of trees)assert.ok(Math.hypot(x-tx,z-tz)>.6,`swing crossed a trunk at ${x},${z}`);}}
+});
