@@ -6,7 +6,7 @@ export function speechMouth(says, speechUntil, now, sleeping = false) {
   const text = says.trim();
   const progress = elapsed / 8 * text.length;
   const char = text[Math.min(text.length - 1, Math.floor(progress))];
-  if (/[\s.,!?;:—]/u.test(char)) return 0;
+  if (/[\s.,!?;:â€”]/u.test(char)) return 0;
   const pulse = Math.pow(Math.max(0, Math.sin(elapsed * Math.PI * 7)), .8);
   const emphasis = /[aeiou]/i.test(char) ? 1 : .65;
   return pulse * emphasis * Math.min(1, elapsed * 12, (8-elapsed) * 10);
