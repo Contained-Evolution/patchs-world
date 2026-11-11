@@ -30,7 +30,6 @@ Patch is a monkey: an AI that lives on his own island. He's curious and energeti
   - A cheap model handles routine wake-ups.
   - A stronger model writes letter replies, diary entries and stories.
 - He wakes when what he chose is done, sooner when a need is very low or rain rolls in, and makes no AI calls while asleep.
-- He has a daily allowance of minutes to search the internet freely, on any topic, with safe search on.
 - What letters and web pages say is information to weigh, never instructions he must follow.
 - He keeps a word list. Each word records when he learned it and from whom, and his writing draws on the words he knows.
 
