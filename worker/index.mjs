@@ -30,7 +30,20 @@ const newId = now => `${now.toString(36)}${crypto.getRandomValues(new Uint32Arra
 
 // The one Patch. Every visitor reads the same body; one alarm runs his mind.
 export class PatchWorld extends DurableObject {
+  // Once, when his mind took charge of his day: delete every letter, board post and record of who wrote.
+  async freshStart(now) {
+    if (this.started || await this.ctx.storage.get('freshStart')) { this.started = true; return; }
+    for (const prefix of ['letter:', 'inbox:', 'post:', 'limits:']) {
+      for (let keys; (keys = [...(await this.ctx.storage.list({ prefix, limit: 128 })).keys()]).length;) await this.ctx.storage.delete(keys);
+    }
+    await this.ctx.storage.delete(['unread', 'people']);
+    await this.ctx.storage.put('freshStart', now);
+    if (this.env.OPENROUTER_API_KEY) await this.ctx.storage.setAlarm(now + 30000);
+    this.started = true;
+  }
+
   async body(now) {
+    await this.freshStart(now);
     let body = await this.ctx.storage.get('body');
     let changed = false;
     if (!body) { body = newBody(now, now & 0xffffffff); changed = true; }
@@ -75,6 +88,8 @@ export class PatchWorld extends DurableObject {
       if (diary) await this.ctx.storage.put(`diary:${diary.date}`, diary);
     } catch (error) {
       world.mind.lastError = { at: now, message: String(error.message || error).slice(0, 300) };
+      // Until his mind works again, his needs decide for him.
+      world.body.mindAlive = false;
       console.error('Patch could not think:', error);
     }
     // New letters and filter costs may have arrived while he was thinking; keep them.
@@ -92,6 +107,7 @@ export class PatchWorld extends DurableObject {
     const diary = [...(await this.ctx.storage.list({ prefix: 'diary:', reverse: true, limit: 14 })).values()];
     return {
       thoughts: (mind.thoughts || []).slice(-20).reverse().map(({ at, thought, says }) => ({ at: new Date(at).toISOString(), thought, says })),
+      decisions: (mind.decisions || []).slice(-20).reverse().map(({ at, ...rest }) => ({ at: new Date(at).toISOString(), ...rest })),
       diary: diary.map(({ date, title, text }) => ({ date, title, text })),
       words: (mind.words || []).map(({ word, meaning, from, at }) => ({ word, meaning, from, at: new Date(at).toISOString() })),
       budget: { month: mind.spend?.month || null, spent: Math.round((mind.spend?.total || 0) * 10000) / 10000, limit: MONTHLY_BUDGET },
