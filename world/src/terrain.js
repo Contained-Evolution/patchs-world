@@ -23,10 +23,12 @@ function segmentDistance(x,z,a,b) {
   return Math.hypot(x-a[0]-t*dx,z-a[1]-t*dz);
 }
 const segments=Object.values(paths).flatMap(route=>route.slice(1).map((point,i)=>[route[i],point]));
+const clearings=[...Object.values(places),[18,10],[21,3]];
 export function groundHeight(x,z) {
   const hill=5.2*Math.exp(-(((x+16)/6.5)**2+((z+22)/7)**2));
-  const anchorDistance=Math.min(...Object.values(places).map(([px,pz])=>Math.hypot(x-px,z-pz)),Math.hypot(x-18,z-10),Math.hypot(x-21,z-3));
-  const trailDistance=Math.min(...segments.map(([a,b])=>segmentDistance(x,z,a,b)));
+  let anchorDistance=Infinity,trailDistance=Infinity;
+  for(const [px,pz] of clearings) anchorDistance=Math.min(anchorDistance,Math.hypot(x-px,z-pz));
+  for(const [a,b] of segments) trailDistance=Math.min(trailDistance,segmentDistance(x,z,a,b));
   const detailMask=smooth(2.8,7,anchorDistance)*smooth(1.5,5,trailDistance);
   const rolling=(.42*Math.sin(x*.16+z*.07)*Math.cos(z*.13-x*.035)+.22*Math.sin(x*.085-z*.17))*detailMask;
   const inland=.9+hill+rolling;
