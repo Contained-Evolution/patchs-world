@@ -4,6 +4,7 @@ import bpy, sys, os
 args = sys.argv[sys.argv.index('--')+1:]
 art, out = args[0], args[1]
 CLIPS = {'Breathing Idle': 'idle', 'Walking': 'walk', 'Running': 'run', 'Hanging Idle': 'hang', 'Start Swinging': 'swing-start',
+         'Climbing A Rope': 'rope-climb', 'Swing To Land': 'swing-land',
          'Swinging': 'swing', 'Rope Swinging': 'rope-swing', 'Swimming': 'swim', 'Treading Water': 'tread', 'Sitting': 'sit',
          'Sleeping Idle': 'sleep', 'Laying Sleeping': 'sleep-lay', 'Sleeping roll over': 'sleep-roll', 'Pick Fruit': 'pick-fruit',
          'Left Shimmy': 'hang-shimmy-left', 'Right Shimmy': 'hang-shimmy-right', 'Freehang Drop': 'hang-drop',

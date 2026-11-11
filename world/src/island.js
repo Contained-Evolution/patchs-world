@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { ISLAND, places, coastRadius, shoreFraction, groundHeight, pondFraction, STREAM, TIDE_POOLS, tideWaterHeight } from './terrain.js';
-import { anchorFor, holdFor, ROPE_TREES } from './world-state.js';
+import { anchorFor, holdFor, ROPE_TREES, trees } from './world-state.js';
 import { forest, isReserved } from './forest.js';
 import { createTerrainTiles } from './terrain-mesh.js';
 import { CLIMB_WALLS } from './climbing.js';
@@ -55,7 +55,7 @@ vec3 detail=texture2D(grassDetail,islandGround*.18).rgb;float inland=1.0-smooths
   const palms=chunk.filter(t=>!t.broad),broadTrees=chunk.filter(t=>t.broad),trunkMesh=new THREE.InstancedMesh(trunkGeo,bark,chunk.length),leafMesh=new THREE.InstancedMesh(blade,foliage,palms.length*7),canopyMesh=new THREE.InstancedMesh(canopyGeometry,canopyMaterial,broadTrees.length*3);
   chunk.forEach((tree,i)=>{const y=groundHeight(tree.x,tree.z),visibleHeight=tree.h+(tree.swing?3.5:0);pose.position.set(tree.x,y+visibleHeight/2,tree.z);pose.rotation.set(0,tree.angle,tree.grove?.055:0);pose.scale.set(tree.grove?.75:1,visibleHeight,tree.grove?.75:1);pose.updateMatrix();trunkMesh.setMatrixAt(i,pose.matrix);});
   palms.forEach((tree,i)=>{const y=groundHeight(tree.x,tree.z);for(let j=0;j<7;j++){pose.position.set(tree.x,y+tree.h,tree.z);pose.rotation.set(-.25-(j%3)*.12,tree.angle+j*Math.PI*2/7,(j%2)*.08);let size=(tree.grove?1.25:1.05)+rand(i*9+j)*.5;pose.scale.set(size,size,size);pose.updateMatrix();leafMesh.setMatrixAt(i*7+j,pose.matrix);}});
-  broadTrees.forEach((tree,i)=>{const y=groundHeight(tree.x,tree.z),w=9+rand(i+81)*5;for(let j=0;j<3;j++){pose.position.set(tree.x,y+tree.h+(tree.swing?3.5:.8),tree.z);pose.rotation.set(0,tree.angle+j*Math.PI/3,0);pose.scale.set(w,w*.48,1);pose.updateMatrix();canopyMesh.setMatrixAt(i*3+j,pose.matrix);}});
+  broadTrees.forEach((tree,i)=>{const y=groundHeight(tree.x,tree.z),w=9+rand(i+81)*5;for(let j=0;j<3;j++){pose.position.set(tree.x,y+tree.h+(tree.swing?3.5:.8),tree.z);if(tree.swing){pose.position.y-=.4+j*.08;pose.rotation.set(-Math.PI/2,0,tree.angle+j*Math.PI/3);pose.scale.set(w,w*.8,1);}else{pose.rotation.set(0,tree.angle+j*Math.PI/3,0);pose.scale.set(w,w*.48,1);}pose.updateMatrix();canopyMesh.setMatrixAt(i*3+j,pose.matrix);}});
   const branches=new THREE.InstancedMesh(branchGeometry,bark,broadTrees.length*2);broadTrees.forEach((tree,i)=>{const y=groundHeight(tree.x,tree.z),height=tree.h+(tree.swing?3.5:0);for(let j=0;j<2;j++){const angle=tree.angle+j*2.8,start=new THREE.Vector3(tree.x,y+height*.7,tree.z),end=new THREE.Vector3(tree.x+Math.cos(angle)*2.6,y+height+.4,tree.z+Math.sin(angle)*2.6),direction=end.clone().sub(start);pose.position.copy(start).add(end).multiplyScalar(.5);pose.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),direction.clone().normalize());pose.scale.set(1,direction.length(),1);pose.updateMatrix();branches.setMatrixAt(i*2+j,pose.matrix);}});
   for(const mesh of [trunkMesh,leafMesh,canopyMesh,branches])if(mesh.count){mesh.instanceMatrix.needsUpdate=true;mesh.computeBoundingSphere();scene.add(mesh);}
  }
@@ -74,7 +74,12 @@ vec3 detail=texture2D(grassDetail,islandGround*.18).rgb;float inland=1.0-smooths
  forest.forEach((tree,i)=>{const {x,z,h}=tree,a=new THREE.Vector3(...anchorFor([x,z,h])),start=new THREE.Vector3(x,a.y,z),d=a.clone().sub(start);pose.position.copy(start).add(a).multiplyScalar(.5);pose.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize());pose.scale.set(1,a.distanceTo(start),1);pose.updateMatrix();handholds.setMatrixAt(i,pose.matrix);});
  handholds.instanceMatrix.needsUpdate=true;handholds.computeBoundingSphere();scene.add(handholds);
  // Rope trees have their own visible rope even when Patch is elsewhere.
- const ropes=new Map();for(const i of ROPE_TREES){const hold=holdFor(i),geometry=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(...hold.anchor),new THREE.Vector3(...hold.grip)]),line=new THREE.Line(geometry,new THREE.LineBasicMaterial({color:0xb39a6c}));scene.add(line);ropes.set(i,line);}
+ const ropes=new Map();for(const i of ROPE_TREES){const hold=holdFor(i),geometry=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(...hold.anchor),new THREE.Vector3(...hold.grip)]),line=new THREE.Line(geometry,new THREE.LineBasicMaterial({color:0xb39a6c}));scene.add(line);ropes.set(i,line);
+  const [x,y,z]=hold.anchor,[tx,tz]=trees[i],dx=x-tx,dz=z-tz;
+  // A broad, visible bough supports his landing and resting pose at the rope top.
+  beam(wood,[tx,groundHeight(tx,tz)+trees[i][2]+2.5,tz],[x,y-.3,z],.32,.42);
+  beam(wood,[tx,y-.3,tz],[x+dx*.8,y-.3,z+dz*.8],.42,.42);
+ }
  function setRope(i,end){const line=ropes.get(i);if(!line)return;const p=line.geometry.attributes.position,hold=holdFor(i),tip=end||hold.grip;p.setXYZ(1,...tip);p.needsUpdate=true;line.geometry.computeBoundingSphere();}
  // Scrub, flowers and coastal stones are instanced rather than individual meshes.
  for(let i=0;i<600;i++){let x=(rand(i+16000)*2-1)*300,z=(rand(i+18000)*2-1)*340;if(shoreFraction(x,z)>.93||reserved(x,z)||rand(i+19000)<.5)continue;rocks.push({x,z,s:.4+rand(i+20000)*2});}

@@ -67,8 +67,8 @@ test('a lookout climb only plays moves its hold allows and ends on his feet',()=
  }
 });
 
-test('tree climbs stay free hangs or rope holds',()=>{
- for(const index of [0,1]){
+test('branch climbs stay free hangs',()=>{
+ for(const index of [0]){
   const line=holdLine(holdFor(index));
   const plan=climbPlan(line,rng(index+3),{duration:600,fromGround:false}),allowed=new Set(Object.values(HANG_CLIPS[index===0?'free':'rope']));
   for(const seg of plan.segments)assert.ok(allowed.has(seg.clip),seg.clip);
@@ -89,4 +89,18 @@ test('visitors cannot walk into the climbing rock',()=>{
  const w=CLIMB_WALLS[0],x=w.x-w.normal[0]*1.2,z=w.z-w.normal[1]*1.2;
  assert.ok(insideRock(x,z));
  assert.ok(!walkable(x,z,w.x+w.normal[0]*2,w.z+w.normal[1]*2));
+});
+
+
+test('every rope climbs to its anchor, lands once, and rests on the canopy',()=>{
+ for(const index of ROPE_TREES){
+  const line=holdLine(holdFor(index)),plan=climbPlan(line,rng(3),{duration:600,fromGround:false});
+  assert.deepEqual(plan.segments.map(s=>s.clip),['rope-climb','swing-land','sleep-lay']);
+  const climb=plan.segments[0],end=placement(line,plan.at(climb.t1-1e-6));
+  assert.ok(Math.abs(end.y+CLIPS['rope-climb'].hands[0][1]-line.anchor[1])<1e-5);
+  let previous=-Infinity;
+  for(let t=0;t<climb.t1;t+=.1){const p=placement(line,plan.at(t));assert.ok(p.y>=previous);previous=p.y;assert.ok(Number.isFinite(p.x+p.y+p.z));}
+  const rest=placement(line,plan.at(300));assert.equal(rest.clip,'sleep-lay');assert.equal(rest.y,line.anchor[1]-.5);
+  assert.deepEqual(plan.at(300),climbPlan(line,rng(3),{duration:600,fromGround:false}).at(300));
+ }
 });

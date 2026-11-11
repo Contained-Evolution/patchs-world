@@ -62,8 +62,9 @@ new GLTFLoader().load(new URL('./assets/patch.glb', document.baseURI).href, gltf
     // Remove only the hips' steady drift, so the stride and bob stay and the loop never snaps back.
     const tracks = clip.tracks.map(track => {
       const copy = track.clone();
-      if (/(?:mixamorig[:_]?Hips).*\.position$/i.test(copy.name) && ['walk','run','swing','swim'].includes(clip.name)) {
+      if (/(?:mixamorig[:_]?Hips).*\.position$/i.test(copy.name) && ['walk','run','swing','swim','rope-climb','swing-land'].includes(clip.name)) {
         const n=copy.times.length, drift=[0,1,2].map(c=>copy.values[(n-1)*3+c]-copy.values[c]), span=copy.times[n-1]-copy.times[0];
+        if(clip.name==='swing-land')drift[1]=0;
         if (span>0) { for (let i=0;i<n;i++) { const f=(copy.times[i]-copy.times[0])/span; for (let c=0;c<3;c++) copy.values[i*3+c]-=drift[c]*f; } strideSpeed[clip.name]=Math.hypot(...drift)/span; }
       }
       return copy;
@@ -85,18 +86,18 @@ let state = null, hasLiveState = false, demo = false, journey = null, serverOffs
 // He swims slow laps of the pond, stopping now and then to tread water.
 function swimAt(seconds){const lap=Math.max(0,seconds)||0,swum=Math.floor(lap/60)*40+Math.min(lap%60,40),a=swum*.034;return {x:ISLAND.pondX+Math.cos(a)*8,z:ISLAND.pondZ+Math.sin(a)*5.6,heading:Math.atan2(-8*Math.sin(a),5.6*Math.cos(a)),stroke:lap%60<40};}
 // Climbs follow a seeded plan. At the lookout he braces on the rock's flat face;
-// in the tall trees he free-hangs from a branch or holds a rope.
+// in the tall trees he climbs a rope, lands on its canopy bough and rests.
 function startClimb(place,key,since,until){
   const seed=seedFrom(key),random=rng(seed),duration=Math.max(60,(Date.parse(until)-Date.parse(since))/1000||600);
   if(place==='lookout'){const line=wallHold(CLIMB_WALLS[0]),plan=climbPlan(line,random,{duration,fromGround:true});return {key,line,plan,start:line.stand(plan.segments[0].s),joined:false};}
   // A rope is held facing its tree.
-  const hold=holdFor(seed%3===0?1:0),[gx,,gz]=hold.grip,[tx,tz]=trees[hold.index];
+  const hold=holdFor([1,9,8][seed%3]),[gx,,gz]=hold.grip,[tx,tz]=trees[hold.index];
   const line=holdLine(hold,Math.atan2(tx-gx,tz-gz)),plan=climbPlan(line,random,{duration,fromGround:false});
   return {key,line,plan,start:[gx,gz],joined:true};
 }
 // Returns false while the generic code still has him walking to the tree and pulling himself up.
 function followClimb(elapsed,dt){
-  const seg=climb.plan.at(Math.max(0,elapsed)),p=placement(climb.line,seg),wall=climb.line.kind==='wall';
+  const wall=climb.line.kind==='wall',seg=climb.plan.at(Math.max(0,elapsed-(wall?0:4))),p=placement(climb.line,seg);
   if(!wall&&climbTime<4)return false;
   if(!climb.joined){
     // He joins the shared climb from the ground, walking round the rock if it is in his way.
@@ -239,7 +240,7 @@ if (travel || swinging) {
   patch.rotation.z=0;
   if(action==='fish'&&!arriving)face(Math.atan2(ISLAND.pondX-patch.position.x,ISLAND.pondZ-patch.position.z),dt);
   let clip=arriving&&action!=='swim'?'walk':pose?pose.clip:names[action]||'idle';
-  if(climb&&!arriving){wasAirborne=true;clip='swing-start';}
+  if(climb&&!arriving){wasAirborne=true;clip=climb.line.kind==='rope'?'rope-climb':'swing-start';}
   if(lap&&!arriving&&!lap.stroke)clip='tread';
   if(descent){descent.elapsed+=dt;const f=Math.min(1,descent.elapsed/2);patch.position.y=THREE.MathUtils.lerp(descent.start,descent.ground,f);clip='rope-to-ground';heldGrip=null;if(f===1)descent=null;}
   // In the hammock he sleeps either on his back or on his side, rolling over now and then.
@@ -252,7 +253,7 @@ if (travel || swinging) {
 }
 if(dt>0)patchVelocity.subVectors(patch.position,previousPatchPosition).multiplyScalar(1/dt).clampLength(0,5);
 // Match the stride to his ground speed so his feet neither slide nor race.
-if(currentAction&&strideSpeed[currentName]&&dt>0){const speed=Math.hypot(patchVelocity.x,patchVelocity.z);currentAction.timeScale=speed>.05?THREE.MathUtils.clamp(speed/strideSpeed[currentName],.45,2.2):1;}
+if(currentAction&&strideSpeed[currentName]&&dt>0&&['walk','run','swing','swim'].includes(currentName)){const speed=Math.hypot(patchVelocity.x,patchVelocity.z);currentAction.timeScale=speed>.05?THREE.MathUtils.clamp(speed/strideSpeed[currentName],.45,2.2):1;}
 if(patchModel)patchModel.position.set(0,0,0);
 if(mixer) mixer.update(dt);
 patchEyes?.update((Date.now()+serverOffset)/1000, action==='sleep' && ['sleep','sleep-lay','sleep-roll'].includes(currentName), dt);
@@ -262,7 +263,6 @@ if(rightHandBone&&heldGrip){
   patch.updateMatrixWorld(true);rightHandBone.getWorldPosition(handWorld);
   if(heldRope!==null)scenery.setRope(heldRope,[handWorld.x,handWorld.y,handWorld.z]);
 }
-if(climb?.line.kind==='rope'&&climbTime>=4){const [x,y,z]=climb.line.point(0);scenery.setRope(climb.line.index,[x,y-.5,z]);}
 if(rightHandBone&&fishingRod.visible){patch.updateMatrixWorld(true);rightHandBone.getWorldPosition(handWorld);fishingRod.position.copy(patch.worldToLocal(handWorld.clone()));}
 // Tip his head back from the held sitting pose. Set it absolutely each frame so the tilt never accumulates.
 if(action==='watch-sky' && headBone && currentName==='sit' && currentAction.time >= clips.sit.duration*.8){
