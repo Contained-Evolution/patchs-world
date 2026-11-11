@@ -5,7 +5,7 @@ import { sampleState } from '../../shared/state.js';
 import { createIsland } from './island.js';
 import { setupCommunity } from './community.js';
 import { ISLAND } from './terrain.js';
-import { travelFraction } from './travel-progress.js';
+import { travelFraction, loopFraction } from './travel-progress.js';
 import { adaptiveQuality } from './render-quality.js';
 import { places, groundHeight, walkRoute, swingRoute, swingLoop, trees, statusText, isLocalPreview, safePatch } from './world-state.js';
 
@@ -65,6 +65,17 @@ function playClip(name, once = false) {
   next.fadeIn(.2).play(); currentAction = next; currentName = name;
 }
 let state = null, hasLiveState = false, demo = false, journey = null, serverOffset = 0;
+function renderCare(p) {
+  const panel=$('#care'), list=$('#care-needs');
+  if (!p.needs) { panel.hidden=true; return; }
+  panel.hidden=false; $('#care-mood').textContent=`Mood: ${p.mood || 'unknown'}`;
+  list.replaceChildren();
+  for (const [key,label] of [['hunger','Fullness'],['energy','Energy'],['fun','Fun'],['comfort','Comfort'],['social','Social']]) {
+    const value=p.needs[key]; if (!Number.isFinite(value)) continue;
+    const percent=Math.round(Math.max(0,Math.min(1,value))*100), row=document.createElement('div'), name=document.createElement('span'), meter=document.createElement('progress'), text=document.createElement('span');
+    row.className='care-row'; name.textContent=label; meter.max=100; meter.value=percent; meter.setAttribute('aria-label',label); text.textContent=`${percent}%`; row.append(name,meter,text); list.append(row);
+  }
+}
 const localPreview = isLocalPreview(location.hostname), start = performance.now();
 const mockActions=['idle','walk','run','climb','swing','swim','fish','eat','sit','sleep','think','write','phone','wave','look','explore','watch-sky'], ids=Object.keys(places);
 async function poll() {
@@ -78,10 +89,11 @@ async function poll() {
     const previous=state?.patch;
     // A poll can arrive after an activity ended while this tab was paused. Place
     // Patch at the server's destination instead of replaying an obsolete journey.
-    if (!state || (previous?.target && !next.patch.target && previous.target===next.patch.place)) {
+    if (!state || (previous && previous.since!==next.patch.since && !next.patch.target)) {
       const [x,z]=places[next.patch.place]; patch.position.set(x,groundHeight(x,z),z);
     }
     state = next; hasLiveState = true; demo = false;
+    renderCare(next.patch);
     $('#connection').hidden = true;
   } catch {
     demo = localPreview && !hasLiveState;
@@ -103,6 +115,7 @@ let last=performance.now();patch.position.set(0,groundHeight(0,0),0);
 $('#find-patch').onclick=()=>{ if (state) controls.findPatch(patch.position,patchVelocity); };
 function frame(now){requestAnimationFrame(frame);updateQuality(now);const dt=Math.min((now-last)/1000,.05);last=now;let t=(now-start)/1000;
 if (demo) { let n=Math.floor(t/9); state={patch:{...sampleState.patch,action:mockActions[n%mockActions.length],place:ids[Math.floor(n/2)%ids.length],target:['walk','run','swing'].includes(mockActions[n%mockActions.length]) ? ids[(Math.floor(n/2)+1)%ids.length] : null,since:String(n),says:null},clock:{dayFraction:(.38+t/240)%1,weather:['clear','cloudy','rain','storm'][Math.floor(t/60)%4]}}; }
+if (demo) renderCare(state.patch);
 controls.update(dt);
 $('#find-patch').disabled=!state;
 if (!state) { patch.visible=false; scene.background=skyDay; scenery.update(reducedMotion.matches?0:dt,1); renderer.render(scene,camera); return; }
@@ -127,7 +140,7 @@ if (travel || swinging) {
     journey={key,points,lengths,total};
   }
   const j=journey;
-  const fraction=travel?travelFraction(since,until,Date.now()+serverOffset,j.total):travelFraction(since,null,Date.now()+serverOffset,j.total);
+  const fraction=travel?travelFraction(since,until,Date.now()+serverOffset,j.total):loopFraction(since,Date.now()+serverOffset,j.total);
   let remaining=j.total*fraction,index=0;while(index<j.lengths.length-1&&remaining>j.lengths[index])remaining-=j.lengths[index++];
   const from=j.points[index],to=j.points[index+1];if(to){const progress=j.lengths[index]?remaining/j.lengths[index]:0,branch=to.mode==='branch';patch.position.lerpVectors(from.p,to.p,progress);if(branch){const dx=to.p.x-from.p.x,dz=to.p.z-from.p.z,horizontal=Math.hypot(dx,dz);if(horizontal>.1){let nx=-dz/horizontal,nz=dx/horizontal;if(Math.abs(nx)>.1&&nx<0){nx=-nx;nz=-nz;}const arc=Math.sin(Math.PI*progress)*2;patch.position.x+=nx*arc;patch.position.z+=nz*arc;}patch.position.y-=Math.sin(Math.PI*progress)*Math.min(.8,j.lengths[index]*.15);const rope=vineGeometry.attributes.position;rope.setXYZ(0,patch.position.x,patch.position.y+1.8,patch.position.z);rope.setXYZ(1,to.p.x,to.p.y+1.8,to.p.z);rope.needsUpdate=true;swingVine.visible=true;}else if(to.mode!=='climb'&&to.mode!=='descent')patch.position.y=groundHeight(patch.position.x,patch.position.z);patch.rotation.y=Math.atan2(to.p.x-from.p.x,to.p.z-from.p.z);patch.rotation.z=branch?Math.sin(Math.PI*progress)*.2:0;playClip(branch?'swing':to.mode==='climb'||to.mode==='descent'?'hang':action==='run'?'run':'walk');}
 } else {

@@ -92,3 +92,11 @@ test('activity end and speech expiry are exposed without extending legacy speech
   state.activity.saysAt = now + 5000;
   assert.equal(view(state, now + 1000).patch.says, null);
 });
+
+
+test('the public activity exposes its shared start and end times', () => {
+  const now=Date.parse('2026-11-11T12:00:00Z');
+  const body=newBody(now, 1), patch=view(body,now).patch;
+  assert.equal(Date.parse(patch.since),body.activity.start);
+  assert.equal(Date.parse(patch.until),body.activity.end);
+});
