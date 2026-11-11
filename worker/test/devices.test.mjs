@@ -20,10 +20,9 @@ function fakeOpenRouter(...replies) {
 const world = now => ({ body: newBody(now, 1), mind: {}, memories: [], categories: {} });
 const hereAt = (w, action, place, now, minutes = 20) => { w.body.activity = { action, place, target: null, start: now, end: now + minutes * 60000, effects: {} }; };
 
-test('the phone is gone; the coconut computer is only at camp and the tablet works anywhere', () => {
+test('the coconut computer is only at camp and the tablet works anywhere', () => {
   const w = world(at(10));
-  assert.equal(ACTIVITIES.some(choice => choice.action === 'phone'), false);
-  assert.match(choose(w.body, { do: 'phone', minutes: 10 }, at(10)), /not something you can do/);
+  assert.ok(ACTIVITIES.some(choice => choice.action === 'computer' && choice.place === 'computer'));
   assert.match(choose(w.body, { do: 'computer', where: 'beach', minutes: 10 }, at(10)), /only computer at: computer/);
   assert.equal(choose(w.body, { do: 'research', where: 'beach', minutes: 10 }, at(10)), null);
   assert.equal(choose(w.body, { do: 'write', where: 'beach', minutes: 10 }, at(10)), null);

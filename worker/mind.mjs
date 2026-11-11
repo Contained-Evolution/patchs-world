@@ -138,7 +138,7 @@ function choicesText(body) {
 Places, and minutes to get there from here: ${PLACES_KNOWN.map(place => `${place} ${place === here ? '(here)' : travelMinutes(here, place)}`).join(', ')}.`;
 }
 
-// His tablet and the coconut computer: what they can do, how much internet time is left, and whether mail is waiting.
+// His daily internet allowance, and what his tablet and coconut computer tell him: what they can do, how much internet is left, and whether mail is waiting.
 export const DAILY_SEARCH_BUDGET = 25;
 // Covers one fixed-size search and its page check at the maximum routing prices.
 export const SEARCH_RESERVE = 0.5;
