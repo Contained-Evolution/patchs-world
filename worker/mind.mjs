@@ -3,6 +3,7 @@
 // In the evening it writes his diary with the higher-quality model.
 
 import { CHILDHOOD, PERSONA, LIFE_STORY } from './persona.mjs';
+import { perceive, nextWeather } from './senses.mjs';
 import { lightUp, recordRecall, normalTags, strengthOf, tagsIn, conceptGraph } from './memory-graph.mjs';
 import { CHOICES, WHERE, PLACES_KNOWN, TIME_ZONE, localMinutes, choose, travelMinutes } from './body.mjs';
 import { STARTING_CATEGORIES } from '../shared/memory.js';
@@ -87,7 +88,7 @@ const ACTION_TAGS = {
   'watch-sky': ['sky', 'clouds', 'stars'], phone: ['device', 'letters'], think: ['wondering'], look: ['big world'], sit: ['quiet'],
 };
 export function cuesFor(body, mind, now) {
-  const { activity, needs = {} } = body, cues = [...(PLACE_TAGS[activity.target || activity.place] || []), ...(ACTION_TAGS[activity.action] || []), ...(mind.noticed || [])];
+  const { activity, needs = {} } = body, cues = [...perceive(activity.target || activity.place, now).tags, ...(PLACE_TAGS[activity.target || activity.place] || []), ...(ACTION_TAGS[activity.action] || []), ...(mind.noticed || [])];
   if (needs.hunger < 0.35) cues.push('food', 'banana');
   if (needs.energy < 0.3) cues.push('sleeping');
   if (needs.social < 0.35) cues.push('missing family', 'family', 'friends');
@@ -131,6 +132,7 @@ function dayNotes(body, mind, memories, now, recalled = []) {
   return [
     `It is ${clockWords(now)}.`,
     nowLine(body, now),
+    `Around you: ${perceive(body.activity.target || body.activity.place, now).text}`,
     mind.problem ? `Last time you chose something you couldn't do: ${mind.problem}` : '',
     `How you feel: ${feelings(body.needs)}.`,
     log.length ? `What you did since you last stopped to think:\n${log.join('\n')}` : 'Nothing new since you last stopped to think.',
@@ -294,7 +296,9 @@ export function nextWake(body, now) {
   if (activity.action === 'sleep') return Math.max(activity.end + MINUTE, now + MINUTE);
   const done = activity.end + (activity.target && queued ? queued.minutes * MINUTE : 0) + 30000;
   const urgent = Object.values(needs).some(value => value < 0.12);
-  return Math.max(now + 2 * MINUTE, Math.min(done, now + (urgent ? 20 : 90) * MINUTE));
+  // Rain or a storm coming in wakes him to decide what to do about it.
+  const turn = nextWeather(now), weatherTurn = turn && ['rain', 'storm'].includes(turn.weather) ? turn.at + MINUTE : Infinity;
+  return Math.max(now + 2 * MINUTE, Math.min(done, weatherTurn, now + (urgent ? 20 : 90) * MINUTE));
 }
 
 export function allMemories(island) {
