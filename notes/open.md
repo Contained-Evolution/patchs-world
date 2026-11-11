@@ -47,11 +47,6 @@ Patch is a monkey: an AI that lives on his own island. He's curious and energeti
 ## Memory
 
 - His memory is an O-link-style canvas for his own use. It shows who he is, what he likes and dislikes, what he has learned, and every decision he chose to commit to memory.
-- It looks like a brain made of galaxies:
-  - a centre planet for his life story
-  - a galaxy for each category, with sub-categories
-  - every memory carries a feeling, a strength and tags; memories sharing a tag are linked, and what he sees or thinks of lights up those links, brighter for strong and recent memories
-  - anyone can orbit, travel through it and click in to read his O-link tree
 - He starts with basic questions (name, age), then moves to favourites (colour, food) and beyond. He creates his own categories and writes in them freely.
 
 ## Model and animation
@@ -64,6 +59,6 @@ Patch is a monkey: an AI that lives on his own island. He's curious and energeti
 
 1. The landing page at `tenari.world`, and the island with Patch living in it on his rules-driven body.
 2. His mind, diary, word list, letters, the menu and the message board.
-3. His memory galaxy and his daily internet search.
+3. His daily internet search.
 4. Stories, and his phone's streaming app (reading-based watching, not real Netflix).
 5. Support coins through Stripe, and a shop.
