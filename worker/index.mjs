@@ -247,7 +247,7 @@ export default {
     if (path === '/api/me' || path === '/api/letters' || path.startsWith('/api/board')) return visitorApi(request, env, url, path);
     if (path.startsWith('/api/')) return json({ error: 'Not found.' }, 404);
 
-    const assetUrl = new URL(path, url);
+    const assetUrl = new URL(path === '/' ? '/index.html' : path, url);
     const asset = await env.ASSETS.fetch(new Request(assetUrl, request));
     if (asset.status === 404 && (path === '/' || path === '/index.html'))
       return new Response(HOLDING, { headers: { ...headers, 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } });
