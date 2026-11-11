@@ -7,6 +7,7 @@ import { visitor, SIGN_IN } from './accounts.mjs';
 import { LIMITS, cleanText, freshLimits, checkLetter, checkPost, countLetter, countPost, pickLetters, postKey } from './letters.mjs';
 import { STARTING_CATEGORIES } from '../shared/memory.js';
 import { concepts } from './memory-graph.mjs';
+import { cleanSubscription, addDevice, sendPush, gone, replyNote, journalNote } from './push.mjs';
 
 const headers = {
   'x-content-type-options': 'nosniff',
@@ -20,11 +21,12 @@ const publicLetter = ({ id, text, at, reply, repliedAt }) => ({
   id, text, at: new Date(at).toISOString(), reply, repliedAt: repliedAt ? new Date(repliedAt).toISOString() : null,
 });
 
-async function readText(request) {
+async function readJson(request) {
   const bytes = await request.arrayBuffer();
   if (bytes.byteLength > 8192) return null;
-  try { return JSON.parse(new TextDecoder().decode(bytes))?.text; } catch { return null; }
+  try { return JSON.parse(new TextDecoder().decode(bytes)); } catch { return null; }
 }
+const readText = async request => (await readJson(request))?.text;
 
 const MINUTE = 60000;
 // Journal entries sort by when he wrote them, in his own time: his tablet entries through the day and the evening diary.
@@ -86,14 +88,14 @@ export class PatchWorld extends DurableObject {
     const world = { body, mind: stored.get('mind') || {}, memories: stored.get('memories') || [], categories: stored.get('categories') || {} };
     const startSpend = world.mind.spend?.total || 0;
     const people = stored.get('people') || {};
-    const answered = [];
+    const answered = [], replies = [], entries = [];
     const since = world.mind.lastWake || now - 60 * MINUTE;
     try {
       if (body.activity.action !== 'sleep') {
         await ponder(this.env, { ...world, mail: (stored.get('unread') || []).length }, now);
         await research(this.env, world, now);
         const entry = await writeJournal(this.env, world, now);
-        if (entry) await this.ctx.storage.put(diaryKey(entry), entry);
+        if (entry) { await this.ctx.storage.put(diaryKey(entry), entry); entries.push(entry); }
         // Letters are read and answered only at the coconut computer.
         const atComputer = didSince(world.body, since, { place: 'computer' });
         const ids = atComputer ? (stored.get('unread') || []).slice(0, 50) : [];
@@ -108,10 +110,11 @@ export class PatchWorld extends DurableObject {
           if (reply.note) person.notes = [...person.notes, reply.note].slice(-10);
           world.body.needs.social = Math.min(1, world.body.needs.social + 0.08);
           answered.push(letter.id);
+          replies.push({ userId: letter.from.id, reply: reply.reply });
         }
       }
       const diary = await writeDiary(this.env, world, now);
-      if (diary) await this.ctx.storage.put(diaryKey(diary), diary);
+      if (diary) { await this.ctx.storage.put(diaryKey(diary), diary); entries.push(diary); }
     } catch (error) {
       world.mind.lastError = { at: now, message: String(error.message || error).slice(0, 300) };
       // Until his mind works again, his needs decide for him.
@@ -126,6 +129,50 @@ export class PatchWorld extends DurableObject {
     const unread = (latest.get('unread') || []).filter(id => !answered.includes(id));
     await this.ctx.storage.put({ body: world.body, mind: world.mind, memories: world.memories, categories: world.categories, unread, people });
     await this.ctx.storage.setAlarm(nextWake(world.body, now));
+    try { await this.notify(replies, entries); } catch (error) { console.error('Patch could not send notifications:', error); }
+  }
+
+  // This account's notification devices: { publicKey, devices: [{ endpoint, letters, journal }] }.
+  async devices(who) {
+    const devices = (await this.ctx.storage.get(`push:${who.id}`)) || [];
+    return { publicKey: this.env.VAPID_PUBLIC_KEY || null, devices: devices.map(({ endpoint, letters, journal }) => ({ endpoint, letters, journal })) };
+  }
+
+  async savePush(who, body) {
+    if (!this.env.VAPID_PUBLIC_KEY) return { status: 503, error: 'Notifications are not set up yet.' };
+    const subscription = cleanSubscription(body?.subscription);
+    if (!subscription) return { status: 400, error: "This browser's notifications can't be used here." };
+    const key = `push:${who.id}`;
+    await this.ctx.storage.put(key, addDevice(await this.ctx.storage.get(key), subscription, body, Date.now()));
+    return { status: 200, ...(await this.devices(who)) };
+  }
+
+  async removePush(who, endpoint) {
+    const key = `push:${who.id}`, devices = ((await this.ctx.storage.get(key)) || []).filter(device => device.endpoint !== endpoint);
+    if (devices.length) await this.ctx.storage.put(key, devices); else await this.ctx.storage.delete(key);
+    return { status: 200, ...(await this.devices(who)) };
+  }
+
+  // A reply goes to its writer's devices; a journal entry goes to every device that asked for journal news.
+  async notify(replies, entries) {
+    if (!this.env.VAPID_PUBLIC_KEY || !this.env.VAPID_PRIVATE_KEY || !(replies.length || entries.length)) return;
+    const owners = entries.length ? await this.ctx.storage.list({ prefix: 'push:' }) : await this.ctx.storage.get(replies.map(({ userId }) => `push:${userId}`));
+    const sends = [];
+    for (const [key, devices] of owners) {
+      const mine = replies.filter(({ userId }) => `push:${userId}` === key).map(({ reply }) => replyNote(reply));
+      for (const device of devices) {
+        for (const note of [...(device.letters ? mine : []), ...(device.journal ? entries.map(journalNote) : [])])
+          sends.push(sendPush(this.env, device, note).then(status => ({ key, endpoint: device.endpoint, status })));
+      }
+    }
+    const stale = new Map();
+    for (const result of await Promise.allSettled(sends)) {
+      if (result.status === 'fulfilled' && gone(result.value.status)) stale.set(result.value.key, [...(stale.get(result.value.key) || []), result.value.endpoint]);
+    }
+    for (const [key, endpoints] of stale) {
+      const devices = ((await this.ctx.storage.get(key)) || []).filter(device => !endpoints.includes(device.endpoint));
+      if (devices.length) await this.ctx.storage.put(key, devices); else await this.ctx.storage.delete(key);
+    }
   }
 
   async journal() {
@@ -287,6 +334,9 @@ async function visitorApi(request, env, url, path) {
   if (path === '/api/letters' && request.method === 'GET') return json({ letters: await patch.letters(who) });
   if (path === '/api/letters' && request.method === 'POST') return send(await patch.sendLetter(who, await readText(request)));
   if (path === '/api/board' && request.method === 'POST') return send(await patch.sendPost(who, await readText(request)));
+  if (path === '/api/push' && request.method === 'GET') return json(await patch.devices(who));
+  if (path === '/api/push' && request.method === 'POST') return send(await patch.savePush(who, await readJson(request)));
+  if (path === '/api/push/remove' && request.method === 'POST') return send(await patch.removePush(who, (await readJson(request))?.endpoint));
   const action = path.match(/^\/api\/board\/(post:[0-9a-z-]+)\/(report|block)$/);
   if (action && request.method === 'POST') return send(await (action[2] === 'report' ? patch.report(who, action[1]) : patch.block(who, action[1])));
   return json({ error: 'Not found.' }, 404);
@@ -304,7 +354,7 @@ export default {
       const patch = patchOf(env);
       return json(path === '/api/state' ? await patch.state() : path === '/api/journal' ? await patch.journal() : await patch.memory());
     }
-    if (path === '/api/me' || path === '/api/letters' || path.startsWith('/api/board')) return visitorApi(request, env, url, path);
+    if (path === '/api/me' || path === '/api/letters' || path.startsWith('/api/board') || path.startsWith('/api/push')) return visitorApi(request, env, url, path);
     if (path.startsWith('/api/')) return json({ error: 'Not found.' }, 404);
 
     const assetUrl = new URL(path === '/' ? '/index.html' : path, url);
@@ -313,6 +363,8 @@ export default {
       return new Response(HOLDING, { headers: { ...headers, 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } });
     const out = new Headers(asset.headers);
     for (const [name, value] of Object.entries(headers)) out.set(name, value);
+    // The service worker checks for a new island on every visit.
+    if (path === '/sw.js') { out.set('cache-control', 'no-cache'); out.set('service-worker-allowed', '/patch/'); }
     return new Response(asset.body, { status: asset.status, headers: out });
   },
 };

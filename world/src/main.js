@@ -8,6 +8,8 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { sampleState } from '../../shared/state.js';
 import { createIsland } from './island.js';
 import { setupCommunity } from './community.js';
+import { setupNotifications } from './notifications.js';
+import { registerApp } from './app.js';
 import { ISLAND } from './terrain.js';
 import { travelFraction } from './travel-progress.js';
 import { adaptiveQuality } from './render-quality.js';
@@ -25,7 +27,8 @@ for(const [label,id] of Object.entries({grove:'banana-grove',trees:'tall-trees',
 
 $('#open-map').onclick = () => { controls.pause(); dialog.showModal(); };
 $('#close-map').onclick = () => dialog.close();
-setupCommunity(dialog);
+const community=setupCommunity(dialog);
+setupNotifications(dialog,community,registerApp());
 // Chris's account sees an Animations button in the menu that opens Patch's clip locker.
 const animations=setupAnimationViewer();
 $('#open-animations').onclick=()=>{dialog.close();controls.pause();animations.open();};
@@ -41,6 +44,9 @@ const scene = new THREE.Scene();
 scene.fog = new THREE.Fog(0xadd9d4, 750, 1650);
 const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, .1, 12000);
 const controls = createVisitorControls(camera, renderer.domElement, dialog, scene);
+// A notification opens the island at its panel: ?view=letters.
+const view=new URLSearchParams(location.search).get('view');
+if(view==='letters'||view==='board'){history.replaceState(null,'',location.pathname);controls.pause();dialog.showModal();community.openPanel(view);}
 const hemi = new THREE.HemisphereLight(0xd9f5ee, 0x496d4c, 2.1); scene.add(hemi);
 const sunLight = new THREE.DirectionalLight(0xffedbe, 2.4); scene.add(sunLight);
 const sunColor=new THREE.Color(0xffedbe),moonColor=new THREE.Color(0x91b7e0);

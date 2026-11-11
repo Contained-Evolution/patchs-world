@@ -1,10 +1,10 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Patch</title><link rel="stylesheet" href="./style.css"><link rel="stylesheet" href="./community.css"></head><body><main id="map"><div id="map-home"><h1>Patch</h1><nav><button id="open-letters">Letters</button><button id="open-board">Bulletin board</button></nav></div><section class="community" id="letters-panel" aria-labelledby="letters-title" hidden>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Patch</title><link rel="manifest" href="./manifest.webmanifest"><link rel="apple-touch-icon" href="./icons/apple-touch-icon.png"><meta name="apple-mobile-web-app-title" content="Patch"><link rel="stylesheet" href="./style.css"><link rel="stylesheet" href="./community.css"></head><body><main id="map"><div id="map-home"><h1>Patch</h1><nav><button id="open-letters">Letters</button><button id="open-board">Bulletin board</button></nav></div><section class="community" id="letters-panel" aria-labelledby="letters-title" hidden>
   <button class="back-map" type="button">← Back to Patch</button>
   <div class="panel-intro"><span class="panel-icon" aria-hidden="true">✉</span><div><p class="panel-kicker">A LITTLE NOTE FROM YOU</p><h3 id="letters-title" tabindex="-1">Letters to Patch</h3><p>Letters land on Patch's coconut computer. His tablet pings him, and he writes back when he sits down to type.</p></div></div>
   <button class="primary" id="write-letter" type="button">✎ Write to Patch</button>
   <form id="letter-form" class="stationery" hidden><span class="stamp" aria-hidden="true">🍌</span><label for="letter-text">Dear Patch,</label><textarea id="letter-text" maxlength="1000" rows="6" placeholder="Tell him about your day, ask him a question, or send him a challenge…" aria-describedby="letter-count"></textarea><div class="form-footer"><span id="letter-count" aria-live="polite">0 / 1000</span><button class="primary" type="submit">Send letter ✉</button></div></form>
   <div class="notice" id="letters-notice" role="status" hidden></div>
-  <div class="signin" id="letters-signin" hidden><p>Sign in to talk to Patch</p><a class="primary" href="/">Sign in</a></div>
+  <div class="signin" id="letters-signin" hidden><p>Sign in to talk to Patch</p><a class="primary" href="https://containedevolution.com/" target="_blank" rel="noopener">Sign in</a></div>
   <h4>Your letters</h4><div class="entries" id="letters-list"><p class="empty">No letters yet. Patch would love to hear from you!</p></div>
 </section>
 <section class="community" id="board-panel" aria-labelledby="board-title" hidden>
@@ -12,6 +12,6 @@
   <div class="panel-intro"><span class="panel-icon" aria-hidden="true">☼</span><div><p class="panel-kicker">NOTES FROM THE ISLAND COMMUNITY</p><h3 id="board-title" tabindex="-1">Message board</h3><p>Leave a little hello for everyone.</p></div></div>
   <form id="board-form"><label for="board-text">Your message</label><textarea id="board-text" maxlength="280" rows="3" placeholder="Say hello to the island…"></textarea><div class="form-footer"><span id="board-count">0 / 280 · No links</span><button class="primary" type="submit">Post</button></div></form>
   <div class="notice" id="board-notice" role="status" hidden></div>
-  <div class="signin" id="board-signin" hidden><p>Sign in to talk to Patch</p><a class="primary" href="/">Sign in</a></div>
+  <div class="signin" id="board-signin" hidden><p>Sign in to talk to Patch</p><a class="primary" href="https://containedevolution.com/" target="_blank" rel="noopener">Sign in</a></div>
   <h4>On the board</h4><div class="entries" id="board-list"><p class="empty">Loading the board…</p></div><button class="secondary" id="board-more" type="button" hidden>Load more</button>
 </section></main><script type="module" src="./community-page.js"></script></body></html>

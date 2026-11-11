@@ -1,10 +1,10 @@
 const $ = (root, selector) => root.querySelector(selector);
-const DEFAULT_SIGN_IN = '/';
+const DEFAULT_SIGN_IN = 'https://containedevolution.com/';
 
 export function setupCommunity(dialog) {
   const home = $(dialog, '#map-home'), panels = { letters: $(dialog, '#letters-panel'), board: $(dialog, '#board-panel') };
   const lists = { letters: $(dialog, '#letters-list'), board: $(dialog, '#board-list') };
-  let justSent = null, user = null, signIn = DEFAULT_SIGN_IN, boardNext = null, boardPosts = [], letters = [], boardLoaded = false;
+  let justSent = null, user = null, signIn = DEFAULT_SIGN_IN, boardNext = null, boardPosts = [], letters = [], boardLoaded = false, current = null;
 
   async function api(path, options = {}) {
     const response = await fetch(`/patch/api${path}`, { credentials: 'same-origin', cache: 'no-store', ...options });
@@ -13,10 +13,12 @@ export function setupCommunity(dialog) {
     return data;
   }
   function setSignIn(value) {
-    // The account endpoint returns a same-origin path. Ignore unexpected destinations.
-    if (typeof value === 'string' && value === '/' && !value.startsWith('//')) signIn=value;
-    dialog.querySelectorAll('.signin a').forEach(link => { link.href=signIn; });
+    // Sign-in opens Contained Evolution in its own window; coming back here checks the account again.
+    // An app on an iPhone's Home Screen keeps its own sign-in, so there it opens in the app's own browser sheet.
+    if (value === DEFAULT_SIGN_IN) signIn=value;
+    dialog.querySelectorAll('.signin a').forEach(link => { link.href=signIn; if (!navigator.standalone) { link.target='_blank'; link.rel='noopener'; } });
   }
+  setSignIn(signIn);
   function notice(panel, message) { const box=$(dialog, `#${panel}-notice`); box.textContent=message || ''; box.hidden=!message; }
   function promptSignIn(panel, path) { setSignIn(path); $(dialog, `#${panel}-signin`).hidden=false; }
   async function checkUser() { const result=await api('/me'); user=result.user; setSignIn(result.signIn); return user; }
@@ -77,19 +79,25 @@ export function setupCommunity(dialog) {
     catch(error) { if(!more) lists.board.replaceChildren(empty('The board could not be loaded.')); notice('board',error.message); }
     finally { button.disabled=false; }
   }
+  const sections = () => dialog.querySelectorAll('section.community');
+  function showPanel(name) {
+    current=name; home.hidden=true; sections().forEach(panel=>{ panel.hidden=panel.id!==`${name}-panel`; });
+    dialog.scrollTop=0; $(dialog,`#${name}-title`).focus({preventScroll:true});
+  }
   async function openPanel(name) {
     user=null;
     if(name==='letters') { letters=[]; renderLetters(); $(dialog,'#letter-form').hidden=true; }
-    home.hidden=true; Object.entries(panels).forEach(([key,panel])=>{ panel.hidden=key!==name; });
-    dialog.scrollTop=0; $(dialog,`#${name}-title`).focus({preventScroll:true}); notice(name,'');
+    showPanel(name); notice(name,'');
     $(dialog,`#${name}-signin`).hidden=true;
     if(name==='board') loadBoard();
     try { await checkUser(); if(name==='letters') { if(user) await loadLetters(); else {letters=[];renderLetters(); $(dialog,'#letter-text').value=''; $(dialog,'#letter-text').dispatchEvent(new Event('input'));} } else renderBoard(); }
     catch(error) { user=null; if(name==='letters') {letters=[];renderLetters();} else if(boardLoaded) renderBoard(); notice(name,error.message); }
   }
   for(const name of ['letters','board']) $(dialog,`#open-${name}`).addEventListener('click',()=>openPanel(name));
-  dialog.querySelectorAll('.back-map').forEach(button=>button.addEventListener('click',()=>{ Object.values(panels).forEach(panel=>panel.hidden=true); const active=button.closest('section').id==='letters-panel'?'letters':'board'; home.hidden=false; dialog.scrollTop=0; $(dialog,`#open-${active}`).focus(); }));
-  dialog.addEventListener('close',()=>{ Object.values(panels).forEach(panel=>panel.hidden=true); home.hidden=false; });
+  dialog.querySelectorAll('.back-map').forEach(button=>button.addEventListener('click',()=>{ sections().forEach(panel=>panel.hidden=true); current=null; const active=button.closest('section').id.replace(/-panel$/,''); home.hidden=false; dialog.scrollTop=0; $(dialog,`#open-${active}`)?.focus(); }));
+  dialog.addEventListener('close',()=>{ sections().forEach(panel=>panel.hidden=true); current=null; home.hidden=false; });
+  // Back from signing in: if this panel was asking for an account, look again.
+  document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible' && panels[current] && !$(dialog,`#${current}-signin`).hidden) openPanel(current); });
   for (const [name,max] of [['letter',1000],['board',280]]) {
     const input=$(dialog,`#${name}-text`), counter=$(dialog,`#${name}-count`);
     input.addEventListener('input',()=>{ counter.textContent=`${input.value.length} / ${max}`+(name==='board'?' · No links':''); counter.classList.toggle('near',input.value.length>max*.9); });
@@ -115,5 +123,5 @@ export function setupCommunity(dialog) {
     });
   }
   $(dialog,'#board-more').addEventListener('click',()=>loadBoard(true));
-  return { openPanel };
+  return { openPanel, showPanel };
 }

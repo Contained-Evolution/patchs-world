@@ -3,8 +3,8 @@ const COOKIE = 'ce_session';
 const TOKEN = /^[A-Za-z0-9_-]{32,96}$/;
 export const ADMIN_EMAIL = 'containedevolution@gmail.com';
 
-// Sign-in returns the visitor to Patch's World.
-export const SIGN_IN = '/';
+// Sign-in and account creation happen on Contained Evolution, in their own window.
+export const SIGN_IN = 'https://containedevolution.com/';
 
 function cookie(request, name) {
   return (request.headers.get('cookie') || '').split(/;\s*/)

@@ -4,6 +4,8 @@ import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { layoutMemories, sharedTagLinks, memoryLights, feelingColor, hash } from './memory-layout.js';
+import { registerApp } from './app.js';
+registerApp();
 
 const $ = id => document.getElementById(id);
 const reduced = matchMedia('(prefers-reduced-motion: reduce)');

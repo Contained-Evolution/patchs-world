@@ -86,3 +86,5 @@ nav button[hidden]{display:none}
 #letters-list .empty{padding:18px;border:1.5px dashed #78916d;border-radius:12px;text-align:center}
 @media(max-width:650px){.letter-paper{padding:14px 52px 10px 12px}.reply.screen,.reply.waiting{margin-left:10px}.reply.screen::before{display:none}.community .stationery{padding:16px 12px 12px}}
 @media(prefers-reduced-motion:reduce){.waiting-dot,.entry.letter.just-sent{animation:none}}
+.alerts label{display:flex;align-items:center;gap:12px;padding:10px 0;cursor:pointer}.alerts input{width:22px;height:22px;accent-color:#f0c47e;flex:none}.alerts small{color:#c8dac9}
+#app-update{position:absolute;left:50%;bottom:max(84px,calc(env(safe-area-inset-bottom) + 64px));transform:translateX(-50%);z-index:5;border:1px solid #f0c47e;border-radius:30px;background:#173f38f2;color:#fff8e6;padding:10px 18px;box-shadow:0 4px 18px #0005;white-space:nowrap}
