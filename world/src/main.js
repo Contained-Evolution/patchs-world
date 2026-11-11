@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { createVisitorControls } from './visitor-controls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { sampleState } from '../../shared/state.js';
 import { createIsland } from './island.js';
@@ -8,7 +8,7 @@ import { places, groundHeight, walkRoute, swingRoute, swingLoop, statusText, isL
 
 const $ = s => document.querySelector(s);
 const dialog = $('#map');
-$('#open-map').onclick = () => dialog.showModal();
+$('#open-map').onclick = () => { controls.pause(); dialog.showModal(); };
 $('#close-map').onclick = () => dialog.close();
 setupCommunity(dialog);
 let renderer;
@@ -20,15 +20,13 @@ $('#world').append(renderer.domElement);
 const scene = new THREE.Scene();
 scene.fog = new THREE.Fog(0xadd9d4, 150, 300);
 const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, .1, 400);
-camera.position.set(6, 6, 10);
-const controls = new OrbitControls(camera, renderer.domElement);
-controls.target.set(1, 2, 2); controls.enableDamping = true; controls.minDistance = 5; controls.maxDistance = 45; controls.maxPolarAngle = Math.PI * .48;
+const controls = createVisitorControls(camera, renderer.domElement, dialog);
 const hemi = new THREE.HemisphereLight(0xd9f5ee, 0x496d4c, 2.1); scene.add(hemi);
 const sunLight = new THREE.DirectionalLight(0xffedbe, 2.4); scene.add(sunLight);
 const mat = color => new THREE.MeshStandardMaterial({color, roughness: 1});
 function mesh(geo,material,x=0,y=0,z=0,parent=scene){const m=new THREE.Mesh(geo,material);m.position.set(x,y,z);parent.add(m);return m;}
 function ellipsoid(material,x,y,z,sx,sy,sz,parent=scene){const m=mesh(new THREE.SphereGeometry(1,12,8),material,x,y,z,parent);m.scale.set(sx,sy,sz);return m;}
-const scenery = createIsland(scene);
+createIsland(scene);
 const patch = new THREE.Group(); scene.add(patch);
 let mixer, headBone, clips = {}, currentAction, currentName, headRest = null;
 const lookUp = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -0.6);
@@ -66,7 +64,7 @@ async function poll() {
     const next = await response.json();
     if (!next.patch || !next.clock) throw new Error('Invalid state');
     next.patch = safePatch(next.patch);
-    if (!state) { const [x,z]=places[next.patch.place]; patch.position.set(x,groundHeight(x,z),z); const target=new THREE.Vector3(x,patch.position.y+1,z); camera.position.add(target.clone().sub(controls.target)); controls.target.copy(target); }
+    if (!state) { const [x,z]=places[next.patch.place]; patch.position.set(x,groundHeight(x,z),z); }
     state = next; hasLiveState = true; demo = false;
     $('#connection').hidden = true;
   } catch {
@@ -81,10 +79,13 @@ const starsGeo=new THREE.BufferGeometry(),starPositions=[];for(let i=0;i<300;i++
 const sun=mesh(new THREE.SphereGeometry(3,16,12),new THREE.MeshBasicMaterial({color:0xffe6a0}));const moon=mesh(new THREE.SphereGeometry(2,16,12),new THREE.MeshBasicMaterial({color:0xe9eddd}));
 const clouds=[];for(let i=0;i<12;i++){let g=new THREE.Group();for(let j=0;j<3;j++)ellipsoid(mat(0xffffff),j*1.8,Math.sin(j)*.5,0,2,1,1.4,g);g.position.set(Math.cos(i*2.4)*45,25+i%4*3,Math.sin(i*2.4)*45);scene.add(g);clouds.push(g);}
 const rainGeo=new THREE.BufferGeometry(),drops=[];for(let i=0;i<500;i++)drops.push((Math.random()-.5)*50,Math.random()*35,(Math.random()-.5)*50);rainGeo.setAttribute('position',new THREE.Float32BufferAttribute(drops,3));const rain=new THREE.Points(rainGeo,new THREE.PointsMaterial({color:0xd6edf2,size:.12,transparent:true,opacity:.7}));scene.add(rain);
-let last=performance.now();patch.position.set(1,.9,2);const follow=new THREE.Vector3();
+let last=performance.now();patch.position.set(1,.9,2);
+$('#find-patch').onclick=()=>{ if (state) controls.findPatch(patch.position); };
 function frame(now){requestAnimationFrame(frame);const dt=Math.min((now-last)/1000,.05);last=now;let t=(now-start)/1000;
 if (demo) { let n=Math.floor(t/9); state={patch:{...sampleState.patch,action:mockActions[n%mockActions.length],place:ids[Math.floor(n/2)%ids.length],target:['walk','run','swing'].includes(mockActions[n%mockActions.length]) ? ids[(Math.floor(n/2)+1)%ids.length] : null,since:String(n),says:null},clock:{dayFraction:(.38+t/240)%1,weather:['clear','cloudy','rain','storm'][Math.floor(t/60)%4]}}; }
-if (!state) { patch.visible=false; controls.update(); renderer.render(scene,camera); return; }
+controls.update(dt);
+$('#find-patch').disabled=!state;
+if (!state) { patch.visible=false; scene.background=skyDay; renderer.render(scene,camera); return; }
 patch.visible=true;
 const {action,place,target,says,since}=state.patch;
 $('#status').textContent = statusText(state.patch);
@@ -137,5 +138,5 @@ if(action==='watch-sky' && headBone && currentName==='sit' && currentAction.time
 } else headRest=null;
 $('#bubble').hidden=!says;$('#bubble').textContent=says||'';
 let day=Number.isFinite(state.clock.dayFraction)?state.clock.dayFraction:.5;let daylight=THREE.MathUtils.smoothstep(Math.sin((day-.25)*Math.PI*2),-.12,.2);let weather=state.clock.weather;let overcast=weather==='cloudy'||weather==='rain'||weather==='storm';sky.copy(skyNight).lerp(skyDay,daylight*(overcast?.65:1));scene.background=sky;scene.fog.color.copy(sky);hemi.intensity=.3+daylight*(overcast?1:1.8);sunLight.intensity=daylight*(overcast?.6:2.4);let angle=(day-.25)*Math.PI*2;sun.position.set(Math.cos(angle)*90,Math.sin(angle)*90,0);moon.position.copy(sun.position).multiplyScalar(-1);sunLight.position.copy(sun.position);stars.material.opacity=1-daylight;stars.visible=daylight<.98;clouds.forEach((c,i)=>{c.visible=overcast||i<5;c.position.x+=dt*.14;if(c.position.x>55)c.position.x=-55;});rain.visible=weather==='rain'||weather==='storm';if(rain.visible)rain.position.y=-(t*12%30);
-follow.set(patch.position.x,patch.position.y+1,patch.position.z);let delta=follow.clone().sub(controls.target).multiplyScalar(Math.min(1,dt*8));controls.target.add(delta);camera.position.add(delta);controls.update();scenery.update(camera,follow);renderer.render(scene,camera);}
+renderer.render(scene,camera);}
 requestAnimationFrame(frame);addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});

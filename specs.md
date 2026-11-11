@@ -9,6 +9,6 @@
 - Memory: childhood memories in [worker/seed/childhood.json](worker/seed/childhood.json); island memories, categories, thoughts, words and diary entries in the Durable Object. Shape: [shared/memory.js](shared/memory.js).
 - API: `GET /patch/api/state` returns the shape in [shared/state.js](shared/state.js). `GET /patch/api/journal` returns recent thoughts, diary entries, learned words and spend. `GET /patch/api/memory` returns categories and all memories.
 - Letters and message board: [letters.mjs](worker/letters.mjs) holds the limits. `GET /patch/api/me`; `GET`/`POST /patch/api/letters` and `POST /patch/api/board` need an account; `GET /patch/api/board?before=` is public; `POST /patch/api/board/<id>/report` and `/block`. Posts and letters pass the automatic filter in [mind.mjs](worker/mind.mjs) first. POSTs must come from `https://tenari.world`.
-- Viewer: [world/src/community.js](world/src/community.js) connects the letters and board panels to the visitor API.
+- Viewer: [world/src/visitor-controls.js](world/src/visitor-controls.js) controls independent walking and flight. [world/src/community.js](world/src/community.js) connects the letters and board panels to the visitor API.
 - Static assets: `world/dist`, served under `/patch/`. [prepare.mjs](worker/scripts/prepare.mjs) builds the world if present and adds the Pangolin font (OFL).
 - Tests: `npm test` in `worker/`. Deploy: `npm run deploy` in `worker/`. If a new Durable Object method answers "RPC receiver does not implement the method" after a deploy, deploy again.
