@@ -7,7 +7,15 @@ for(let row=0;row<6;row++) for(let col=0;col<8;col++) {
  const x=85+col*4.4+(row%2)*.9+Math.sin(row*7+col*3)*.35, z=-119+row*4.5+Math.cos(row*4+col*8)*.35;
  trees.push([x,z,10+((row*8+col)%5)*.5]);
 }
-export const anchorFor = ([x,z,h]) => [x+1.4,groundHeight(x,z)+h-1,z];
+// Four outward-facing branch shapes share the same reachable height.
+export const ROPE_TREES = new Set([1, 9, 8]);
+export const ROPE_LENGTH = 2.4;
+export function anchorFor([x,z,h]) {
+ const variant=Math.abs(Math.round(x*10+z*7))%4, angle=[-.6,-.2,.2,.6][variant], length=[1.4,1.55,1.7,1.85][variant];
+ return [x+Math.cos(angle)*length,groundHeight(x,z)+h-1+[0,.2,-.15,.1][variant],z+Math.sin(angle)*length];
+}
+export function holdFor(index) { const anchor=anchorFor(trees[index]); return {index, type:ROPE_TREES.has(index)?'rope':'branch', anchor, grip:[anchor[0],anchor[1]-(ROPE_TREES.has(index)?ROPE_LENGTH:0),anchor[2]]}; }
+export const traversalLoop = () => [0,1,9,8,0].map(holdFor);
 const distance = (a,b) => Math.hypot(a[0]-b[0],a[1]-b[1]);
 export function walkRoute(from,to) {
   const a=paths[from]||paths.hammock,b=paths[to]||paths.hammock;

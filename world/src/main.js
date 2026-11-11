@@ -5,10 +5,11 @@ import { sampleState } from '../../shared/state.js';
 import { createIsland } from './island.js';
 import { setupCommunity } from './community.js';
 import { ISLAND } from './terrain.js';
-import { travelFraction, loopFraction } from './travel-progress.js';
+import { travelFraction } from './travel-progress.js';
 import { adaptiveQuality } from './render-quality.js';
-import { places, groundHeight, walkRoute, swingLoop, trees, statusText, isLocalPreview, safePatch } from './world-state.js';
+import { places, groundHeight, walkRoute, swingLoop, traversalLoop, holdFor, statusText, isLocalPreview, safePatch } from './world-state.js';
 import { patchRoute, roamPlan, ROAM, seedFrom } from './patch-motion.js';
+import { makeTransfer } from './traversal.js';
 
 const $ = s => document.querySelector(s);
 const dialog = $('#map');
@@ -38,13 +39,13 @@ const scenery=createIsland(scene);
 const patch = new THREE.Group(); scene.add(patch);const patchVelocity=new THREE.Vector3(),previousPatchPosition=new THREE.Vector3();
 const fishingRod=new THREE.Group(),rodDirection=new THREE.Vector3(.1,.65,2.2),rod=new THREE.Mesh(new THREE.CylinderGeometry(.025,.045,rodDirection.length(),6),new THREE.MeshStandardMaterial({color:0x6b4d31}));rod.position.copy(rodDirection).multiplyScalar(.5);rod.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),rodDirection.clone().normalize());fishingRod.add(rod);const lineGeo=new THREE.BufferGeometry().setFromPoints([rodDirection,new THREE.Vector3(.1,-.7,3.3)]);fishingRod.add(new THREE.Line(lineGeo,new THREE.LineBasicMaterial({color:0xd8d1b7})));patch.add(fishingRod);const handWorld=new THREE.Vector3();
 
-const vineGeometry=new THREE.BufferGeometry();vineGeometry.setAttribute('position',new THREE.BufferAttribute(new Float32Array(6),3));const swingVine=new THREE.Line(vineGeometry,new THREE.LineBasicMaterial({color:0x718452}));swingVine.visible=false;scene.add(swingVine);
-let mixer, headBone, rightHandBone, clips = {}, strideSpeed = {}, currentAction, currentName, headRest = null, roam = null;
+
+let mixer, patchModel, headBone, rightHandBone, clips = {}, strideSpeed = {}, currentAction, currentName, headRest = null, roam = null;
 // Turn smoothly toward a heading instead of snapping at each bend.
 function face(angle,dt){const turn=Math.atan2(Math.sin(angle-patch.rotation.y),Math.cos(angle-patch.rotation.y));patch.rotation.y+=turn*Math.min(1,dt*7);}
 const lookUp = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -0.6);
 new GLTFLoader().load(new URL('./assets/patch.glb', document.baseURI).href, gltf => {
-  patch.add(gltf.scene);
+  patchModel=gltf.scene; patch.add(patchModel);
   gltf.scene.traverse(node => { if (node.isBone && /mixamorig[:_]?head$/i.test(node.name)) headBone=node; if(node.isBone && /mixamorig[:_]?righthand$/i.test(node.name)) rightHandBone=node; });
   mixer = new THREE.AnimationMixer(gltf.scene);
   for (const clip of gltf.animations) {
@@ -69,7 +70,7 @@ function playClip(name, once = false) {
   if (currentAction) currentAction.fadeOut(.2);
   next.fadeIn(.2).play(); currentAction = next; currentName = name;
 }
-let state = null, hasLiveState = false, demo = false, journey = null, serverOffset = 0;
+let state = null, hasLiveState = false, demo = false, journey = null, serverOffset = 0, descent = null, wasAirborne = false, climbTime = 0;
 function renderCare(p) {
   const panel=$('#care'), list=$('#care-needs');
   if (!p.needs) { panel.hidden=true; return; }
@@ -126,8 +127,8 @@ if (!state) { patch.visible=false; scene.background=skyDay; scenery.update(reduc
 patch.visible=true;previousPatchPosition.copy(patch.position);
 const {action,place,target,says,since,until,speechUntil}=state.patch;
 $('#status').textContent = statusText(state.patch);
-swingVine.visible=false;fishingRod.visible=action==='fish'&&!target;
-const dest=action==='climb'&&place==='tall-trees'&&!target?[trees[0][0]+.45,trees[0][1]]:action==='sleep'&&place==='hammock'&&!target?[0,1]:action==='swim'&&place==='pond'&&!target?[ISLAND.pondX,ISLAND.pondZ]:places[target]||places[place];
+scenery.resetRopes();let heldRope=null, heldGrip=null;fishingRod.visible=action==='fish'&&!target;
+const dest=action==='climb'&&place==='tall-trees'&&!target?[holdFor(0).grip[0],holdFor(0).grip[2]]:action==='sleep'&&place==='hammock'&&!target?[0,1]:action==='swim'&&place==='pond'&&!target?[ISLAND.pondX,ISLAND.pondZ]:places[target]||places[place];
 const travel = !!(target && places[target] && ['walk','run','swing'].includes(action));
 const swinging = action === 'swing';
 const key = `${action}|${place}|${target||''}|${since||''}`;
@@ -135,22 +136,46 @@ if (travel || swinging) {
   if (!journey || journey.key !== key) {
     // Leave from where he is standing when that is near the place he is leaving.
     const here=[patch.position.x,patch.position.z],origin=Math.hypot(here[0]-places[place][0],here[1]-places[place][1])<60?here:places[place],seed=seedFrom(key);
-    const points=[{p:new THREE.Vector3(origin[0],groundHeight(...origin),origin[1]),mode:'ground'}];
+    const ground=groundHeight(...origin),fromAir=wasAirborne&&patch.position.y>ground+.5;
+    const points=[{p:new THREE.Vector3(origin[0],fromAir?patch.position.y:ground,origin[1]),mode:'ground'}];
+    if(fromAir)points.push({p:new THREE.Vector3(origin[0],ground,origin[1]),mode:'descent'});
     const groundPoints=route=>route.forEach(([x,z])=>points.push({p:new THREE.Vector3(x,groundHeight(x,z),z),mode:'ground'}));
     const wayTo=(from,to,remembered)=>patchRoute(from,to,seed+points.length,remembered).slice(1);
-    const branchPoints=anchors=>anchors.forEach(([x,y,z],i)=>points.push({p:new THREE.Vector3(x,y-1.8,z),mode:travel&&i===0?'climb':'branch'}));
+    const branchPoints=holds=>holds.forEach((hold,i)=>{const [x,y,z]=hold.grip;points.push({p:new THREE.Vector3(x,y-1.8,z),hold,mode:travel&&i===0?'climb':'branch'});});
     if(swinging){
-      if(travel){const [ax,,az]=swingLoop()[0];groundPoints(wayTo(origin,[ax,az],[origin,...walkRoute(place,'tall-trees'),[ax,az]]));branchPoints(swingLoop());if(target!=='tall-trees'){const last=points.at(-1).p;points.push({p:new THREE.Vector3(last.x,groundHeight(last.x,last.z),last.z),mode:'descent'});groundPoints(wayTo([last.x,last.z],places[target],[[last.x,last.z],...walkRoute('tall-trees',target)]));}}
-      else {points.length=0;branchPoints(swingLoop());}
+      if(travel){const [ax,,az]=swingLoop()[0];groundPoints(wayTo(origin,[ax,az],[origin,...walkRoute(place,'tall-trees'),[ax,az]]));branchPoints(traversalLoop());if(target!=='tall-trees'){const last=points.at(-1).p;points.push({p:new THREE.Vector3(last.x,groundHeight(last.x,last.z),last.z),mode:'descent'});groundPoints(wayTo([last.x,last.z],places[target],[[last.x,last.z],...walkRoute('tall-trees',target)]));}}
+      else {points.length=0;branchPoints(traversalLoop());}
     } else groundPoints(wayTo(origin,places[target],[origin,...walkRoute(place,target)]));
     const lengths=[];let total=0;for(let i=1;i<points.length;i++){const length=points[i-1].p.distanceTo(points[i].p);lengths.push(length);total+=length;}
-    journey={key,points,lengths,total};
+    const transfers=points.slice(1).map((point,i)=>point.mode==='branch'&&points[i].hold?makeTransfer(points[i].hold,point.hold):null);
+    journey={key,points,lengths,total,transfers};
   }
   const j=journey;
-  const fraction=travel?travelFraction(since,until,Date.now()+serverOffset,j.total):loopFraction(since,Date.now()+serverOffset,j.total);
+  const elapsed=Math.max(0,(Date.now()+serverOffset-Date.parse(since))/1000||0);
+  const mounting=!travel&&elapsed<4;
+  const fraction=travel?travelFraction(since,until,Date.now()+serverOffset,j.total):((Math.max(0,elapsed-4)*3/Math.max(j.total,1))%1);
   let remaining=j.total*fraction,index=0;while(index<j.lengths.length-1&&remaining>j.lengths[index])remaining-=j.lengths[index++];
-  const from=j.points[index],to=j.points[index+1];if(to){const progress=j.lengths[index]?remaining/j.lengths[index]:0,branch=to.mode==='branch';patch.position.lerpVectors(from.p,to.p,progress);if(branch){const dx=to.p.x-from.p.x,dz=to.p.z-from.p.z,horizontal=Math.hypot(dx,dz);if(horizontal>.1){let nx=-dz/horizontal,nz=dx/horizontal;if(Math.abs(nx)>.1&&nx<0){nx=-nx;nz=-nz;}const arc=Math.sin(Math.PI*progress)*2;patch.position.x+=nx*arc;patch.position.z+=nz*arc;}patch.position.y-=Math.sin(Math.PI*progress)*Math.min(.8,j.lengths[index]*.15);const rope=vineGeometry.attributes.position;rope.setXYZ(0,patch.position.x,patch.position.y+1.8,patch.position.z);rope.setXYZ(1,to.p.x,to.p.y+1.8,to.p.z);rope.needsUpdate=true;swingVine.visible=true;}else if(to.mode!=='climb'&&to.mode!=='descent')patch.position.y=groundHeight(patch.position.x,patch.position.z);face(Math.atan2(to.p.x-from.p.x,to.p.z-from.p.z),dt);patch.rotation.z=branch?Math.sin(Math.PI*progress)*.2:0;const pace=travel?j.total/Math.max(1,(Date.parse(until)-Date.parse(since))/1000):1;playClip(branch?'swing':to.mode==='climb'||to.mode==='descent'?'hang':pace>1.9?'run':'walk');}
+  const from=j.points[index],to=j.points[index+1];if(to){
+    const progress=j.lengths[index]?remaining/j.lengths[index]:0,branch=to.mode==='branch';
+    patch.position.lerpVectors(from.p,to.p,progress);
+    if(branch&&!mounting){
+      const sample=j.transfers[index].at(progress),dx=to.p.x-from.p.x,dz=to.p.z-from.p.z;
+      patch.position.set(sample.grip[0],sample.grip[1]-1.8,sample.grip[2]);
+      heldGrip=sample.grip;if(sample.hold?.type==='rope')heldRope=sample.hold.index;
+      face(Math.atan2(dx,dz),dt);patch.rotation.z=heldRope!==null?Math.sin(Math.PI*progress)*.12:0;
+      playClip(sample.hold?(sample.hold.type==='rope'?'rope-swing':'hang'):'swing');
+    }else if(!mounting){
+      if(to.mode!=='climb'&&to.mode!=='descent')patch.position.y=groundHeight(patch.position.x,patch.position.z);
+      face(Math.atan2(to.p.x-from.p.x,to.p.z-from.p.z),dt);patch.rotation.z=0;
+      const pace=travel?j.total/Math.max(1,(Date.parse(until)-Date.parse(since))/1000):1;
+      const clip=to.mode==='climb'?'swing-start':to.mode==='descent'?'rope-to-ground':pace>1.9?'run':'walk';playClip(clip,clip==='swing-start'||clip==='rope-to-ground');
+    }
+  }
+  if(mounting){const hold=holdFor(0),f=THREE.MathUtils.smoothstep(elapsed/4,0,1),[x,y,z]=hold.grip;patch.position.set(x,THREE.MathUtils.lerp(groundHeight(x,z),y-1.8,f),z);patch.rotation.z=0;playClip('swing-start',true);if(f>.98)heldGrip=hold.grip;}
+  wasAirborne=swinging;descent=null;
 } else {
+  if(wasAirborne&&action!=='climb'){const ground=groundHeight(patch.position.x,patch.position.z);if(patch.position.y>ground+.5)descent={start:patch.position.y,ground,elapsed:0};wasAirborne=false;}
+  if(action!=='climb')climbTime=0;
   journey=null;
   const names={idle:'idle',think:'idle',phone:'idle',write:'idle',look:'look-around',wave:'look-around',walk:'walk',run:'run',climb:'hang',swim:'swim',fish:'sit',sit:'sit',sleep:'sleep',eat:'idle',explore:'look-around','watch-sky':'sit'};
   // Exploring and similar activities are a shared roam: he picks spots, walks there, stops and looks around.
@@ -161,19 +186,29 @@ if (travel || swinging) {
   const goal=pose?[pose.x,pose.z]:dest,dx=goal[0]-patch.position.x,dz=goal[1]-patch.position.z,dist=Math.hypot(dx,dz);
   // Catch up gently when he is out of place, and follow the roam exactly once he is on it.
   if(pose&&dist<1.5){patch.position.x=pose.x;patch.position.z=pose.z;if(pose.heading!==null)face(pose.heading,dt);}
-  else if(dist>.15){let step=Math.min(dist,dt*1.7);patch.position.x+=dx/dist*step;patch.position.z+=dz/dist*step;face(Math.atan2(dx,dz),dt);}
+  else if(dist>.15&&!descent){let step=Math.min(dist,dt*1.7);patch.position.x+=dx/dist*step;patch.position.z+=dz/dist*step;face(Math.atan2(dx,dz),dt);}
   const arriving=pose?dist>=1.5:dist>.5;
-  patch.position.y=action==='swim'?ISLAND.pondY-.35:action==='climb'&&!arriving?groundHeight(patch.position.x,patch.position.z)+1.5:action==='sleep'&&place==='hammock'&&!arriving?groundHeight(0,0)+1.5:groundHeight(patch.position.x,patch.position.z);
+  if(action==='climb'&&!arriving&&place==='tall-trees')climbTime=Math.min(4,climbTime+dt);
+  patch.position.y=action==='swim'?ISLAND.pondY-.35:action==='climb'&&!arriving&&place==='tall-trees'?THREE.MathUtils.lerp(groundHeight(patch.position.x,patch.position.z),holdFor(0).grip[1]-1.8,THREE.MathUtils.smoothstep(climbTime/4,0,1)):action==='sleep'&&place==='hammock'&&!arriving?groundHeight(0,0)+1.5:groundHeight(patch.position.x,patch.position.z);
   patch.rotation.z=0;
   if(action==='fish'&&!arriving)face(Math.atan2(ISLAND.pondX-patch.position.x,ISLAND.pondZ-patch.position.z),dt);
-  const clip=arriving&&action!=='swim'?'walk':pose?pose.clip:names[action]||'idle';
-  playClip(clip,clip==='sit');
+  let clip=arriving&&action!=='swim'?'walk':pose?pose.clip:names[action]||'idle';
+  if(action==='climb'&&!arriving&&place==='tall-trees'){wasAirborne=true;if(climbTime>=4)heldGrip=holdFor(0).grip;else clip='swing-start';}
+  if(descent){descent.elapsed+=dt;const f=Math.min(1,descent.elapsed/2);patch.position.y=THREE.MathUtils.lerp(descent.start,descent.ground,f);clip='rope-to-ground';heldGrip=null;if(f===1)descent=null;}
+  playClip(clip,['sit','swing-start','rope-to-ground'].includes(clip));
 }
 if(dt>0)patchVelocity.subVectors(patch.position,previousPatchPosition).multiplyScalar(1/dt).clampLength(0,5);
 // Match the stride to his ground speed so his feet neither slide nor race.
 if(currentAction&&strideSpeed[currentName]&&dt>0){const speed=Math.hypot(patchVelocity.x,patchVelocity.z);currentAction.timeScale=speed>.05?THREE.MathUtils.clamp(speed/strideSpeed[currentName],.45,2.2):1;}
+if(patchModel)patchModel.position.set(0,0,0);
 if(mixer) mixer.update(dt);
-if(rightHandBone&&(fishingRod.visible||swingVine.visible)){rightHandBone.getWorldPosition(handWorld);if(swingVine.visible){const rope=vineGeometry.attributes.position;rope.setXYZ(0,handWorld.x,handWorld.y,handWorld.z);rope.needsUpdate=true;}if(fishingRod.visible)fishingRod.position.copy(patch.worldToLocal(handWorld.clone()));}
+if(rightHandBone&&heldGrip){
+  patch.updateMatrixWorld(true);rightHandBone.getWorldPosition(handWorld);
+  const correction=new THREE.Vector3(...heldGrip).sub(handWorld);patch.worldToLocal(correction.add(patch.position));patchModel.position.copy(correction);
+  patch.updateMatrixWorld(true);rightHandBone.getWorldPosition(handWorld);
+  if(heldRope!==null)scenery.setRope(heldRope,[handWorld.x,handWorld.y,handWorld.z]);
+}
+if(rightHandBone&&fishingRod.visible){patch.updateMatrixWorld(true);rightHandBone.getWorldPosition(handWorld);fishingRod.position.copy(patch.worldToLocal(handWorld.clone()));}
 // Tip his head back from the held sitting pose. Set it absolutely each frame so the tilt never accumulates.
 if(action==='watch-sky' && headBone && currentName==='sit' && currentAction.time >= clips.sit.duration*.8){
   if(!headRest) headRest=headBone.quaternion.clone();
