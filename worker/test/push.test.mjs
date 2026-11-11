@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { cleanSubscription, encrypt, vapid, sendPush, addDevice, fromBase64Url, toBase64Url, replyNote, journalNote, MAX_DEVICES } from '../push.mjs';
+import { cleanSubscription, encrypt, vapid, sendPush, addDevice, deliveries, fromBase64Url, toBase64Url, replyNote, journalNote, MAX_DEVICES } from '../push.mjs';
 
 const ECDH = { name: 'ECDH', namedCurve: 'P-256' };
 
@@ -82,4 +82,13 @@ test('push: an account keeps its newest devices and refreshes a known one', asyn
   assert.equal(devices.length, MAX_DEVICES);
   assert.deepEqual(devices.at(-1), { endpoint: 'https://fcm.googleapis.com/3', keys: {}, letters: false, journal: true, at: 99 });
   assert.equal(replyNote('x'.repeat(300)).body.length, 140);
+});
+
+test('push: replies reach only their writer, journal entries reach everyone who chose them', () => {
+  const device = (name, letters, journal) => ({ endpoint: `https://fcm.googleapis.com/${name}`, keys: {}, letters, journal });
+  const owners = new Map([['push:ana', [device('ana-phone', true, false), device('ana-laptop', false, true)]], ['push:ben', [device('ben-phone', true, true)]]]);
+  const sent = deliveries(owners, [{ userId: 'ana', reply: 'Hi Ana!' }], [{ title: 'Rain', text: 'Wet day.' }])
+    .map(({ device, note }) => `${device.endpoint.split('/').pop()}: ${note.tag}`);
+  assert.deepEqual(sent, ['ana-phone: patch-letter', 'ana-laptop: patch-journal', 'ben-phone: patch-journal']);
+  assert.deepEqual(deliveries(owners, [], []), []);
 });

@@ -60,7 +60,8 @@ self.addEventListener('notificationclick', event => {
   if (!url.pathname.startsWith(BASE)) url.href = new URL(BASE, self.location.origin).href;
   event.waitUntil((async () => {
     const open = (await self.clients.matchAll({ type: 'window' })).find(client => new URL(client.url).pathname.startsWith(BASE));
-    if (open) { await open.focus(); return open.navigate(url.href); }
+    // A window this worker doesn't control yet can't be navigated from here, so open a new one instead.
+    if (open) try { await open.focus(); return await open.navigate(url.href); } catch {}
     return self.clients.openWindow(url.href);
   })());
 });

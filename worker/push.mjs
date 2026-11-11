@@ -89,5 +89,17 @@ export function addDevice(devices = [], subscription, { letters, journal } = {},
 }
 
 const excerpt = value => { const line = String(value || '').replace(/\s+/g, ' ').trim(); return line.length > 140 ? `${line.slice(0, 139)}…` : line; };
+// Who hears what after his mind runs: [{ key, device, note }] from each account's devices (`push:<id>` → devices).
+// A reply goes to its writer's devices that chose replies; a journal entry to every device that chose the journal.
+export function deliveries(owners, replies, entries) {
+  const out = [];
+  for (const [key, devices] of owners) {
+    const mine = replies.filter(({ userId }) => `push:${userId}` === key).map(({ reply }) => replyNote(reply));
+    for (const device of devices)
+      for (const note of [...(device.letters ? mine : []), ...(device.journal ? entries.map(journalNote) : [])]) out.push({ key, device, note });
+  }
+  return out;
+}
+
 export const replyNote = reply => ({ title: 'Patch wrote back', body: excerpt(reply), url: '/patch/?view=letters', tag: 'patch-letter' });
 export const journalNote = entry => ({ title: 'Patch wrote in his journal', body: excerpt(entry.title ? `${entry.title}: ${entry.text}` : entry.text), url: '/patch/journal.html', tag: 'patch-journal' });

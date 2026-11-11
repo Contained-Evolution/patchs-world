@@ -7,8 +7,10 @@ export function registerApp(button = document.getElementById('app-update')) {
     registration.addEventListener('updatefound', () => registration.installing?.addEventListener('statechange', offer));
     button?.addEventListener('click', () => {
       button.disabled = true;
+      // Another tab may have taken the update already; then a reload is all that's left.
+      if (!registration.waiting) return location.reload();
       navigator.serviceWorker.addEventListener('controllerchange', () => location.reload(), { once: true });
-      registration.waiting?.postMessage('update');
+      registration.waiting.postMessage('update');
     });
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') registration.update().catch(() => {}); });
     return registration;

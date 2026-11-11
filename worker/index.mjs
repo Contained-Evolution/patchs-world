@@ -8,7 +8,7 @@ import { visitor, SIGN_IN } from './accounts.mjs';
 import { LIMITS, cleanText, freshLimits, checkLetter, checkPost, countLetter, countPost, pickLetters, postKey } from './letters.mjs';
 import { STARTING_CATEGORIES } from '../shared/memory.js';
 import { concepts } from './memory-graph.mjs';
-import { cleanSubscription, addDevice, sendPush, gone, replyNote, journalNote } from './push.mjs';
+import { cleanSubscription, addDevice, sendPush, gone, deliveries } from './push.mjs';
 
 const headers = {
   'x-content-type-options': 'nosniff',
@@ -180,18 +180,10 @@ export class PatchWorld extends DurableObject {
     return { status: 200, ...(await this.devices(who)) };
   }
 
-  // A reply goes to its writer's devices; a journal entry goes to every device that asked for journal news.
   async notify(replies, entries) {
     if (!this.env.VAPID_PUBLIC_KEY || !this.env.VAPID_PRIVATE_KEY || !(replies.length || entries.length)) return;
     const owners = entries.length ? await this.ctx.storage.list({ prefix: 'push:' }) : await this.ctx.storage.get(replies.map(({ userId }) => `push:${userId}`));
-    const sends = [];
-    for (const [key, devices] of owners) {
-      const mine = replies.filter(({ userId }) => `push:${userId}` === key).map(({ reply }) => replyNote(reply));
-      for (const device of devices) {
-        for (const note of [...(device.letters ? mine : []), ...(device.journal ? entries.map(journalNote) : [])])
-          sends.push(sendPush(this.env, device, note).then(status => ({ key, endpoint: device.endpoint, status })));
-      }
-    }
+    const sends = deliveries(owners, replies, entries).map(({ key, device, note }) => sendPush(this.env, device, note).then(status => ({ key, endpoint: device.endpoint, status })));
     const stale = new Map();
     for (const result of await Promise.allSettled(sends)) {
       if (result.status === 'fulfilled' && gone(result.value.status)) stale.set(result.value.key, [...(stale.get(result.value.key) || []), result.value.endpoint]);
