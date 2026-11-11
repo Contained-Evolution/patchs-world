@@ -189,6 +189,7 @@ followPatch.onchange = () => {
 function renderIsland(now, rainOffset = 0) {
   const renderView = view => {
     if (rain.visible) rain.position.set(view.position.x, view.position.y - rainOffset, view.position.z);
+    scenery.setTrackingTarget(patch.visible && !cameraFeeds.open && followPatch.checked ? patch.position : null);
     renderer.render(scene, view);
   };
   if (cameraFeeds.open) cameraFeeds.render(now, renderView);

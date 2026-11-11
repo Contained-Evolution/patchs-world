@@ -25,6 +25,12 @@ export function createVisitorControls(camera, canvas, isModalOpen, scene) {
   const target = new THREE.Vector3();
   const destination = new THREE.Vector3();
   const sightRay = new THREE.Raycaster();
+  const rayDirection = new THREE.Vector3(), sightPoint = new THREE.Vector3();
+  const smoothedView = new THREE.Vector3();
+  const sightHits = [];
+  let solids;
+  const viewOffsets = [[7, 2], [7, -.6], [4.5, .7], [4.5, -1.7]];
+  let viewOffset = viewOffsets[0];
   const euler = new THREE.Euler(0, 0, 0, 'YXZ');
   const keys = new Set(), touch = new Set();
   let mode = 'walk', yaw = 0, pitch = 0, touchLook = null, lastTouch = 0;
@@ -97,33 +103,59 @@ export function createVisitorControls(camera, canvas, isModalOpen, scene) {
     return [0, 12];
   }
 
+  function visibility(from) {
+    let visible = 0;
+    for (const height of [.65, 1.55]) {
+      sightPoint.copy(target);
+      sightPoint.y += height - 1;
+      rayDirection.subVectors(sightPoint, from);
+      sightRay.far = Math.max(0, rayDirection.length() - .15);
+      sightRay.set(from, rayDirection.normalize());
+      sightHits.length = 0;
+      sightRay.intersectObjects(solids, false, sightHits);
+      if (!sightHits.some(({ object }) => mode !== 'follow' || !object.material.userData.trackingCutaway)) visible++;
+    }
+    return visible;
+  }
+
   function positionPatchView(position, dt, snap = false) {
     target.copy(position);
     target.y += 1;
-    const radius = 7;
-    const positionAtAngle = angle => {
+    const positionAt = (angle, [radius, height]) => {
       const x = position.x + Math.cos(angle) * radius;
       const z = position.z + Math.sin(angle) * radius;
-      destination.set(x, Math.max(position.y + 2, groundHeight(x, z) + 1.6), z);
+      destination.set(x, Math.max(position.y + height, groundHeight(x, z) + 1.6), z);
     };
 
+    positionAt(viewAngle, viewOffset);
+    smoothedView.copy(patchView.position).lerp(destination, 1 - Math.exp(-8 * dt));
     nextSightCheck -= dt;
     if (snap || nextSightCheck <= 0) {
-      nextSightCheck = .6;
-      const solids = scene.children.filter(object => object.isMesh && !object.material.transparent);
-      for (let i = 0; i < 16; i++) {
-        const angle = viewAngle + i * Math.PI / 8;
-        positionAtAngle(angle);
-        const direction = new THREE.Vector3().subVectors(target, destination);
-        sightRay.far = direction.length() - .3;
-        sightRay.set(destination, direction.normalize());
-        if (sightRay.intersectObjects(solids, false).length === 0) {
-          viewAngle = angle;
-          break;
+      nextSightCheck = .15;
+      solids ??= scene.children.filter(object => object.isMesh && !object.material.transparent);
+      let best = visibility(destination);
+      const current = snap ? best : visibility(smoothedView);
+      if (best < 2 || current < 2) {
+        const startAngle = viewAngle;
+        for (const offset of [viewOffset, ...viewOffsets.filter(offset => offset !== viewOffset)]) {
+          for (const step of [0, 1, -1, 2, -2, 3, -3, 4, -4, 5, -5, 6, -6, 7, -7, 8]) {
+            const angle = startAngle + step * Math.PI / 8;
+            positionAt(angle, offset);
+            const score = visibility(destination);
+            if (score > best) {
+              best = score;
+              viewAngle = angle % (2 * Math.PI);
+              viewOffset = offset;
+            }
+            if (best === 2) break;
+          }
+          if (best === 2) break;
         }
+        positionAt(viewAngle, viewOffset);
+        // A camera path can cross a canopy even when its endpoint has a clear view.
+        if (best > current) snap = true;
       }
     }
-    positionAtAngle(viewAngle);
     if (snap || patchView.position.distanceToSquared(destination) > 400) patchView.position.copy(destination);
     else patchView.position.lerp(destination, 1 - Math.exp(-8 * dt));
     patchView.lookAt(target);
@@ -193,6 +225,7 @@ export function createVisitorControls(camera, canvas, isModalOpen, scene) {
       if (follow.checked || position.y > groundHeight(position.x, position.z) + 3) {
         setMode(follow.checked ? 'follow' : 'watch');
         viewAngle = Math.PI / 4;
+        viewOffset = viewOffsets[0];
         positionPatchView(position, 0, true);
         return;
       }

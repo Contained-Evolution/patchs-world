@@ -51,6 +51,40 @@ vec3 detail=texture2D(grassDetail,islandGround*.18).rgb;float inland=1.0-smooths
  for(const tree of trunks){const key=`${Math.floor(tree.x/160)},${Math.floor(tree.z/160)}`;if(!tiles.has(key))tiles.set(key,[]);tiles.get(key).push(tree);}
  const canopyMap=new THREE.TextureLoader().load(new URL('./assets/rainforest-canopy.png',document.baseURI).href);canopyMap.colorSpace=THREE.SRGBColorSpace;canopyMap.anisotropy=4;
  const canopyMaterial=material(0xffffff,{map:canopyMap,alphaTest:.32,side:THREE.DoubleSide}),canopyGeometry=new THREE.PlaneGeometry(1,1),branchGeometry=new THREE.CylinderGeometry(.04,.15,1,6);
+ // Clear the line to Patch through the canopy cards while using his tracking camera.
+ const trackingPatch = { value: false }, trackingTarget = { value: new THREE.Vector3() };
+ canopyMaterial.userData.trackingCutaway = true;
+ canopyMaterial.onBeforeCompile = shader => {
+  shader.uniforms.trackingPatch = trackingPatch;
+  shader.uniforms.trackingTarget = trackingTarget;
+  shader.vertexShader = shader.vertexShader
+   .replace('#include <common>', '#include <common>\nvarying vec3 canopyPosition;')
+   .replace('#include <project_vertex>', `#include <project_vertex>
+vec4 canopyPoint = vec4(transformed, 1.0);
+#ifdef USE_INSTANCING
+ canopyPoint = instanceMatrix * canopyPoint;
+#endif
+canopyPosition = (modelMatrix * canopyPoint).xyz;`);
+  shader.fragmentShader = shader.fragmentShader
+   .replace('#include <common>', `#include <common>
+varying vec3 canopyPosition;
+uniform bool trackingPatch;
+uniform vec3 trackingTarget;`)
+   .replace('#include <alphatest_fragment>', `#include <alphatest_fragment>
+if (trackingPatch) {
+ vec3 sightLine = trackingTarget - cameraPosition;
+ float depth = dot(canopyPosition - cameraPosition, sightLine) / max(dot(sightLine, sightLine), .001);
+ vec3 nearest = cameraPosition + clamp(depth, 0.0, 1.0) * sightLine;
+ if (distance(canopyPosition, nearest) < mix(.4, 1.55, clamp(depth, 0.0, 1.0))) discard;
+}`);
+ };
+ function setTrackingTarget(position) {
+  trackingPatch.value = Boolean(position);
+  if (position) {
+   trackingTarget.value.copy(position);
+   trackingTarget.value.y += 1;
+  }
+ }
  // Independent chunks let the camera cull forests outside its field of view.
  for(const chunk of tiles.values()){
   const palms=chunk.filter(t=>!t.broad),broadTrees=chunk.filter(t=>t.broad),trunkMesh=new THREE.InstancedMesh(trunkGeo,bark,chunk.length),leafMesh=new THREE.InstancedMesh(blade,foliage,palms.length*7),canopyMesh=new THREE.InstancedMesh(canopyGeometry,canopyMaterial,broadTrees.length*3);
@@ -130,5 +164,5 @@ vec3 detail=texture2D(grassDetail,islandGround*.18).rgb;float inland=1.0-smooths
  const boulderMesh=new THREE.InstancedMesh(boulder,rock,stones.length);stones.forEach((p,i)=>{pose.position.set(p.x,groundHeight(p.x,p.z)+p.sy*.10,p.z);pose.rotation.set(rand(p.x+p.z)*.4,rand(p.x-p.z)*6,.1);pose.scale.set(p.sx,p.sy,p.sz);pose.updateMatrix();boulderMesh.setMatrixAt(i,pose.matrix);});boulderMesh.instanceMatrix.needsUpdate=true;boulderMesh.computeBoundingSphere();scene.add(boulderMesh);
  // Chairs, the camp table and the coconut computer.
  const furniture=createFurniture(scene,{bark,wood,blade,foliage});
- return { setRope, setMail:furniture.setMail, resetRopes(){for(const i of ROPE_TREES)setRope(i,null);}, update(dt,daylight){furniture.update(dt,daylight);waterTime.value+=dt;waterLight.value=daylight;flowMap.offset.y-=dt*.7;foliage.emissiveIntensity=.05+daylight*.3;foliageDark.emissiveIntensity=.05+daylight*.3;} };
+ return { setRope, setTrackingTarget, setMail:furniture.setMail, resetRopes(){for(const i of ROPE_TREES)setRope(i,null);}, update(dt,daylight){furniture.update(dt,daylight);waterTime.value+=dt;waterLight.value=daylight;flowMap.offset.y-=dt*.7;foliage.emissiveIntensity=.05+daylight*.3;foliageDark.emissiveIntensity=.05+daylight*.3;} };
 }
