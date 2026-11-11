@@ -39,7 +39,7 @@ export function patchRoute(from,to,seed,remembered=[from,to]){
 
 // How far he roams for an activity, and how restless he is while doing it.
 export const ROAM={
- explore:{radius:{'tall-trees':45,cave:9,'tide-pools':22},legs:[6,22],pauses:[2,9],run:.12},
+ explore:{radius:{'tall-trees':45,cave:9,'tide-pools':22,lookout:9},legs:[6,22],pauses:[2,9],run:.12},
  look:{radius:{lookout:9},legs:[3,8],pauses:[6,16],run:0},
 };
 // On his tablet he wanders a few steps now and then, reading or writing as he goes. At the computer he sits.
@@ -74,6 +74,8 @@ export function roamPlan(action,place,seed){
   if(seconds<leg.t1){const p=(seconds-leg.t0)/(leg.t1-leg.t0);return{x:leg.x0+(leg.x1-leg.x0)*p,z:leg.z0+(leg.z1-leg.z0)*p,heading:Math.atan2(leg.x1-leg.x0,leg.z1-leg.z0),clip:leg.speed>=RUN_SPEED?'run':kind.device?'walk-texting':'walk',moving:true};}
   // He pulls his tablet out once, at the start; after that each stop picks up the two-handed part of the clip.
   if(leg.clip==='tablet-stand'){const c=CLIPS['tablet-stand'],k=seconds-leg.t1,loop=c.duration-c.held;return{x:leg.x1,z:leg.z1,heading:null,clip:leg.clip,moving:false,time:lo===0&&k<c.duration?k:c.held+(lo===0?k-c.duration:k)%loop};}
-  return{x:leg.x1,z:leg.z1,heading:leg.facing??null,clip:leg.clip==='jump'&&seconds-leg.t1>=CLIPS.jump.duration?'idle':leg.clip,moving:false,time:seconds-leg.t1};
+  const pauseTime=seconds-leg.t1;
+  const once=leg.clip==='jump'||leg.clip==='look-around';
+  return{x:leg.x1,z:leg.z1,heading:leg.facing??null,clip:once&&pauseTime>=CLIPS[leg.clip].duration?'idle':leg.clip,moving:false,time:pauseTime};
  }};
 }

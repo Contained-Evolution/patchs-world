@@ -313,7 +313,7 @@ if(ropeExit){
     if(place==='computer'){const at=Number.isFinite(elapsed)?Math.max(0,elapsed):t%30,left=Number.isFinite(Date.parse(until))?(Date.parse(until)-Date.now()-serverOffset)/1000:60,desk=deskClip(action,at,left,{'sit-to-type':CLIPS['sit-to-type'].duration,'type-to-sit':CLIPS['type-to-sit'].duration,typing:CLIPS.typing.duration});poseClip(desk.clip,desk.time);}
     else playClip('sit',true);
   } else if(foodPose){if(foodPose.moving)playClip(foodPose.clip);else poseClip(foodPose.clip,foodPose.time);}
-  else if(['jump','tablet-stand'].includes(pose?.clip)&&!arriving&&!descent)poseClip(pose.clip,pose.time);
+  else if(['jump','look-around','tablet-stand'].includes(pose?.clip)&&!arriving&&!descent)poseClip(pose.clip,pose.time);
   else if(!arriving&&!descent&&['idle','think'].includes(action)&&state.patch.needs?.energy<.35&&elapsed%45<CLIPS.yawn.duration)poseClip('yawn',elapsed%45);
   else playClip(clip,['sit','swing-start','rope-to-ground','fall','jump-down'].includes(clip));
   }

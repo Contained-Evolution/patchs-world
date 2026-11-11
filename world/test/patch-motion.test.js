@@ -6,6 +6,7 @@ import {places} from '../src/terrain.js';
 import {walkRoute} from '../src/world-state.js';
 import {forest} from '../src/forest.js';
 import {foragePlan} from '../src/foraging.js';
+import {CLIPS} from '../src/patch-clips.js';
 
 test('his routes between places go around trunks and stay on dry land',()=>{
  const ids=Object.keys(places);
@@ -28,6 +29,20 @@ test('exploring roams widely, pauses, and is the same for every visitor',()=>{
   last=pose;
  }
  assert.ok(far>20,`only roamed ${far}`);assert.ok(moving>150&&moving<800,`moving ${moving} of 900 samples`);assert.ok(clips.has('look-around'));
+});
+
+test('exploring the lookout alternates movement and pauses without looping look-around',()=>{
+ const plan=roamPlan('explore','lookout',seedFrom('explore|lookout|x'));
+ const clips=new Set();
+ let moved=false;
+ for(let seconds=0;seconds<300;seconds+=.25){
+  const pose=plan.at(seconds);
+  moved ||= pose.moving;
+  clips.add(pose.clip);
+  if(pose.clip==='look-around')assert.ok(pose.time<CLIPS['look-around'].duration);
+ }
+ assert.ok(moved);
+ assert.ok(clips.has('look-around')&&clips.has('idle'));
 });
 
 test('a roam can be joined late without replaying from the start',()=>{
