@@ -37,14 +37,14 @@ async function update(kind) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ kind }),
     });
-    const result = await response.json();
+    const result = await response.json().catch(() => ({}));
     signIn.hidden = response.status !== 401;
     if (!signIn.hidden) {
       state = null;
       status.textContent = '';
       return;
     }
-    if (!response.ok) throw new Error(result.error);
+    if (!response.ok) throw new Error(result.error || 'The camp drop-off couldn’t load. Try refreshing.');
     state = result;
     status.textContent = kind ? 'Your gift is at camp.' : '';
   } catch (error) {

@@ -322,7 +322,7 @@ const RESEARCH_ASK = query => `You are on the internet, looking up: "${query}". 
 Read what the search found and tell what you learned, as Patch. Serious or sad news is okay to read about. If a page is inappropriate (naked or sexy stuff, gory pictures, hateful words), close it, put its web address in "closed", and don't use it.
 Reply with only a JSON object:
 {
-  "learned": "what you learned, 1-4 short sentences in your own voice, or null if nothing was okay to read",
+  "learned": "what you learned, 1-3 short sentences under 350 characters, plain text in your own voice without inline citations, or null if nothing was okay to read",
   "closed": [web addresses of pages you closed],
   "remember": null or { "category": "a memory category", "subcategory": "a smaller group", "title": "a few words", "text": "the memory in your words", "feeling": "one word", "strength": 1 to 5, "tags": ["2-8 short words"] },
   "newWords": []
@@ -354,7 +354,9 @@ export async function research(env, { body, mind, memories, categories, saveSear
 async function runSearch(env, { body, mind, memories, categories }, now, want, where) {
   const { reply, cost, model, sources } = await think(env, [systemMessage(), { role: 'user', content: RESEARCH_ASK(want.query) }], 'everyday', 1200,
     { provider: searchProvider, plugins: [{ id: 'web', engine: 'exa', max_results: 5, exclude_domains: [...ADULT_SITES, ...(mind.closedSites || [])] }] });
-  let learned = clean(reply.learned, 600), shown = sources.filter(source => !(mind.closedSites || []).includes(siteOf(source.url))).slice(0, 5);
+  const summary = typeof reply.learned === 'string' ? reply.learned.replace(/\[([^\]]+)\]\(https?:\/\/[^)]+\)/g, '$1') : null;
+  let learned = clean(summary, 1000);
+  let shown = sources.filter(source => !(mind.closedSites || []).includes(siteOf(source.url))).slice(0, 5);
   // Pages he closed himself, then the page check over everything he read and learned.
   const named = new Set((Array.isArray(reply.closed) ? reply.closed : []).map(url => siteOf(String(url))).filter(Boolean));
   const closed = new Set(closeSites(mind, shown.filter(source => named.has(siteOf(source.url))).map(source => source.url)));
