@@ -1,3 +1,4 @@
+import { createPatchEyes } from './patch-eyes.js';
 import * as THREE from 'three';
 import { createVisitorControls } from './visitor-controls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -47,12 +48,13 @@ const patch = new THREE.Group(); scene.add(patch);const patchVelocity=new THREE.
 const fishingRod=new THREE.Group(),rodDirection=new THREE.Vector3(.1,.65,2.2),rod=new THREE.Mesh(new THREE.CylinderGeometry(.025,.045,rodDirection.length(),6),new THREE.MeshStandardMaterial({color:0x6b4d31}));rod.position.copy(rodDirection).multiplyScalar(.5);rod.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),rodDirection.clone().normalize());fishingRod.add(rod);const lineGeo=new THREE.BufferGeometry().setFromPoints([rodDirection,new THREE.Vector3(.1,-.7,3.3)]);fishingRod.add(new THREE.Line(lineGeo,new THREE.LineBasicMaterial({color:0xd8d1b7})));patch.add(fishingRod);const handWorld=new THREE.Vector3();
 
 
-let mixer, patchModel, headBone, rightHandBone, clips = {}, strideSpeed = {}, currentAction, currentName, headRest = null, roam = null;
+let patchEyes, mixer, patchModel, headBone, rightHandBone, clips = {}, strideSpeed = {}, currentAction, currentName, headRest = null, roam = null;
 // Turn smoothly toward a heading instead of snapping at each bend.
 function face(angle,dt){const turn=Math.atan2(Math.sin(angle-patch.rotation.y),Math.cos(angle-patch.rotation.y));patch.rotation.y+=turn*Math.min(1,dt*7);}
 const lookUp = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -0.6);
 new GLTFLoader().load(new URL('./assets/patch.glb', document.baseURI).href, gltf => {
   patchModel=gltf.scene; patch.add(patchModel);
+  patchEyes=createPatchEyes(patchModel);
   gltf.scene.traverse(node => { if (node.isBone && /mixamorig[:_]?head$/i.test(node.name)) headBone=node; if(node.isBone && /mixamorig[:_]?righthand$/i.test(node.name)) rightHandBone=node; });
   mixer = new THREE.AnimationMixer(gltf.scene);
   for (const clip of gltf.animations) {
@@ -253,6 +255,7 @@ if(dt>0)patchVelocity.subVectors(patch.position,previousPatchPosition).multiplyS
 if(currentAction&&strideSpeed[currentName]&&dt>0){const speed=Math.hypot(patchVelocity.x,patchVelocity.z);currentAction.timeScale=speed>.05?THREE.MathUtils.clamp(speed/strideSpeed[currentName],.45,2.2):1;}
 if(patchModel)patchModel.position.set(0,0,0);
 if(mixer) mixer.update(dt);
+patchEyes?.update((Date.now()+serverOffset)/1000, action==='sleep' && ['sleep','sleep-lay','sleep-roll'].includes(currentName), dt);
 if(rightHandBone&&heldGrip){
   patch.updateMatrixWorld(true);rightHandBone.getWorldPosition(handWorld);
   const correction=new THREE.Vector3(...heldGrip).sub(handWorld);patch.worldToLocal(correction.add(patch.position));patchModel.position.copy(correction);
