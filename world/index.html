@@ -44,7 +44,10 @@
 <div id="bubble" hidden></div>
 <div class="island-movement">
   <p id="explore-hint">Drag the island to look · WASD or arrows to move · Shift to go faster</p>
-  <button id="move-toggle" type="button" aria-label="Walk forward" aria-pressed="false" title="Walk forward">
+  <div id="move-stick" role="group" aria-label="Movement joystick">
+    <span class="move-stick-thumb" aria-hidden="true"></span>
+  </div>
+  <button id="return-to-walk" type="button" aria-label="Return to walking" title="Return to walking" hidden>
     <svg aria-hidden="true" viewBox="0 0 32 32" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
       <circle cx="18" cy="5" r="2" fill="currentColor"/>
       <path d="m9 16 4-5 5-1 3 5 4 2m-7-7-3 9 5 4 2 6m-7-10-3 5-5 4"/>

@@ -6,7 +6,8 @@ import { shoreFraction, walkShoreLimit } from './terrain.js';
 export { walkable, walkStep } from './island-collision.js';
 
 export function createVisitorControls(camera, canvas, isModalOpen, scene, walkSolids) {
-  const moveToggle = document.querySelector('#move-toggle');
+  const moveStick = document.querySelector('#move-stick');
+  const returnToWalk = document.querySelector('#return-to-walk');
   const follow = document.querySelector('#follow-patch');
   const mouseLock = document.querySelector('#mouse-lock');
   const hint = document.querySelector('#explore-hint');
@@ -22,7 +23,7 @@ export function createVisitorControls(camera, canvas, isModalOpen, scene, walkSo
   let viewOffset = viewOffsets[0];
   const euler = new THREE.Euler(0, 0, 0, 'YXZ');
   const keys = new Set();
-  let walkingForward = false;
+  let stickPointer = null, stickSide = 0, stickForward = 0;
   let mode = 'walk', yaw = 0, pitch = 0, touchLook = null, lastTouch = 0;
   const touchScreen = matchMedia('(any-pointer: coarse)');
   let viewAngle = 0, nextSightCheck = 0, lockedLook = false;
@@ -30,14 +31,33 @@ export function createVisitorControls(camera, canvas, isModalOpen, scene, walkSo
   canvas.tabIndex = 0;
   canvas.setAttribute('aria-label', 'Explore Patch’s island');
 
-  function setWalkingForward(value) {
-    walkingForward = value;
-    moveToggle.setAttribute('aria-pressed', String(value));
+  function resetStick() {
+    const pointer = stickPointer;
+    stickPointer = null;
+    stickSide = stickForward = 0;
+    moveStick.removeAttribute('data-active');
+    moveStick.style.removeProperty('--stick-x');
+    moveStick.style.removeProperty('--stick-y');
+    if (pointer !== null && moveStick.hasPointerCapture(pointer)) moveStick.releasePointerCapture(pointer);
+  }
+
+  function aimStick(event) {
+    const bounds = moveStick.getBoundingClientRect();
+    const dx = event.clientX - (bounds.left + bounds.width / 2);
+    const dy = event.clientY - (bounds.top + bounds.height / 2);
+    const radius = bounds.width * .28;
+    const distance = Math.hypot(dx, dy);
+    const scale = Math.min(1, radius / (distance || 1));
+    const strength = THREE.MathUtils.clamp((distance / radius - .15) / .85, 0, 1);
+    stickSide = strength * dx / (distance || 1);
+    stickForward = -strength * dy / (distance || 1);
+    moveStick.style.setProperty('--stick-x', `${dx * scale}px`);
+    moveStick.style.setProperty('--stick-y', `${dy * scale}px`);
   }
 
   function pause() {
     keys.clear();
-    setWalkingForward(false);
+    resetStick();
     touchLook = null;
     if (document.pointerLockElement === canvas) document.exitPointerLock();
   }
@@ -45,8 +65,7 @@ export function createVisitorControls(camera, canvas, isModalOpen, scene, walkSo
   function updateLook() {
     const walking = mode === 'walk';
     document.body.classList.toggle('walking', walking);
-    moveToggle.setAttribute('aria-label', walking ? 'Walk forward' : 'Return to walking');
-    moveToggle.title = walking ? 'Walk forward' : 'Return to walking';
+    returnToWalk.hidden = walking;
     mouseLock.hidden = !walking;
     mouseLock.setAttribute('aria-pressed', String(lockedLook));
     const label = lockedLook ? 'Mouse look on: click the island to look; Escape releases the mouse' : 'Mouse look off: drag to look';
@@ -67,10 +86,9 @@ export function createVisitorControls(camera, canvas, isModalOpen, scene, walkSo
     updateLook();
   }
 
-  moveToggle.onclick = event => {
-    if (mode !== 'walk') setMode('walk');
-    else if (canWalk()) setWalkingForward(!walkingForward);
-    if (event.detail || !touchScreen.matches) canvas.focus({ preventScroll: true });
+  returnToWalk.onclick = () => {
+    setMode('walk');
+    canvas.focus({ preventScroll: true });
   };
   touchScreen.addEventListener('change', updateLook);
   mouseLock.onclick = () => {
@@ -158,6 +176,23 @@ export function createVisitorControls(camera, canvas, isModalOpen, scene, walkSo
   }
 
   const canWalk = () => mode === 'walk' && !isModalOpen();
+  moveStick.addEventListener('contextmenu', event => event.preventDefault());
+  moveStick.addEventListener('pointerdown', event => {
+    if (!canWalk() || stickPointer !== null || event.button !== 0) return;
+    event.preventDefault();
+    stickPointer = event.pointerId;
+    moveStick.setPointerCapture(stickPointer);
+    moveStick.setAttribute('data-active', '');
+    aimStick(event);
+  });
+  moveStick.addEventListener('pointermove', event => {
+    if (event.pointerId === stickPointer) aimStick(event);
+  });
+  for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) {
+    moveStick.addEventListener(type, event => {
+      if (event.pointerId === stickPointer) resetStick();
+    });
+  }
   canvas.addEventListener('click', () => {
     if (!canWalk() || !lockedLook || Date.now() - lastTouch < 800 || matchMedia('(pointer: coarse)').matches) return;
     canvas.requestPointerLock?.();
@@ -232,11 +267,18 @@ export function createVisitorControls(camera, canvas, isModalOpen, scene, walkSo
     update(dt) {
       if (!canWalk()) return;
       const has = (...codes) => codes.some(code => keys.has(code));
-      const forward = Number(has('KeyW', 'ArrowUp') || walkingForward) - Number(has('KeyS', 'ArrowDown'));
-      const side = Number(has('KeyD', 'ArrowRight')) - Number(has('KeyA', 'ArrowLeft'));
+      const keyForward = Number(has('KeyW', 'ArrowUp')) - Number(has('KeyS', 'ArrowDown'));
+      const keySide = Number(has('KeyD', 'ArrowRight')) - Number(has('KeyA', 'ArrowLeft'));
+      const usingKeys = keyForward !== 0 || keySide !== 0;
+      const forward = usingKeys ? keyForward : stickForward;
+      const side = usingKeys ? keySide : stickSide;
       const length = Math.hypot(forward, side);
       if (!length) return;
-      const speed = 3.5 * (has('ShiftLeft', 'ShiftRight') ? 2 : 1) * dt / length;
+      let pace;
+      if (usingKeys) pace = has('ShiftLeft', 'ShiftRight') ? 7 : 3.5;
+      else if (length <= .6) pace = 3.5 * length / .6;
+      else pace = 3.5 + 3.5 * (length - .6) / .4;
+      const speed = pace * dt / length;
       const dx = (-Math.sin(yaw) * forward + Math.cos(yaw) * side) * speed;
       const dz = (-Math.cos(yaw) * forward - Math.sin(yaw) * side) * speed;
       const { x, z } = camera.position;
