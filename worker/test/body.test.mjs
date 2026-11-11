@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { advance, newBody, view, isNight, localMinutes } from '../body.mjs';
+import { advance, newBody, view, isNight, localMinutes, choose } from '../body.mjs';
 import { ACTIONS, PLACES, NEEDS } from '../../shared/state.js';
 
 const HOUR = 3600000;
@@ -99,4 +99,38 @@ test('the public activity exposes its shared start and end times', () => {
   const body=newBody(now, 1), patch=view(body,now).patch;
   assert.equal(Date.parse(patch.since),body.activity.start);
   assert.equal(Date.parse(patch.until),body.activity.end);
+});
+
+test('his mind can choose to stay in bed or eat all day, and nothing overrides it', () => {
+  const body = newBody(MORNING, 11);
+  Object.assign(body, { mindAlive: true, mindAt: MORNING });
+  body.activity = { ...body.activity, place: 'hammock', target: null };
+  assert.equal(choose(body, { do: 'sleep', where: 'hammock', minutes: 600 }, MORNING), null);
+  advance(body, MORNING + 9 * HOUR);
+  assert.equal(view(body, MORNING + 9 * HOUR).patch.action, 'sleep');
+  advance(body, MORNING + 11 * HOUR);
+  const after = view(body, MORNING + 11 * HOUR).patch;
+  assert.equal(after.action, 'think', 'he waits for his own next choice instead of the needs picking');
+  assert.equal(choose(body, { do: 'eat', where: 'banana-grove', minutes: 120 }, MORNING + 11 * HOUR), null);
+  assert.equal(body.activity.target, 'banana-grove');
+  assert.equal(body.queued.action, 'eat');
+});
+
+test('a choice made while travelling waits for him to arrive, then takes him on', () => {
+  const body = newBody(MORNING, 12);
+  Object.assign(body, { mindAlive: true, mindAt: MORNING });
+  body.activity = { ...body.activity, action: 'walk', place: 'hammock', target: 'beach', start: MORNING, end: MORNING + 8 * 60000 };
+  assert.equal(choose(body, { do: 'fish', where: 'pond', minutes: 30 }, MORNING + 60000), null);
+  advance(body, MORNING + 9 * 60000);
+  assert.equal(body.activity.target, 'pond');
+  advance(body, body.activity.end + 1000);
+  assert.equal(body.activity.action, 'fish');
+  assert.equal(body.activity.place, 'pond');
+});
+
+test('when his mind stops working, his needs take over again', () => {
+  const body = newBody(MORNING, 13);
+  Object.assign(body, { mindAlive: false, mindAt: MORNING });
+  advance(body, MORNING + 3 * HOUR);
+  assert.notEqual(body.activity.waiting, true);
 });

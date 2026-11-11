@@ -1,10 +1,10 @@
-// Patch's mind. It wakes every 30–60 minutes while he's awake, thinks about his day,
-// and can say something, ask his body for an activity, remember something or learn a word.
+// Patch's mind. It wakes when what he chose is done (sooner when he's in a bad way, never while asleep),
+// thinks about his day, and decides what he does next. It can also say something, remember something or learn a word.
 // In the evening it writes his diary with the higher-quality model.
 
 import { CHILDHOOD, PERSONA, LIFE_STORY } from './persona.mjs';
 import { lightUp, recordRecall, normalTags, strengthOf, tagsIn, conceptGraph } from './memory-graph.mjs';
-import { WANTS, TIME_ZONE, localMinutes } from './body.mjs';
+import { CHOICES, WHERE, PLACES_KNOWN, TIME_ZONE, localMinutes, choose, travelMinutes } from './body.mjs';
 import { STARTING_CATEGORIES } from '../shared/memory.js';
 
 // Main model first, backup second. OpenRouter falls back within the same request.
@@ -105,6 +105,21 @@ export function comeToMind(mind, memories, cues, now, limit = 8) {
   return lit.memories.map(entry => entry.memory);
 }
 
+const PLACE_WORDS = { hammock: 'your hammock', shelves: 'your rope shelves', pond: 'the pond', 'banana-grove': 'the banana grove', 'tall-trees': 'the tall trees', beach: 'the beach', lookout: 'the lookout', 'tide-pools': 'the tide pools', meadow: 'the meadow', cave: 'the cave' };
+function nowLine(body, now) {
+  const { action, place, target, end, waiting } = body.activity;
+  if (target) return `Right now you are on your way to ${PLACE_WORDS[target]} (${action}ing), about ${Math.max(1, Math.round((end - now) / MINUTE))} minutes away.`;
+  if (waiting) return `You just finished what you chose, at ${PLACE_WORDS[place]}. What do you want to do next?`;
+  return `Right now you are: ${action} at ${PLACE_WORDS[place]}, about ${Math.max(0, Math.round((end - now) / MINUTE))} more minutes of what you chose.`;
+}
+// What he can choose from, and how far each place is from where he is.
+function choicesText(body) {
+  const here = body.activity.target || body.activity.place;
+  const where = action => WHERE[action] ? ` (only at ${WHERE[action].join(', ')})` : '';
+  return `Things you can do: ${CHOICES.map(action => action + where(action)).join('; ')}.
+Places, and minutes to get there from here: ${PLACES_KNOWN.map(place => `${place} ${place === here ? '(here)' : travelMinutes(here, place)}`).join(', ')}.`;
+}
+
 function dayNotes(body, mind, memories, now, recalled = []) {
   const since = mind.lastWake || now - 60 * MINUTE;
   const log = (body.log || []).filter(entry => entry.at >= since && !entry.target)
@@ -115,7 +130,8 @@ function dayNotes(body, mind, memories, now, recalled = []) {
   const words = (mind.words || []).slice(-15).map(entry => `${entry.word} (${entry.meaning})`);
   return [
     `It is ${clockWords(now)}.`,
-    `Right now you are: ${body.activity.action} at the ${body.activity.target || body.activity.place}.`,
+    nowLine(body, now),
+    mind.problem ? `Last time you chose something you couldn't do: ${mind.problem}` : '',
     `How you feel: ${feelings(body.needs)}.`,
     log.length ? `What you did since you last stopped to think:\n${log.join('\n')}` : 'Nothing new since you last stopped to think.',
     cameToMind.length ? `What comes to mind right now:\n${cameToMind.join('\n')}` : '',
@@ -125,11 +141,11 @@ function dayNotes(body, mind, memories, now, recalled = []) {
   ].filter(Boolean).join('\n\n');
 }
 
-const THINK_ASK = `Stop and think for a moment, as Patch. Reply with only a JSON object:
+const THINK_ASK = `Stop and think for a moment, as Patch. You decide what you do next: follow your instincts, your feelings and what comes to mind. You can do the same thing again, or anything else. Reply with only a JSON object:
 {
   "thought": "what you're thinking right now, 1-3 short sentences, in your own voice",
   "says": "something short you say out loud, or null",
-  "want": "what you want to do next, one of: ${WANTS.join(', ')}; or null to let your body decide",
+  "plan": null to keep doing what you're doing, or { "do": "one thing you can do", "where": "a place", "minutes": how long, "how": "walk, run or swing (to the tall trees) to get there, or null", "why": "a few words" },
   "remember": null or { "category": "a memory category", "subcategory": "a smaller group", "title": "a few words", "text": "the memory in your words", "feeling": "one word", "strength": 1 to 5 (5 = you will never forget it), "tags": ["2-8 short words for the things, people, places and feelings in it"] },
   "noticed": ["up to 6 short words for what you are noticing or thinking about right now"],
   "newWords": []
@@ -181,20 +197,28 @@ export function overBudget(mind, now) {
 
 // One moment of thought. Mutates body, mind, memories and categories.
 export async function ponder(env, { body, mind, memories, categories }, now) {
-  if (overBudget(mind, now)) return;
+  if (overBudget(mind, now)) { body.mindAlive = false; return; }
   const recalled = comeToMind(mind, memories, cuesFor(body, mind, now), now);
   const notes = dayNotes(body, mind, memories, now, recalled);
   const { reply, cost, model } = await think(env, [systemMessage(), { role: 'user', content: `${notes}
+
+${choicesText(body)}
 
 ${THINK_ASK}` }], 'everyday', 1500);
   spend(mind, cost, now);
   const thought = clean(reply.thought, 400), says = clean(reply.says, 160);
   if (thought) mind.thoughts = [...(mind.thoughts || []), { at: now, thought, says, model }].slice(-40);
+  // His choice is what happens next. Waiting with nothing chosen means a little more thinking.
+  const plan = reply.plan && typeof reply.plan === 'object' ? reply.plan : null;
+  mind.problem = plan ? choose(body, plan, now) : null;
+  if (plan && !mind.problem) mind.decisions = [...(mind.decisions || []), { at: now, do: plan.do, where: body.activity.target || body.activity.place, minutes: body.queued?.minutes || Math.round((body.activity.end - body.activity.start) / MINUTE), why: clean(plan.why, 160) }].slice(-40);
+  else if (body.activity.waiting) body.activity.end = Math.max(body.activity.end, now + 15 * MINUTE);
+  body.mindAlive = true;
+  body.mindAt = now;
   if (says) {
     body.activity.says = says;
     body.activity.saysAt = now;
   }
-  if (WANTS.includes(reply.want)) body.want = reply.want;
   const here = body.activity.target || body.activity.place;
   rememberMemory(memories, categories, reply.remember, now, [here, body.activity.action]);
   mind.noticed = normalTags(reply.noticed).slice(0, 6);
@@ -264,10 +288,13 @@ ${text}
 }
 
 // When the mind should next wake, given the body.
-export function nextWake(body, now, random = Math.random) {
-  const { activity } = body;
-  if (activity.action === 'sleep') return Math.max(activity.end + 2 * MINUTE, now + MINUTE);
-  return now + (30 + Math.floor(random() * 31)) * MINUTE;
+// He wakes to decide when what he chose is done, or sooner when he's in a bad way. Asleep, he wakes when the sleep ends.
+export function nextWake(body, now) {
+  const { activity, needs = {}, queued } = body;
+  if (activity.action === 'sleep') return Math.max(activity.end + MINUTE, now + MINUTE);
+  const done = activity.end + (activity.target && queued ? queued.minutes * MINUTE : 0) + 30000;
+  const urgent = Object.values(needs).some(value => value < 0.12);
+  return Math.max(now + 2 * MINUTE, Math.min(done, now + (urgent ? 20 : 90) * MINUTE));
 }
 
 export function allMemories(island) {

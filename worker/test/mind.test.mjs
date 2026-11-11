@@ -18,9 +18,9 @@ function fakeOpenRouter(reply, cost = 0.002) {
 
 const world = now => ({ body: newBody(now, 1), mind: {}, memories: [], categories: {} });
 
-test('a thought is recorded and can ask the body for an activity, a memory and a word', async () => {
+test('a thought is recorded, his choice happens, and he can remember and learn a word', async () => {
   const calls = fakeOpenRouter({
-    thought: 'The pond looks sparkly today.', says: 'Splash time!', want: 'swim',
+    thought: 'The pond looks sparkly today.', says: 'Splash time!', plan: { do: 'swim', where: 'pond', minutes: 25, why: 'it sparkles' },
     remember: { category: 'Pond Life', subcategory: 'fish', title: 'A silver fish', text: 'I saw a silver fish jump.', feeling: 'amazed' },
     newWords: [{ word: 'sparkly', meaning: 'shiny with little lights', from: 'the pond' }],
   });
@@ -31,18 +31,25 @@ test('a thought is recorded and can ask the body for an activity, a memory and a
   assert.equal(w.mind.thoughts[0].thought, 'The pond looks sparkly today.');
   assert.equal(w.body.activity.says, 'Splash time!');
   assert.equal(w.body.activity.saysAt, at(10));
-  assert.equal(w.body.want, 'swim');
+  assert.equal(w.body.activity.target, 'pond');
+  assert.equal(w.body.queued.action, 'swim');
+  assert.equal(w.body.queued.minutes, 25);
+  assert.equal(w.body.mindAlive, true);
+  assert.equal(w.mind.decisions[0].why, 'it sparkles');
   assert.equal(w.memories[0].category, 'pond-life');
   assert.deepEqual(w.categories['pond-life'].subcategories, ['fish']);
   assert.equal(w.mind.words[0].word, 'sparkly');
   assert.equal(w.mind.spend.total, 0.002);
 });
 
-test('unknown wants are ignored and the diary waits for evening', async () => {
-  fakeOpenRouter({ thought: 'Hmm.', says: null, want: 'fly to the moon', remember: null, newWords: [] });
-  const w = world(at(10));
+test('impossible choices change nothing and he is told why next time', async () => {
+  const calls = fakeOpenRouter({ thought: 'Hmm.', says: null, plan: { do: 'swim', where: 'meadow', minutes: 20 }, remember: null, newWords: [] });
+  const w = world(at(10)), before = { ...w.body.activity };
   await ponder(env, w, at(10));
-  assert.equal(w.body.want, null);
+  assert.deepEqual(w.body.activity, before);
+  assert.match(w.mind.problem, /only swim at: pond/);
+  await ponder(env, w, at(10, 30));
+  assert.match(calls[1].messages[1].content, /couldn't do: You can only swim at: pond/);
   assert.equal(await writeDiary(env, w, at(10)), null);
 });
 
@@ -64,12 +71,16 @@ test('he stops thinking near the monthly limit', async () => {
   assert.equal(calls.length, 0);
 });
 
-test('he wakes 30 to 60 minutes apart, and in the morning after sleeping', () => {
+test('he wakes when what he chose is done, sooner when in a bad way, and after sleep', () => {
   const w = world(at(10));
-  const gap = nextWake(w.body, at(10), () => 0.5) - at(10);
-  assert.ok(gap >= 30 * 60000 && gap <= 60 * 60000);
+  w.body.activity = { ...w.body.activity, action: 'swim', place: 'pond', target: null, start: at(10), end: at(10, 40) };
+  assert.equal(nextWake(w.body, at(10)), at(10, 40) + 30000);
+  w.body.activity.end = at(14);
+  assert.equal(nextWake(w.body, at(10)), at(11, 30));
+  w.body.needs.hunger = 0.05;
+  assert.equal(nextWake(w.body, at(10)), at(10, 20));
   w.body.activity = { ...w.body.activity, action: 'sleep', end: at(6, 40) + 86400000 };
-  assert.equal(nextWake(w.body, at(23)), at(6, 42) + 86400000);
+  assert.equal(nextWake(w.body, at(23)), at(6, 41) + 86400000);
 });
 
 test('JSON is read even when the model wraps it in words', () => {

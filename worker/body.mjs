@@ -1,4 +1,5 @@
-// Patch's body: needs drive what he does next. No AI runs here.
+// Patch's body. While his mind is awake and working, it decides what he does, where and for how long,
+// and the body carries it out and keeps his needs. When his mind is unavailable, the needs pick for him.
 // The simulation steps from one activity to the next, so it can catch up on any gap without a timer.
 
 import { NEEDS } from '../shared/state.js';
@@ -19,7 +20,7 @@ const DECAY = {
   asleep: { hunger: -0.0008, energy: 0, fun: 0, comfort: 0, social: -0.0002 },
 };
 
-// What he can choose to do. Effects are per minute, on top of decay.
+// What his needs pick when his mind is unavailable. Effects are per minute, on top of decay.
 export const ACTIVITIES = [
   { action: 'eat', place: 'banana-grove', minutes: [5, 10], effects: { hunger: 0.05, comfort: 0.004 }, appeal: 0.2 },
   { action: 'eat', place: 'shelves', minutes: [4, 8], effects: { hunger: 0.045, comfort: 0.006 } },
@@ -37,6 +38,24 @@ export const ACTIVITIES = [
   { action: 'think', place: 'hammock', minutes: [5, 15], effects: { comfort: 0.01, social: 0.002 }, appeal: 0.2 },
   { action: 'sleep', place: 'hammock', minutes: [20, 45], effects: { energy: 0.012, comfort: 0.006 }, nap: true },
 ];
+
+// What each choice does per minute, on top of decay, and where it can be done. Missing places = anywhere.
+const EFFECTS = {
+  idle: { comfort: 0.003 }, sit: { comfort: 0.01, fun: 0.003 }, think: { comfort: 0.01, social: 0.002 },
+  eat: { hunger: 0.05, comfort: 0.004 }, fish: { fun: 0.008, hunger: 0.004, comfort: 0.003 },
+  swim: { fun: 0.015, comfort: 0.005, energy: -0.0015 }, swing: { fun: 0.018, energy: -0.0015 }, climb: { fun: 0.012, energy: -0.0015 },
+  explore: { fun: 0.016, energy: -0.002 }, 'watch-sky': { comfort: 0.012, fun: 0.008, social: 0.003 }, look: { comfort: 0.006, fun: 0.006, social: 0.003 },
+  phone: { social: 0.015, fun: 0.006, comfort: 0.003 }, write: { fun: 0.008, social: 0.006 }, wave: { social: 0.006, fun: 0.004 },
+  sleep: { energy: 0.008, comfort: 0.004 },
+};
+export const CHOICES = Object.keys(EFFECTS);
+export const WHERE = {
+  eat: ['banana-grove', 'shelves', 'beach'], fish: ['pond'], swim: ['pond'], swing: ['tall-trees'], climb: ['tall-trees'],
+  explore: ['tall-trees', 'cave', 'tide-pools', 'beach', 'meadow', 'lookout', 'banana-grove', 'pond'],
+};
+export const PLACES_KNOWN = Object.keys(SPOTS);
+const MIND_TRUST = 12 * 60 * MINUTE;
+const mindLed = (state, time) => state.mindAlive === true && Number.isFinite(state.mindAt) && time - state.mindAt < MIND_TRUST;
 
 function rng(seed) {
   let a = seed >>> 0;
@@ -61,7 +80,7 @@ export function localMinutes(time) {
 const BEDTIME = 21 * 60, WAKE = 6 * 60 + 30;
 export const isNight = time => { const m = localMinutes(time); return m >= BEDTIME || m < WAKE; };
 
-function travelMinutes(from, to) {
+export function travelMinutes(from, to) {
   const [ax, ay] = SPOTS[from], [bx, by] = SPOTS[to];
   return Math.max(1, Math.round(Math.hypot(ax - bx, ay - by) * 0.6));
 }
@@ -99,10 +118,13 @@ function next(state, time) {
   if (state.queued) {
     const queued = state.queued;
     state.queued = null;
+    if (queued.place && queued.place !== place) return travel(state, place, queued.place, time, random, { ...queued, place: null });
     state.recent = [queued.action, ...(state.recent || [])].slice(0, 3);
     if (queued.nap) return start('sleep', place, time, queued.minutes, { effects: queued.effects, nap: true });
     return start(queued.action, place, time, queued.minutes, { effects: queued.effects });
   }
+  // His mind is deciding: once what he chose is done, he waits and thinks until it wakes and chooses again.
+  if (mindLed(state, time)) return start('think', place, time, 5, { effects: EFFECTS.think, waiting: true });
   if (isNight(time) && needs.hunger > 0.15) {
     if (place !== 'hammock') return travel(state, place, 'hammock', time, random, { action: 'sleep', minutes: 0, effects: {} });
     const m = localMinutes(time);
@@ -113,9 +135,7 @@ function next(state, time) {
     return start('idle', place, time, 3);
   }
   const recent = state.recent || [];
-  const wanted = state.want && wantedActivity(state.want, place);
-  state.want = null;
-  const best = wanted || ACTIVITIES.map(choice => [score(choice, needs, place, recent, random), choice]).sort((a, b) => b[0] - a[0])[0][1];
+  const best = ACTIVITIES.map(choice => [score(choice, needs, place, recent, random), choice]).sort((a, b) => b[0] - a[0])[0][1];
   const minutes = best.minutes[0] + Math.floor(random() * (best.minutes[1] - best.minutes[0] + 1));
   const queued = { action: best.action, minutes, effects: best.effects, nap: !!best.nap };
   if (best.place !== place) return travel(state, place, best.place, time, random, queued);
@@ -124,22 +144,38 @@ function next(state, time) {
   return start(best.action, place, time, minutes, { effects: best.effects });
 }
 
-// The mind can ask for an activity; it happens next unless it's bedtime.
-export const WANTS = [...new Set(ACTIVITIES.map(choice => choice.nap ? 'nap' : choice.action))];
-function wantedActivity(want, place) {
-  const matches = ACTIVITIES.filter(choice => (choice.nap ? 'nap' : choice.action) === want);
-  return matches.find(choice => choice.place === place) || matches[0] || null;
-}
-
-function travel(state, from, to, time, random, queued) {
+function travel(state, from, to, time, random, queued, how = null) {
   // Bedtime travel queues nothing; the night rule takes over once he arrives.
   state.queued = queued.minutes ? queued : null;
   const minutes = travelMinutes(from, to);
   // Through the forest he sometimes swings; otherwise he walks, or runs when he's very hungry.
   const forest = to === 'tall-trees' || from === 'tall-trees';
-  const action = state.needs.hunger < 0.2 ? 'run' : forest && random() < 0.5 ? 'swing' : 'walk';
+  const action = how === 'swing' && forest ? 'swing' : how === 'run' || how === 'walk' ? how : state.needs.hunger < 0.2 ? 'run' : forest && random() < 0.5 ? 'swing' : 'walk';
   const speed = action === 'walk' ? 1 : 0.6;
   return start(action, from, time, Math.max(1, Math.round(minutes * speed)), { target: to, effects: { energy: -0.002 } });
+}
+
+// His mind's choice takes effect now. Returns null when it worked, or the reason it can't be done.
+// plan: { do, where, minutes, how }. A choice made while travelling waits until he arrives.
+export function choose(state, plan, now) {
+  const action = plan?.do, place = plan?.where || state.activity.target || state.activity.place;
+  if (!CHOICES.includes(action)) return `"${action}" is not something you can do.`;
+  if (!PLACES_KNOWN.includes(place)) return `"${place}" is not a place on your island.`;
+  if (WHERE[action] && !WHERE[action].includes(place)) return `You can only ${action} at: ${WHERE[action].join(', ')}.`;
+  const [low, high] = action === 'sleep' ? [10, 600] : [3, 120];
+  const minutes = Math.max(low, Math.min(high, Math.round(Number(plan.minutes)) || 20));
+  const queued = { action, minutes, effects: EFFECTS[action], nap: action === 'sleep' };
+  const { activity } = state;
+  if (activity.target) { state.queued = { ...queued, place }; return null; }
+  state.needs = applyMinutes(state.needs, activity, Math.max(0, now - activity.start) / MINUTE);
+  state.queued = null;
+  state.recent = [action, ...(state.recent || [])].slice(0, 3);
+  state.activity = place === activity.place
+    ? start(action, place, now, minutes, { effects: EFFECTS[action], nap: action === 'sleep' })
+    : travel(state, activity.place, place, now, rng(state.seed + Math.floor(now / MINUTE)), queued, plan.how);
+  const { action: a, place: p, target } = state.activity;
+  state.log = [...(state.log || []), { action: a, place: p, target, at: now }].slice(-40);
+  return null;
 }
 
 export function newBody(now, seed = 1) {
@@ -149,7 +185,6 @@ export function newBody(now, seed = 1) {
     activity: start('look', 'beach', now, 5),
     queued: null,
     recent: [],
-    want: null,
     log: [],
   };
 }
