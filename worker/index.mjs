@@ -390,7 +390,7 @@ const RETIRE = `self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', event => event.waitUntil((async () => {
   for (const name of await caches.keys()) if (name.startsWith('patch-')) await caches.delete(name);
   await self.registration.unregister();
-  for (const client of await self.clients.matchAll({ type: 'window' })) client.navigate('${SITE}/');
+  await Promise.allSettled((await self.clients.matchAll({ type: 'window' })).map(client => client.navigate('${SITE}/')));
 })()));`;
 
 const patchOf = env => env.PATCH_WORLD.get(env.PATCH_WORLD.idFromName('patch'));
