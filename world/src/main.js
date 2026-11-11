@@ -1,7 +1,8 @@
 import { createPatchMouth } from './patch-mouth.js';
 import { foragePlan } from './foraging.js';
 import { createFoodProps } from './food-props.js';
-import { createPatchEyes } from './patch-eyes.js';
+import { createPatchEyes, blinkRate, drowsiness } from './patch-eyes.js';
+import { captionAt } from '../../shared/speech.js';
 import * as THREE from 'three';
 import { createVisitorControls } from './visitor-controls.js';
 import { setupIslandCameras } from './island-cameras.js';
@@ -229,6 +230,19 @@ function renderCare(p) {
   if (Array.isArray(p.carrying) && p.carrying.length) { const carried=document.createElement('p'); carried.className='care-carrying'; carried.textContent=`Carrying: ${p.carrying.join(', ')}`; list.append(carried); }
 }
 const localPreview = isLocalPreview(location.hostname), start = performance.now();
+// Each recording's timing, loaded once, so his mouth follows the words he's saying.
+const timings = new Map();
+let faceClip;
+function speechTiming(speech) {
+  const id = speech?.voice;
+  if (!id || !/^[0-9a-z]+$/.test(id)) return null;
+  if (!timings.has(id)) {
+    timings.set(id, null);
+    fetch(`/api/voice/${id}`).then(response => response.ok ? response.json() : null).then(clip => { if (clip?.timing) timings.set(id, clip.timing); }, () => {});
+    for (const old of [...timings.keys()].slice(0, -8)) timings.delete(old);
+  }
+  return timings.get(id);
+}
 const mockActions=['idle','walk','run','climb','swing','swim','fish','eat','sit','sleep','think','write','research','computer','wave','look','explore','watch-sky'], ids=Object.keys(places);
 async function poll() {
   try {
@@ -293,7 +307,7 @@ const walked = controls.update(dt) || 0;
 findPatch.disabled = followPatch.disabled = !state;
 if (!state) { sound.update(controls.camera,{daylight:1,weather:'clear',walked}); patch.visible=false; scene.background=skyDay; rain.visible=false; scenery.update(reducedMotion.matches?0:dt,1); renderIsland(now); return; }
 patch.visible=true;previousPatchPosition.copy(patch.position);
-const {action,place,target,says,since,until,speechUntil}=state.patch,mail=Number(state.patch.mail)||0;scenery.setMail(mail);
+const {action,place,target,since,until,speech}=state.patch,mail=Number(state.patch.mail)||0;scenery.setMail(mail);
 $('#status').textContent = statusText(state.patch)+(mail&&!(place==='computer'&&!target)?` ✉ ${mail} letter${mail===1?'':'s'} waiting at his coconut computer.`:'');
 foodPose=null;scenery.resetRopes();let heldRope=null, heldGrip=null;fishingRod.visible=action==='fish'&&!target;
 const climbKey=`${action}|${place}|${since||''}`;
@@ -461,7 +475,8 @@ if(currentAction&&strideSpeed[currentName]&&dt>0&&['walk','run','swing','swim','
 if(patchModel)patchModel.position.set(0,0,0);
 if(mixer) mixer.update(dt);
 foodProps.update(foodPose,patch,leftHandBone,rightHandBone);
-patchEyes?.update((Date.now()+serverOffset)/1000, action==='sleep' && ['sleep','sleep-lay','sleep-roll'].includes(currentName), dt);
+const serverNow=Date.now()+serverOffset,timing=speechTiming(speech),talking=!!speech&&serverNow>=Date.parse(speech.at)&&serverNow<Date.parse(speech.until);
+patchEyes?.update(dt, action==='sleep' && ['sleep','sleep-lay','sleep-roll'].includes(currentName), {rate:blinkRate(action,talking), shift:currentName!==faceClip, drowsy:action==='sleep'?0:drowsiness(state.patch.needs?.energy)});faceClip=currentName;
 if(rightHandBone&&heldGrip){
   patch.updateMatrixWorld(true);rightHandBone.getWorldPosition(handWorld);
   const correction=new THREE.Vector3(...heldGrip).sub(handWorld);patch.worldToLocal(correction.add(patch.position));patchModel.position.copy(correction);
@@ -475,14 +490,14 @@ ping.visible=mail>0&&!(place==='computer'&&!target)&&action!=='sleep';if(ping.vi
 if(rightHandBone&&fishingRod.visible){patch.updateMatrixWorld(true);rightHandBone.getWorldPosition(handWorld);fishingRod.position.copy(patch.worldToLocal(handWorld.clone()));}
 // The ground sit animates his head, so the tilt goes on top of each frame's pose.
 if(action==='watch-sky' && headBone && currentName==='sit-ground') headBone.quaternion.multiply(lookUp);
-patchMouth?.update(says,speechUntil,Date.now()+serverOffset,action==='sleep',dt);
-const speechLive=!!says && Number.isFinite(Date.parse(speechUntil)) && Date.now()+serverOffset<Date.parse(speechUntil);$('#bubble').hidden=!speechLive;$('#bubble').textContent=speechLive?says:'';
+patchMouth?.update(speech,timing,serverNow,action==='sleep',dt);
+const caption=talking?captionAt(speech.text,timing,serverNow-Date.parse(speech.at)):'';$('#bubble').hidden=!caption;if($('#bubble').textContent!==caption)$('#bubble').textContent=caption;
 let day=Number.isFinite(state.clock.dayFraction)?state.clock.dayFraction:.5;let daylight=THREE.MathUtils.smoothstep(Math.sin((day-.25)*Math.PI*2),-.12,.2);let weather=state.clock.weather;let overcast=weather==='cloudy'||weather==='rain'||weather==='storm';sky.copy(skyNight).lerp(skyDay,daylight*(overcast?.65:1));updateSky(daylight);scene.background=skyTexture;scene.fog.color.copy(sky);hemi.intensity=1.25+daylight*(overcast?.4:1.15);sunLight.intensity=daylight*(overcast?.6:2.4)+(1-daylight)*.65;sunLight.color.copy(moonColor).lerp(sunColor,daylight);let angle=(day-.25)*Math.PI*2;sun.position.set(Math.cos(angle)*900,Math.sin(angle)*900,0);moon.position.copy(sun.position).multiplyScalar(-1);sunLight.position.copy(daylight>.05?sun.position:moon.position);stars.material.opacity=1-daylight;stars.visible=daylight<.98;clouds.forEach((c,i)=>{c.visible=overcast||i<5;c.position.x+=reducedMotion.matches?0:dt*.14;if(c.position.x>520)c.position.x=-520;});rain.visible=weather==='rain'||weather==='storm';
 controls.track(patch.position,dt);
 sound.update(cameraFeeds.camera || controls.camera, {
   daylight, weather, walked, patch: patch.position, previousPatch: previousPatchPosition,
   clip: currentName, clipTime: currentAction?.time, action, place, since, mail, target,
-  carrying: state.patch.carrying, gift: state.patch.giftSound, now: Date.now() + serverOffset,
+  carrying: state.patch.carrying, gift: state.patch.giftSound, speech, now: Date.now() + serverOffset,
   silent: cameraFeeds.open && !cameraFeeds.camera
 });
 scenery.update(reducedMotion.matches?0:dt,daylight);renderIsland(now,reducedMotion.matches?0:t*12%30);}

@@ -213,3 +213,4 @@ nav button[hidden]{display:none}
 @media(max-width:650px) { .camera-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 #letter-kind{display:block;font:inherit;max-width:100%;min-height:44px;margin:6px 0 14px;padding:6px 10px;color:#263d35;background:#fff3d6;border:1px solid #948065;border-radius:8px}
 .install-help{width:min(440px,92vw);text-align:center}.install-help h2{margin:4px 0 12px;font-size:26px}.install-help p{line-height:1.5;color:#e4f0dc}#install-steps{font-size:19px;color:#fff8e6}.install-help .primary{margin-top:8px;font-size:17px}
+.reply-voice{display:block;width:100%;margin:4px 0 8px}

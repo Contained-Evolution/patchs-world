@@ -16,6 +16,10 @@ html_handling = "none"
 [vars]
 VAPID_PUBLIC_KEY = "BNgbQ0CDOxGp2lu2AYN_pCj9Cate9SuCI8gLBP8pJUAlfQzHEDZ-M2h-oZMPhqBzGgo7_UgoQ5P2DPab4sLqJFU"
 
+# Patch's ElevenLabs voice and the most characters a month it may use. The key is the ELEVENLABS_API_KEY secret.
+VOICE_ID = ""
+VOICE_CHARACTERS_A_MONTH = "30000"
+
 [[durable_objects.bindings]]
 name = "PATCH_WORLD"
 class_name = "PatchWorld"

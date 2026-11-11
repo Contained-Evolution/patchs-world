@@ -86,6 +86,9 @@ export function createIslandAudio(button, footsteps) {
   let nextBird = 0, nextThunder = 0, nextRepeat = 0, visitorStride = 0, patchStride = 0;
   let lastClip, lastActivity, lastMail, lastGift, lastCarrying, lastCueTime = -1;
   let lastMix = -1, environment, leftFoot = false;
+  // Patch's recorded lines, decoded once each, and the one playing now.
+  const recordings = new Map();
+  let speaking = null;
   try {
     soundOn = localStorage.getItem('patch-sound') !== 'muted';
     footstepsOn = localStorage.getItem('patch-footsteps') !== 'muted';
@@ -206,6 +209,39 @@ export function createIslandAudio(button, footsteps) {
     finish(source, null, nodes, time + duration);
   }
 
+  function recording(id) {
+    if (!recordings.has(id)) {
+      recordings.set(id, { buffer: null });
+      fetch(`/api/voice/${id}.mp3`).then(response => response.ok ? response.arrayBuffer() : Promise.reject())
+        .then(bytes => context.decodeAudioData(bytes)).then(buffer => { recordings.get(id).buffer = buffer; }, () => {});
+      for (const old of [...recordings.keys()].slice(0, -8)) recordings.delete(old);
+    }
+    return recordings.get(id).buffer;
+  }
+
+  // He's heard where he stands, a little louder than his footsteps. A late visitor joins the line partway through.
+  function speak(speech, now, volume, pan) {
+    const key = speech?.voice ? `${speech.voice}|${speech.at}` : null;
+    if (speaking && speaking.key !== key) { speaking.source.stop(); speaking = null; }
+    if (!key) return;
+    const start = Date.parse(speech.at), end = Date.parse(speech.until);
+    if (!speaking) {
+      const buffer = recording(speech.voice);
+      if (!buffer || now >= end) return;
+      const source = context.createBufferSource(), gain = context.createGain(), stereo = context.createStereoPanner();
+      source.buffer = buffer;
+      gain.gain.value = 0;
+      source.connect(gain).connect(stereo).connect(output);
+      const offset = Math.max(0, now - start) / 1000;
+      if (offset >= buffer.duration) return;
+      source.start(context.currentTime + Math.max(0, start - now) / 1000, offset);
+      source.onended = () => { source.disconnect(); gain.disconnect(); stereo.disconnect(); if (speaking?.source === source) speaking = null; };
+      speaking = { key, source, gain, stereo };
+    }
+    speaking.gain.gain.setTargetAtTime(Math.min(1.4, volume * 1.5 + .05), context.currentTime, .05);
+    speaking.stereo.pan.setTargetAtTime(pan * .8, context.currentTime, .05);
+  }
+
   return {
     pause(value) {
       if (paused === value) return;
@@ -254,6 +290,7 @@ export function createIslandAudio(button, footsteps) {
       const right = camera.matrixWorld.elements;
       const pan = Math.max(-.85, Math.min(.85, (dx * right[0] + dz * right[2]) / Math.max(2, distance)));
       const volume = .91 / (1 + (distance / 8) ** 2);
+      speak(state.speech, state.now, volume, pan);
       const moving = steps.has(clip);
       const patchTravel = Math.hypot(patch.x - previousPatch.x, patch.z - previousPatch.z);
       if (footstepsOn && moving && patchTravel < 1) patchStride = Math.min(.9, patchStride + patchTravel);

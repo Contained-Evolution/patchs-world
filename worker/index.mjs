@@ -10,6 +10,8 @@ import { LIMITS, cleanText, freshLimits, checkLetter, checkPost, countLetter, co
 import { STARTING_CATEGORIES } from '../shared/memory.js';
 import { concepts } from './memory-graph.mjs';
 import { cleanSubscription, addDevice, sendPush, gone, deliveries } from './push.mjs';
+import { canSpeak, voiceRoom, countVoice, record } from './voice.mjs';
+import { estimateMs, schedule, speechView } from '../shared/speech.js';
 
 const headers = {
   'x-content-type-options': 'nosniff',
@@ -19,8 +21,8 @@ const headers = {
 
 const json = (body, status = 200) => Response.json(body, { status, headers: { ...headers, 'cache-control': 'no-store' } });
 
-const publicLetter = ({ id, text, at, reply, repliedAt, lookup, acceptedLookup }) => ({
-  id, text, lookup: Boolean(lookup), acceptedLookup: Boolean(acceptedLookup), at: new Date(at).toISOString(), reply, repliedAt: repliedAt ? new Date(repliedAt).toISOString() : null,
+const publicLetter = ({ id, text, at, reply, repliedAt, lookup, acceptedLookup, voice }) => ({
+  id, text, lookup: Boolean(lookup), acceptedLookup: Boolean(acceptedLookup), at: new Date(at).toISOString(), reply, repliedAt: repliedAt ? new Date(repliedAt).toISOString() : null, voice: voice || null,
 });
 
 async function readJson(request) {
@@ -80,10 +82,13 @@ export class PatchWorld extends DurableObject {
     const now = Date.now();
     const body = await this.body(now);
     if (this.env.OPENROUTER_API_KEY && !(await this.ctx.storage.getAlarm())) await this.ctx.storage.setAlarm(now + 60000);
-    const stored = await this.ctx.storage.get(['unread', 'giftSound']);
+    const stored = await this.ctx.storage.get(['unread', 'giftSound', 'speech']);
     const result = view(body, now, (stored.get('unread') || []).length);
     const sound = stored.get('giftSound');
     if (sound && now - sound.at < GIFT_SOUND_DURATION) result.patch.giftSound = sound;
+    const speech = speechView(stored.get('speech'), now);
+    result.patch.speech = speech;
+    if (speech && Date.parse(speech.at) <= now) Object.assign(result.patch, { says: speech.text, speechUntil: speech.until });
     return result;
   }
 
@@ -104,13 +109,17 @@ export class PatchWorld extends DurableObject {
     world.mind.gifts = selectedGifts.length ? [...(await this.ctx.storage.get(selectedGifts.map(id => `gift:${id}`))).values()] : [];
     const startSpend = world.mind.spend?.total || 0;
     const people = stored.get('people') || {};
-    const answered = [], replies = [], entries = [];
+    const answered = [], replies = [], entries = [], spoken = [];
     const since = world.mind.lastWake || now - 60 * MINUTE;
     try {
       if (body.activity.action !== 'sleep') {
         const previousSearch = world.mind.wantSearch && await research(this.env, world, now);
         const giftBody = { activity: { ...body.activity }, needs: body.needs };
         await ponder(this.env, { ...world, mail: (stored.get('unread') || []).length }, now);
+        // What he says is queued with his voice instead of shown on the spot.
+        if (body.activity.saysAt === now && body.activity.says) spoken.push({ text: body.activity.says, kind: 'says' });
+        delete body.activity.says;
+        delete body.activity.saysAt;
         const gift = world.mind.gifts.find(item => item.id === world.mind.giftChoice?.id);
         if (gift) {
           const result = await this.applyGift(gift.id, world.mind.giftChoice.do, giftBody, now);
@@ -136,6 +145,7 @@ export class PatchWorld extends DurableObject {
           world.body.needs.social = Math.min(1, world.body.needs.social + 0.08);
           answered.push(letter.id);
           replies.push({ userId: letter.from.id, reply: reply.reply });
+          spoken.push({ text: reply.reply, kind: 'reply', letter });
         }
       }
       const diary = await writeDiary(this.env, world, now);
@@ -157,7 +167,43 @@ export class PatchWorld extends DurableObject {
     const unread = (latest.get('unread') || []).filter(id => !answered.includes(id));
     await this.ctx.storage.put({ body: world.body, mind: world.mind, memories: world.memories, categories: world.categories, unread, people });
     await this.ctx.storage.setAlarm(nextWake(world.body, now));
+    try { await this.speak(spoken, now); } catch (error) { console.error('Patch could not speak:', error); }
     try { await this.notify(replies, entries); } catch (error) { console.error('Patch could not send notifications:', error); }
+  }
+
+  // Records what he says and his letter replies once, then queues them to be said in turn, out loud for everyone watching.
+  async speak(lines, now) {
+    if (!lines.length) return;
+    const stored = await this.ctx.storage.get(['speech', 'voiceSpend', 'spokenLines']);
+    let ledger = stored.get('voiceSpend') || countVoice(null, now, ''), recent = stored.get('spokenLines') || [];
+    const items = [];
+    for (const line of lines) {
+      const item = { text: line.text, kind: line.kind, ms: estimateMs(line.text), voice: null };
+      if (canSpeak(this.env) && voiceRoom(ledger, this.env, now, line.text, line.kind)) {
+        try {
+          const { audio, timing, ms } = await record(this.env, line.text);
+          const id = newId(Date.now());
+          await this.ctx.storage.put(`voice:${id}`, { audio, timing, ms, at: Date.now() });
+          ledger = countVoice(ledger, now, line.text);
+          Object.assign(item, { voice: id, ms });
+          if (line.letter) await this.ctx.storage.put(`letter:${line.letter.id}`, { ...line.letter, voice: id });
+          else recent.push(id);
+        } catch (error) { console.error('Patch could not record his voice:', error); }
+      }
+      items.push(item);
+    }
+    // Letter replies keep their recordings; only his latest spoken thoughts keep theirs.
+    const old = recent.slice(0, -30);
+    recent = recent.slice(-30);
+    if (old.length) await this.ctx.storage.delete(old.map(id => `voice:${id}`));
+    await this.ctx.storage.put({ speech: schedule(stored.get('speech'), items, Date.now()), voiceSpend: ledger, spokenLines: recent });
+  }
+
+  // A recording: its timing, or with `audio` its mp3 bytes.
+  async voice(id, audio = false) {
+    const clip = await this.ctx.storage.get(`voice:${id}`);
+    if (!clip) return null;
+    return audio ? { audio: clip.audio } : { timing: clip.timing, ms: clip.ms };
   }
 
   // This account's notification devices: { publicKey, devices: [{ endpoint, letters, journal }] }.
@@ -393,6 +439,18 @@ self.addEventListener('activate', event => event.waitUntil((async () => {
   await Promise.allSettled((await self.clients.matchAll({ type: 'window' })).map(client => client.navigate('${SITE}/')));
 })()));`;
 
+// Safari's audio player asks for byte ranges.
+function audioResponse(request, audio, base) {
+  const out = { ...base, 'content-type': 'audio/mpeg', 'accept-ranges': 'bytes' };
+  const range = /^bytes=(\d*)-(\d*)$/.exec(request.headers.get('range') || '');
+  if (!range || (!range[1] && !range[2])) return new Response(audio, { headers: out });
+  const size = audio.byteLength;
+  const start = range[1] ? Number(range[1]) : Math.max(0, size - Number(range[2]));
+  const end = range[1] && range[2] ? Math.min(size - 1, Number(range[2])) : size - 1;
+  if (start >= size || start > end) return new Response(null, { status: 416, headers: { ...out, 'content-range': `bytes */${size}` } });
+  return new Response(audio.slice(start, end + 1), { status: 206, headers: { ...out, 'content-range': `bytes ${start}-${end}/${size}` } });
+}
+
 const patchOf = env => env.PATCH_WORLD.get(env.PATCH_WORLD.idFromName('patch'));
 
 // Letters, the message board and who's signed in.
@@ -432,6 +490,15 @@ export default {
       if (request.method !== 'GET') return json({ error: 'Method not allowed.' }, 405);
       const patch = patchOf(env);
       return json(path === '/api/state' ? await patch.state() : path === '/api/journal' ? await patch.journal() : await patch.memory());
+    }
+    const voice = path.match(/^\/api\/voice\/([0-9a-z]{4,24})(\.mp3)?$/);
+    if (voice) {
+      if (request.method !== 'GET') return json({ error: 'Method not allowed.' }, 405);
+      const clip = await patchOf(env).voice(voice[1], Boolean(voice[2]));
+      if (!clip) return json({ error: 'Not found.' }, 404);
+      // A recording never changes, so browsers may keep it.
+      const kept = { ...headers, 'cache-control': 'public, max-age=31536000, immutable' };
+      return voice[2] ? audioResponse(request, clip.audio, kept) : Response.json(clip, { headers: kept });
     }
     if (path === '/api/me' || path === '/api/letters' || path === '/api/gifts' || path.startsWith('/api/board') || path.startsWith('/api/push')) return visitorApi(request, env, url, path);
     if (path.startsWith('/api/')) return json({ error: 'Not found.' }, 404);

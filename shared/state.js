@@ -25,6 +25,7 @@ export const sampleState = {
     mood: 'curious',
     says: null, // a short line he says out loud, or null
     speechUntil: null, // expiry for the spoken line
+    speech: null, // the line being said or about to start: { text, at, until, voice } (voice: recording id, or null)
     carrying: ['smooth river stone from Dad'], // what he has with him
     mail: 0, // letters waiting for him at the coconut computer; his tablet pings him about them
     since: '2026-01-01T12:00:00Z', // when the current action started

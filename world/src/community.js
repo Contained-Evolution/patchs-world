@@ -37,7 +37,10 @@ export function setupCommunity(dialog) {
       paper.append(stamp,textNode('p','entry-date postmark',date(letter.at)),textNode('p','letter-greeting','Dear Patch,'),textNode('p','entry-text',letter.text));
       const reply=document.createElement('div'); reply.className='reply'+(letter.reply?' screen':' waiting');
       if (letter.reply) {
-        reply.append(textNode('strong','reply-label','Patch wrote back'),textNode('p','entry-text',letter.reply),textNode('p','entry-date',`Sent from the coconut computer 🥥${letter.repliedAt?' · '+date(letter.repliedAt):''}`));
+        reply.append(textNode('strong','reply-label','Patch wrote back'),textNode('p','entry-text',letter.reply));
+        // He read his reply aloud on the island; this is that recording.
+        if (/^[0-9a-z]+$/.test(letter.voice||'')) { const audio=document.createElement('audio'); audio.className='reply-voice'; audio.controls=true; audio.preload='none'; audio.src=`/api/voice/${letter.voice}.mp3`; audio.setAttribute('aria-label','Hear Patch read his reply'); reply.append(textNode('p','entry-date','Hear Patch read it 🐒'),audio); }
+        reply.append(textNode('p','entry-date',`Sent from the coconut computer 🥥${letter.repliedAt?' · '+date(letter.repliedAt):''}`));
       } else {
         const dot=textNode('span','waiting-dot',''); dot.setAttribute('aria-hidden','true');
         const label=textNode('strong','reply-label','Waiting at the coconut computer'); label.prepend(dot);
