@@ -156,7 +156,10 @@ ${THINK_ASK}` }], 'everyday', 1500);
   spend(mind, cost, now);
   const thought = clean(reply.thought, 400), says = clean(reply.says, 160);
   if (thought) mind.thoughts = [...(mind.thoughts || []), { at: now, thought, says, model }].slice(-40);
-  if (says) body.activity.says = says;
+  if (says) {
+    body.activity.says = says;
+    body.activity.saysAt = now;
+  }
   if (WANTS.includes(reply.want)) body.want = reply.want;
   rememberMemory(memories, categories, reply.remember, now);
   learnWords(mind, reply.newWords, now);

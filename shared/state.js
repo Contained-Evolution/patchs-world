@@ -19,7 +19,9 @@ export const sampleState = {
     needs: { hunger: 0.4, energy: 0.8, fun: 0.6, comfort: 0.7, social: 0.3 },
     mood: 'curious',
     says: null, // a short line he says out loud, or null
+    speechUntil: null, // expiry for the spoken line
     since: '2026-01-01T12:00:00Z', // when the current action started
+    until: '2026-01-01T12:05:00Z', // when the current action ends
   },
   clock: {
     now: '2026-01-01T12:03:00Z',

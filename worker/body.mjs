@@ -38,23 +38,6 @@ export const ACTIVITIES = [
   { action: 'sleep', place: 'hammock', minutes: [20, 45], effects: { energy: 0.012, comfort: 0.006 }, nap: true },
 ];
 
-const SAYS = {
-  eat: ['Banana number... I lost count!', 'Mom would put cinnamon on this.', 'Mmm. Crunchy ones are the best.'],
-  fish: ['Come on, fishy fishy.', 'Dad says fishing is mostly waiting. Dad was right.'],
-  swim: ['Splash!', 'The water is warm today!'],
-  swing: ['Wheee!', 'Branch to branch to branch!', 'Sam would never catch me now!'],
-  climb: ['Higher! Higher!'],
-  explore: ['What is over here?', 'Captain Patch, exploring!', 'Ooh, a shell!'],
-  'watch-sky': ['That cloud looks like a dragon. Sam would say so too.', 'I see a turtle up there!'],
-  sit: ['The waves sound like they are whispering.'],
-  look: ['I wonder what Sam is doing over there.', 'One day I will go see what is on that land.', 'That cloud looks like a turtle.'],
-  phone: ['Let me check my messages!', 'What should I learn about today?'],
-  think: ['Hmm...', 'I have a question about that.'],
-  sleep: ['Goodnight, Mom. Goodnight, Dad. Goodnight, Sam.'],
-  nap: ['*yawn* Just a little rest.'],
-  wake: ['Good morning, island!'],
-};
-
 function rng(seed) {
   let a = seed >>> 0;
   return () => {
@@ -92,10 +75,6 @@ function applyMinutes(needs, activity, minutes) {
 
 function pick(list, random) { return list[Math.floor(random() * list.length)]; }
 
-function maybeSay(action, random) {
-  return SAYS[action] && random() < 0.35 ? pick(SAYS[action], random) : null;
-}
-
 // Needs he's low on matter most. A full need adds nothing, and he likes variety.
 function score(choice, needs, place, recent, random) {
   let value = choice.appeal || 0;
@@ -121,17 +100,17 @@ function next(state, time) {
     const queued = state.queued;
     state.queued = null;
     state.recent = [queued.action, ...(state.recent || [])].slice(0, 3);
-    if (queued.nap) return start('sleep', place, time, queued.minutes, { effects: queued.effects, says: SAYS.nap[0], nap: true });
-    return start(queued.action, place, time, queued.minutes, { effects: queued.effects, says: maybeSay(queued.action, random) });
+    if (queued.nap) return start('sleep', place, time, queued.minutes, { effects: queued.effects, nap: true });
+    return start(queued.action, place, time, queued.minutes, { effects: queued.effects });
   }
   if (isNight(time) && needs.hunger > 0.15) {
     if (place !== 'hammock') return travel(state, place, 'hammock', time, random, { action: 'sleep', minutes: 0, effects: {} });
     const m = localMinutes(time);
     const untilWake = ((WAKE - m + 1440) % 1440) + Math.floor(random() * 20);
-    return start('sleep', 'hammock', time, Math.max(5, untilWake), { effects: { energy: 0.004, comfort: 0.002 }, says: activity.action === 'sleep' && !activity.nap ? null : SAYS.sleep[0] });
+    return start('sleep', 'hammock', time, Math.max(5, untilWake), { effects: { energy: 0.004, comfort: 0.002 } });
   }
   if (activity.action === 'sleep' && !activity.nap) {
-    return start('idle', place, time, 3, { says: SAYS.wake[0] });
+    return start('idle', place, time, 3);
   }
   const recent = state.recent || [];
   const wanted = state.want && wantedActivity(state.want, place);
@@ -141,8 +120,8 @@ function next(state, time) {
   const queued = { action: best.action, minutes, effects: best.effects, nap: !!best.nap };
   if (best.place !== place) return travel(state, place, best.place, time, random, queued);
   state.recent = [best.action, ...recent].slice(0, 3);
-  if (best.nap) return start('sleep', place, time, minutes, { effects: best.effects, says: SAYS.nap[0], nap: true });
-  return start(best.action, place, time, minutes, { effects: best.effects, says: maybeSay(best.action, random) });
+  if (best.nap) return start('sleep', place, time, minutes, { effects: best.effects, nap: true });
+  return start(best.action, place, time, minutes, { effects: best.effects });
 }
 
 // The mind can ask for an activity; it happens next unless it's bedtime.
@@ -167,7 +146,7 @@ export function newBody(now, seed = 1) {
   return {
     seed,
     needs: { hunger: 0.7, energy: 0.9, fun: 0.6, comfort: 0.7, social: 0.5 },
-    activity: start('look', 'beach', now, 5, { says: 'Wow. My very own island.' }),
+    activity: start('look', 'beach', now, 5),
     queued: null,
     recent: [],
     want: null,
@@ -214,8 +193,11 @@ export function view(state, now) {
       target: activity.target,
       needs,
       mood: activity.action === 'sleep' ? 'asleep' : mood(needs),
-      says: activity.says || null,
+      // Spoken words come from the mind, not from canned body activity lines.
+      says: activity.says && Number.isFinite(activity.saysAt) && now >= activity.saysAt && now - activity.saysAt < 8000 ? activity.says : null,
+      speechUntil: activity.says && Number.isFinite(activity.saysAt) && now >= activity.saysAt && now - activity.saysAt < 8000 ? new Date(activity.saysAt + 8000).toISOString() : null,
       since: new Date(activity.start).toISOString(),
+      until: new Date(activity.end).toISOString(),
     },
     clock: {
       now: new Date(now).toISOString(),

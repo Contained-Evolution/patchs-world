@@ -1,65 +1,128 @@
 import * as THREE from 'three';
-import { places, paths, trees, anchorFor, groundHeight } from './world-state.js';
-import { coastRadius } from './terrain.js';
-import { addWorldDressing } from './world-dressing.js';
+import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
+import { ISLAND, places, paths, coastRadius, shoreFraction, groundHeight, pondFraction, pathDistance, STREAM, TIDE_POOLS, tideWaterHeight } from './terrain.js';
+import { trees, anchorFor } from './world-state.js';
+import { forest, isReserved } from './forest.js';
+import { createTerrainTiles } from './terrain-mesh.js';
+const rand=n=>{const v=Math.sin(n*127.1+311.7)*43758.5453123;return v-Math.floor(v);};
+function surfaceTexture(base, strokes, seed=1){
+ const c=document.createElement('canvas');c.width=c.height=512;const g=c.getContext('2d');g.fillStyle=base;g.fillRect(0,0,512,512);
+ for(let i=0;i<3800;i++){const x=rand(i+seed)*512,y=rand(i+seed+4000)*512,r=.5+rand(i+seed+8000)*3;g.globalAlpha=.05+rand(i+20000)*.15;g.fillStyle=strokes[i%strokes.length];g.beginPath();g.ellipse(x,y,r*2,r,rand(i+10)*Math.PI,0,Math.PI*2);g.fill();}
+ g.globalAlpha=1;const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(100,110);t.anisotropy=4;return t;
+}
+function leafGeometry(){
+ // Curved lanceolate blade, tapered at both ends, with a central ridge.
+ const p=[],uv=[],idx=[],n=3;
+ for(let i=0;i<=n;i++){const t=i/n,w=Math.sin(Math.PI*t)**.72*.48,y=Math.sin(t*Math.PI)*.18-t*t*.3;for(const side of [-1,0,1]){p.push(side*w,y+(side===0?.045:0),t*3.5);uv.push((side+1)/2,t);}}
+ for(let i=0;i<n;i++)for(let j=0;j<2;j++){let a=i*3+j,b=a+1,c=a+3,d=c+1;idx.push(a,c,b,b,c,d);}
+ const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));g.setIndex(idx);g.computeVertexNormals();return g;
+}
+function rockGeometry(){let g=mergeVertices(new THREE.IcosahedronGeometry(1,2));const p=g.attributes.position;for(let i=0;i<p.count;i++){let x=p.getX(i),y=p.getY(i),z=p.getZ(i);let f=1+.16*Math.sin(x*7+z*4)*Math.cos(y*9-z*2);p.setXYZ(i,x*f,y*f,z*f);}g.computeVertexNormals();return g;}
+export function createIsland(scene){
+ const material=(color,extra={})=>new THREE.MeshStandardMaterial({color,roughness:1,...extra});
+ const groundMat=material(0xffffff,{vertexColors:true,map:surfaceTexture('#dfdfdf',['#898989','#ffffff','#bbbbbb'])});
+ const grassDetail=new THREE.TextureLoader().load(new URL('./assets/tropical-grass.png',document.baseURI).href);grassDetail.colorSpace=THREE.SRGBColorSpace;grassDetail.wrapS=grassDetail.wrapT=THREE.RepeatWrapping;grassDetail.anisotropy=4;
+ groundMat.onBeforeCompile=shader=>{shader.uniforms.grassDetail={value:grassDetail};shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nvarying vec2 islandGround;').replace('#include <begin_vertex>','#include <begin_vertex>\nislandGround = position.xz;');shader.fragmentShader=shader.fragmentShader.replace('#include <common>','#include <common>\nvarying vec2 islandGround; uniform sampler2D grassDetail;').replace('#include <map_fragment>',`#include <map_fragment>
+vec3 detail=texture2D(grassDetail,islandGround*.18).rgb;float inland=1.0-smoothstep(.78,.95,length(islandGround/vec2(320.0,360.0)));diffuseColor.rgb*=mix(vec3(1.0),detail*1.55,inland*.8);`);};
+ const barkMap=new THREE.TextureLoader().load(new URL('./assets/tropical-bark.png',document.baseURI).href);barkMap.colorSpace=THREE.SRGBColorSpace;barkMap.wrapS=barkMap.wrapT=THREE.RepeatWrapping;barkMap.repeat.set(1,3);barkMap.anisotropy=4;const bark=material(0xc4b3a0,{map:barkMap});
+ const leafMap=new THREE.TextureLoader().load(new URL('./assets/tropical-leaf.png',document.baseURI).href);leafMap.colorSpace=THREE.SRGBColorSpace;leafMap.anisotropy=4;
+ const foliage=material(0xc1d9ae,{map:leafMap,alphaTest:.35,side:THREE.DoubleSide,roughness:.9,emissive:0x334b29,emissiveMap:leafMap,emissiveIntensity:.35});const foliageDark=material(0x92b888,{map:leafMap,alphaTest:.35,side:THREE.DoubleSide,emissive:0x283e24,emissiveMap:leafMap,emissiveIntensity:.35});
+ const rockMap=new THREE.TextureLoader().load(new URL('./assets/volcanic-rock.png',document.baseURI).href);rockMap.colorSpace=THREE.SRGBColorSpace;rockMap.wrapS=rockMap.wrapT=THREE.RepeatWrapping;rockMap.anisotropy=4;const rock=material(0xbab9ad,{map:rockMap});
+ const sand=material(0xd8c592),wood=material(0x725039),rope=material(0xd1c7a0),cloth=material(0xb36551,{side:THREE.DoubleSide,emissive:0x26150f});
+ const wet=material(0x67836b,{roughness:.55});
+ const add=(geo,mat,x=0,y=0,z=0)=>{const o=new THREE.Mesh(geo,mat);o.position.set(x,y,z);scene.add(o);return o;};
+ const beam=(mat,a,b,r1,r2=r1)=>{const av=new THREE.Vector3(...a),bv=new THREE.Vector3(...b),d=bv.clone().sub(av);const o=add(new THREE.CylinderGeometry(r2,r1,d.length(),8),mat);o.position.copy(av).add(bv).multiplyScalar(.5);o.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize());return o;};
+ const stones=[];const stone=(x,z,sx,sy,sz)=>{stones.push({x,z,sx,sy,sz});};
+ const boulder=rockGeometry(),blade=leafGeometry();
+ // Heightfield follows the exact same coast and ground query as movement and Patch.
+ for(const geometry of createTerrainTiles())add(geometry,groundMat);
+ // Transparent, sunlit moving water uses the same shader idea as Tenari's valley.
+ const waterTime={value:0},waterLight={value:1};
+ const water=material(0x317d87,{roughness:.25,metalness:.16,transparent:true,opacity:.83,depthWrite:false,side:THREE.DoubleSide});
+ water.onBeforeCompile=shader=>{shader.uniforms.waterTime=waterTime;shader.uniforms.waterLight=waterLight;shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nvarying vec2 wavePosition;').replace('#include <begin_vertex>','#include <begin_vertex>\nwavePosition = (modelMatrix * vec4(position,1.0)).xz;');shader.fragmentShader=shader.fragmentShader.replace('#include <common>','#include <common>\nvarying vec2 wavePosition; uniform float waterTime; uniform float waterLight;').replace('#include <normal_fragment_maps>',`#include <normal_fragment_maps>\nfloat a=sin(wavePosition.x*.24+wavePosition.y*.14+waterTime*.7); float b=sin(wavePosition.x*-.12+wavePosition.y*.34-waterTime*.5); float waveFade=1.0-smoothstep(1.0,5.0,length(fwidth(wavePosition))); a*=waveFade; b*=waveFade; normal=normalize(normal+vec3(a*.09,b*.09,0.0)); diffuseColor.rgb*=.9+.06*a+.04*b;`).replace('#include <opaque_fragment>',`float fresnel=pow(1.0-abs(dot(normal,normalize(vViewPosition))),3.0); outgoingLight=mix(outgoingLight,vec3(.45,.65,.68),fresnel*.5); float shine=pow(max(0.0,sin(wavePosition.x*.12+wavePosition.y*.08+waterTime)*sin(wavePosition.y*.16-wavePosition.x*.03-waterTime*.8)),20.0); outgoingLight+=vec3(.8,.88,.76)*shine*waveFade*waterLight*.08;\n#include <opaque_fragment>`);};
+ const ocean=add(new THREE.PlaneGeometry(12000,12000),water,0,ISLAND.ocean,0);ocean.rotation.x=-Math.PI/2;
+ const pond=add(new THREE.CircleGeometry(1,80),water,ISLAND.pondX,ISLAND.pondY,ISLAND.pondZ);pond.rotation.x=-Math.PI/2;pond.scale.set(ISLAND.pondRX,ISLAND.pondRZ,1);
+ const pathMat=material(0xb9a274,{side:THREE.DoubleSide,map:surfaceTexture('#c6b494',['#9c8a6b','#dfd1b3'],98)});pathMat.map.repeat.set(1,1);
+ // Trails are sampled ribbons, with flowing boundaries and distance-based UVs.
+ let routeIndex=0;
+ for(const route of Object.values(paths)){
+  if(route.length<2)continue;
+  const curve=new THREE.CatmullRomCurve3(route.map(([x,z])=>new THREE.Vector3(x,0,z)),false,'centripetal');
+  const length=curve.getLength(),count=Math.max(2,Math.ceil(length/1.5)),pp=[],ii=[],u=[];let previous=null,distance=0;
+  for(let i=0;i<=count;i++){const t=i/count,p=curve.getPoint(t),tangent=curve.getTangent(t),w=1.35+.12*Math.sin(t*17+routeIndex);if(previous)distance+=p.distanceTo(previous);previous=p;
+   for(const side of [-1,1]){const x=p.x-tangent.z*w*side,z=p.z+tangent.x*w*side;pp.push(x,groundHeight(x,z)+.28+routeIndex*.002,z);u.push((side+1)/2,distance/4);}}
+  for(let i=0;i<count;i++){const q=i*2,ax=(pp[q*3]+pp[(q+1)*3])/2,az=(pp[q*3+2]+pp[(q+1)*3+2])/2,bx=(pp[(q+2)*3]+pp[(q+3)*3])/2,bz=(pp[(q+2)*3+2]+pp[(q+3)*3+2])/2;if(Math.hypot(ax,az)<8||Math.hypot(bx,bz)<8)continue;ii.push(q,q+2,q+1,q+1,q+2,q+3);}const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pp,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(u,2));g.setIndex(ii);g.computeVertexNormals();add(g,pathMat);routeIndex++;
+ }
+ // Deterministic irregular tropical growth; clear paths and activity spaces.
+ const trunkGeo=new THREE.CylinderGeometry(.06,.5,1,8),trunks=forest,rocks=[];
+ const reserved=isReserved;
+ const pose=new THREE.Object3D(),tiles=new Map();
+ for(const tree of trunks){const key=`${Math.floor(tree.x/160)},${Math.floor(tree.z/160)}`;if(!tiles.has(key))tiles.set(key,[]);tiles.get(key).push(tree);}
+ const canopyMap=new THREE.TextureLoader().load(new URL('./assets/rainforest-canopy.png',document.baseURI).href);canopyMap.colorSpace=THREE.SRGBColorSpace;canopyMap.anisotropy=4;
+ const canopyMaterial=material(0xffffff,{map:canopyMap,alphaTest:.32,side:THREE.DoubleSide}),canopyGeometry=new THREE.PlaneGeometry(1,1),branchGeometry=new THREE.CylinderGeometry(.04,.15,1,6);
+ // Independent chunks let the camera cull forests outside its field of view.
+ for(const chunk of tiles.values()){
+  const palms=chunk.filter(t=>!t.broad),broadTrees=chunk.filter(t=>t.broad),trunkMesh=new THREE.InstancedMesh(trunkGeo,bark,chunk.length),leafMesh=new THREE.InstancedMesh(blade,foliage,palms.length*7),canopyMesh=new THREE.InstancedMesh(canopyGeometry,canopyMaterial,broadTrees.length*3);
+  chunk.forEach((tree,i)=>{const y=groundHeight(tree.x,tree.z),visibleHeight=tree.h+(tree.swing?3.5:0);pose.position.set(tree.x,y+visibleHeight/2,tree.z);pose.rotation.set(0,tree.angle,tree.grove?.055:0);pose.scale.set(tree.grove?.75:1,visibleHeight,tree.grove?.75:1);pose.updateMatrix();trunkMesh.setMatrixAt(i,pose.matrix);});
+  palms.forEach((tree,i)=>{const y=groundHeight(tree.x,tree.z);for(let j=0;j<7;j++){pose.position.set(tree.x,y+tree.h,tree.z);pose.rotation.set(-.25-(j%3)*.12,tree.angle+j*Math.PI*2/7,(j%2)*.08);let size=(tree.grove?1.25:1.05)+rand(i*9+j)*.5;pose.scale.set(size,size,size);pose.updateMatrix();leafMesh.setMatrixAt(i*7+j,pose.matrix);}});
+  broadTrees.forEach((tree,i)=>{const y=groundHeight(tree.x,tree.z),w=9+rand(i+81)*5;for(let j=0;j<3;j++){pose.position.set(tree.x,y+tree.h+(tree.swing?3.5:.8),tree.z);pose.rotation.set(0,tree.angle+j*Math.PI/3,0);pose.scale.set(w,w*.48,1);pose.updateMatrix();canopyMesh.setMatrixAt(i*3+j,pose.matrix);}});
+  const branches=new THREE.InstancedMesh(branchGeometry,bark,broadTrees.length*2);broadTrees.forEach((tree,i)=>{const y=groundHeight(tree.x,tree.z),height=tree.h+(tree.swing?3.5:0);for(let j=0;j<2;j++){const angle=tree.angle+j*2.8,start=new THREE.Vector3(tree.x,y+height*.7,tree.z),end=new THREE.Vector3(tree.x+Math.cos(angle)*2.6,y+height+.4,tree.z+Math.sin(angle)*2.6),direction=end.clone().sub(start);pose.position.copy(start).add(end).multiplyScalar(.5);pose.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),direction.clone().normalize());pose.scale.set(1,direction.length(),1);pose.updateMatrix();branches.setMatrixAt(i*2+j,pose.matrix);}});
+  for(const mesh of [trunkMesh,leafMesh,canopyMesh,branches])if(mesh.count){mesh.instanceMatrix.needsUpdate=true;mesh.computeBoundingSphere();scene.add(mesh);}
+ }
+ // Layered understory turns the trunks into a living forest without blocking paths.
+ const understory=[];for(let i=0;i<2200;i++){let x=(rand(i+31000)*2-1)*300,z=(rand(i+36000)*2-1)*335;if(shoreFraction(x,z)>.87||reserved(x,z)||rand(i+39000)>.45)continue;understory.push({x,z,size:.35+rand(i+42000)*.5,angle:rand(i+44000)*6});}
+ const lowLeaves=new THREE.InstancedMesh(blade,foliage,understory.length*3);understory.forEach((p,i)=>{for(let k=0;k<3;k++){pose.position.set(p.x,groundHeight(p.x,p.z)+.12,p.z);pose.rotation.set(-.6,p.angle+k*2.1,0);pose.scale.setScalar(p.size);pose.updateMatrix();lowLeaves.setMatrixAt(i*3+k,pose.matrix);}});lowLeaves.instanceMatrix.needsUpdate=true;lowLeaves.computeBoundingSphere();scene.add(lowLeaves);
+ // Banana bunches grow in the grove, with visible curved fruit beneath the leaves.
+ const bananaTrees=trunks.filter(t=>t.grove&&rand(t.x+t.z)>.55),fruitMat=material(0xd7ba4d),fruit=new THREE.InstancedMesh(new THREE.TorusGeometry(.24,.075,3,6,Math.PI*1.2),fruitMat,bananaTrees.length*4);
+ bananaTrees.forEach((t,i)=>{for(let k=0;k<4;k++){pose.position.set(t.x+Math.cos(k*1.6)*.2,groundHeight(t.x,t.z)+t.h-.55,t.z+Math.sin(k*1.6)*.2);pose.rotation.set(.2,k*1.6,0);pose.scale.setScalar(1);pose.updateMatrix();fruit.setMatrixAt(i*4+k,pose.matrix);}});fruit.instanceMatrix.needsUpdate=true;fruit.computeBoundingSphere();scene.add(fruit);
+ // The meadow remains open and is dotted with small flowers.
+ const flowers=[];for(let i=0;i<500;i++){let a=rand(i+50000)*6.283,r=Math.sqrt(rand(i+51000))*45,x=places.meadow[0]+Math.cos(a)*r,z=places.meadow[1]+Math.sin(a)*r;if(pathDistance(x,z)>3&&shoreFraction(x,z)<.89)flowers.push([x,z,i]);}
+ const flowerMap=new THREE.TextureLoader().load(new URL('./assets/wildflowers.png',document.baseURI).href);flowerMap.colorSpace=THREE.SRGBColorSpace;flowerMap.anisotropy=4;const flowerMat=material(0xffffff,{map:flowerMap,alphaTest:.65,side:THREE.DoubleSide}),flowerMesh=new THREE.InstancedMesh(new THREE.PlaneGeometry(1,1),flowerMat,flowers.length*2);flowers.forEach(([x,z,i],k)=>{for(let j=0;j<2;j++){const scale=.5+rand(i+52000)*.4;pose.position.set(x,groundHeight(x,z)+scale*.42,z);pose.rotation.set(0,rand(i+53000)*3+j*Math.PI/2,0);pose.scale.setScalar(scale);pose.updateMatrix();flowerMesh.setMatrixAt(k*2+j,pose.matrix);}});flowerMesh.instanceMatrix.needsUpdate=true;flowerMesh.computeBoundingSphere();scene.add(flowerMesh);
+ // Each swinging handhold has a visible living branch.
+ const handholds=new THREE.InstancedMesh(new THREE.CylinderGeometry(.09,.18,1,7),bark,trees.length);trees.forEach((tree,i)=>{const [x,z,h]=tree,y=groundHeight(x,z),a=new THREE.Vector3(...anchorFor(tree)),start=new THREE.Vector3(x,y+h-1,z),d=a.clone().sub(start);pose.position.copy(start).add(a).multiplyScalar(.5);pose.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),d.clone().normalize());pose.scale.set(1,d.length(),1);pose.updateMatrix();handholds.setMatrixAt(i,pose.matrix);});handholds.instanceMatrix.needsUpdate=true;handholds.computeBoundingSphere();scene.add(handholds);
+ // Scrub, flowers and coastal stones are instanced rather than individual meshes.
+ for(let i=0;i<600;i++){let x=(rand(i+16000)*2-1)*300,z=(rand(i+18000)*2-1)*340;if(shoreFraction(x,z)>.93||reserved(x,z)||rand(i+19000)<.5)continue;rocks.push({x,z,s:.4+rand(i+20000)*2});}
+ const rockMesh=new THREE.InstancedMesh(boulder,rock,rocks.length);rocks.forEach((r,i)=>{pose.position.set(r.x,groundHeight(r.x,r.z)+r.s*.25,r.z);pose.rotation.set(.1,rand(i+41)*6,.15);pose.scale.set(r.s*1.3,r.s*.55,r.s);pose.updateMatrix();rockMesh.setMatrixAt(i,pose.matrix);});rockMesh.instanceMatrix.needsUpdate=true;rockMesh.computeBoundingSphere();scene.add(rockMesh);
+ // Home: two living supports, hanging ropes and a curved cloth bed.
+ const hy=groundHeight(0,0);for(const x of [-3.4,3.4]){beam(bark,[x,hy,1],[x,hy+6,1],.38,.24);for(let j=0;j<5;j++){let a=j*1.25;const f=add(blade,foliageDark,x,hy+5.8,1);f.rotation.set(-.3,a,0);f.scale.setScalar(1.1);}}
+ const bedGeo=new THREE.PlaneGeometry(5,1.3,24,4);bedGeo.rotateX(-Math.PI/2);const bp=bedGeo.attributes.position;for(let i=0;i<bp.count;i++){const x=bp.getX(i);bp.setY(i,Math.pow(Math.abs(x)/2.5,2)*.55);}bedGeo.computeVertexNormals();add(bedGeo,cloth,0,hy+1.35,1);
+ for(const x of [-1,1])beam(rope,[x*2.5,hy+1.9,1],[x*3.4,hy+4.2,1],.035);
+ for(const x of [4.2,6.2])beam(wood,[x,hy,2],[x,hy+3.4,2],.07);for(const y of [hy+1.35,hy+2.5]){const shelf=add(new THREE.BoxGeometry(2.5,.13,.9),wood,5.2,y,2);shelf.rotation.y=.03;}
+ // Simple useful objects make the clearing feel inhabited without moving Patch's anchors.
+ const lamp=add(new THREE.SphereGeometry(.18,8,6),new THREE.MeshBasicMaterial({color:0xffd99c}),5,hy+2.74,2);
+ const basket=add(new THREE.CylinderGeometry(.65,.48,.65,12),wood,6,hy+.33,-1);basket.rotation.z=.05;
+ const basketRim=add(new THREE.TorusGeometry(.65,.045,6,24),rope,6,hy+.68,-1);basketRim.rotation.x=Math.PI/2;
+ for(let i=0;i<4;i++){const fruit=add(new THREE.TorusGeometry(.23,.065,6,12,Math.PI*1.25),material(0xd7bc58),5.7+i*.19,hy+.75,-1);fruit.rotation.set(.4,i*.8,.25);}
+ for(const [x,z] of [[-5,5],[-7,4],[8,-4]]){let y=groundHeight(x,z);beam(wood,[x-1,y+.12,z],[x+1,y+.2,z+.35],.12,.08);}
+ // Pond edge, stream, falls and waterside boulders; geometry sits on the basin.
+ for(let i=0;i<30;i++){const a=i*Math.PI*2/30,x=ISLAND.pondX+Math.cos(a)*(ISLAND.pondRX+1.4),z=ISLAND.pondZ+Math.sin(a)*(ISLAND.pondRZ+1.3);if(i%4!==0&&Math.hypot(x-places.pond[0],z-places.pond[1])>5&&pathDistance(x,z)>3.5)stone(x,z,.7+rand(i)*.6,.45+rand(i+40)*.5,.6+rand(i+90)*.5);}
+ const reedData=[];for(let i=0;i<22;i++){let a=i*6.28/22,x=ISLAND.pondX+Math.cos(a)*27,z=ISLAND.pondZ+Math.sin(a)*19,y=groundHeight(x,z);for(let j=0;j<3;j++)reedData.push({x:x+j*.2,y,z,h:1.4+rand(i+j)*.8});}
+ const reeds=new THREE.InstancedMesh(new THREE.CylinderGeometry(.01,.025,1,5),material(0x567343),reedData.length);reedData.forEach((p,i)=>{pose.position.set(p.x+.075,p.y+p.h/2,p.z);pose.rotation.set(0,0,-.1);pose.scale.set(1,p.h,1);pose.updateMatrix();reeds.setMatrixAt(i,pose.matrix);});reeds.instanceMatrix.needsUpdate=true;reeds.computeBoundingSphere();scene.add(reeds);
+ // A continuous shallow stream meets the pond; its bed uses the terrain query.
+ const sv=[],si=[];for(let k=1;k<STREAM.length;k++){const a=STREAM[k-1],b=STREAM[k],dx=b[0]-a[0],dz=b[1]-a[1],len=Math.hypot(dx,dz),steps=Math.ceil(len/2),nx=-dz/len,nz=dx/len,base=sv.length/3;for(let i=0;i<=steps;i++){const t=i/steps,x=a[0]+dx*t,z=a[1]+dz*t,y=a[2]+(b[2]-a[2])*t,w=2+.25*Math.sin(k*4+t*5);for(const side of [-1,1])sv.push(x+nx*w*side,y,z+nz*w*side);}for(let i=0;i<steps;i++){const q=base+i*2;si.push(q,q+2,q+1,q+1,q+2,q+3);}}
+ const streamGeo=new THREE.BufferGeometry();streamGeo.setAttribute('position',new THREE.Float32BufferAttribute(sv,3));streamGeo.setIndex(si);streamGeo.computeVertexNormals();add(streamGeo,water);
+ // The ledge's water surface falls between two rocks, leaving both banks visible.
+ const source=STREAM.at(-1),previousSource=STREAM.at(-2),sourceDX=source[0]-previousSource[0],sourceDZ=source[1]-previousSource[1],sourceLength=Math.hypot(sourceDX,sourceDZ),sourceTX=sourceDX/sourceLength,sourceTZ=sourceDZ/sourceLength,sourceNX=-sourceTZ,sourceNZ=sourceTX;for(const side of [-1,1])stone(source[0]+sourceNX*6*side,source[1]+sourceNZ*6*side,2.3,1.8,2.3);stone(source[0]+sourceTX*5,source[1]+sourceTZ*5,2.4,2.2,2.4);
+ const flowCanvas=document.createElement('canvas');flowCanvas.width=128;flowCanvas.height=256;const flowCtx=flowCanvas.getContext('2d');const flowGradient=flowCtx.createLinearGradient(0,0,128,0);flowGradient.addColorStop(0,'rgba(186,226,223,0)');flowGradient.addColorStop(.2,'rgba(186,226,223,.42)');flowGradient.addColorStop(.8,'rgba(186,226,223,.42)');flowGradient.addColorStop(1,'rgba(186,226,223,0)');flowCtx.fillStyle=flowGradient;flowCtx.fillRect(0,0,128,256);for(let i=0;i<32;i++){const x=12+rand(i+12)*104;flowCtx.fillStyle=`rgba(255,255,245,${.06+rand(i+4)*.2})`;flowCtx.fillRect(x,rand(i+32)*256,1+rand(i+6)*3,30+rand(i+7)*95);}const flowMap=new THREE.CanvasTexture(flowCanvas);flowMap.wrapT=THREE.RepeatWrapping;flowMap.colorSpace=THREE.SRGBColorSpace;const fallsMat=new THREE.MeshBasicMaterial({map:flowMap,transparent:true,depthWrite:false,side:THREE.DoubleSide});const fallsGeo=new THREE.PlaneGeometry(3.4,2,12,12),fallsPositions=fallsGeo.attributes.position;for(let i=0;i<fallsPositions.count;i++){const x=fallsPositions.getX(i),y=fallsPositions.getY(i),t=(y+1)/2;fallsPositions.setX(i,x*(.82+.18*t)+.08*Math.sin(t*7));}fallsGeo.computeVertexNormals();const fallingWater=add(fallsGeo,fallsMat,source[0],source[2]+.95,source[1]);fallingWater.rotation.y=Math.atan2(sourceTX,sourceTZ);const fallDetail=new THREE.TextureLoader().load(new URL('./assets/waterfall.png',document.baseURI).href);fallDetail.colorSpace=THREE.SRGBColorSpace;const detailMat=new THREE.MeshBasicMaterial({map:fallDetail,transparent:true,alphaTest:.08,opacity:.72,depthWrite:false,side:THREE.DoubleSide});const fallOverlay=add(fallsGeo,detailMat,source[0]+sourceTX*.03,source[2]+.95,source[1]+sourceTZ*.03);fallOverlay.rotation.y=fallingWater.rotation.y;
 
-export function createIsland(scene) {
-  const material=(color,extra={})=>new THREE.MeshStandardMaterial({color,roughness:1,...extra});
-  const sand=material(0xe4cc89),grass=material(0x79ad68),bark=material(0x78563c), darkBark=material(0x644a34),leaf=material(0x397b4c),leaf2=material(0x559b58),rock=material(0x8d9886),water=material(0x55b8bd,{roughness:.35}),white=material(0xc5edeb),dark=material(0x192820), pathMat=material(0xc3ac79),flower=material(0xf5ce75);
-  leaf.side=leaf2.side=bark.side=pathMat.side=water.side=THREE.DoubleSide;
-  const tex=new THREE.TextureLoader();
-  function texture(mat,file,repeat){let t=tex.load(new URL('./assets/'+file,document.baseURI).href);t.colorSpace=THREE.SRGBColorSpace;t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(...repeat);mat.map=t;mat.needsUpdate=true;}
-  texture(grass,'meadow-grass.jpg',[10,8]);texture(bark,'pine-bark.jpg',[1,2]);texture(rock,'rock-boulder-dry.jpg',[1,1]);
-  function mesh(g,m,x=0,y=0,z=0){let o=new THREE.Mesh(g,m);o.position.set(x,y,z);scene.add(o);return o;}
-  function oval(m,x,y,z,sx,sy,sz){let o=mesh(new THREE.SphereGeometry(1,14,10),m,x,y,z);o.scale.set(sx,sy,sz);return o;}
-  function beam(m,a,b,r1,r2=r1){let v=new THREE.Vector3(...b).sub(new THREE.Vector3(...a));let o=mesh(new THREE.CylinderGeometry(r2,r1,v.length(),8),m);o.position.set((a[0]+b[0])/2,(a[1]+b[1])/2,(a[2]+b[2])/2);o.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),v.normalize());return o;}
-  // One continuous polar mesh carries grass, dry sand and the submerged edge.
-  const rings=72, slices=192, verts=[], uvs=[], colors=[], indices=[];
-  const grassColor=new THREE.Color(0x79ad68), sandColor=new THREE.Color(0xe4cc89), wetColor=new THREE.Color(0xb9a576), color=new THREE.Color();
-  for(let j=0;j<=rings;j++) for(let i=0;i<=slices;i++) {
-    const angle=i/slices*Math.PI*2, fraction=j/rings, radius=coastRadius(angle)*fraction;
-    const x=Math.cos(angle)*45*radius,z=Math.sin(angle)*36*radius;
-    verts.push(x,groundHeight(x,z),z); uvs.push(x/45,z/36);
-    const sandMix=THREE.MathUtils.smoothstep(fraction,.78,.9), wetMix=THREE.MathUtils.smoothstep(fraction,.95,1);
-    color.copy(grassColor).lerp(sandColor,sandMix).lerp(wetColor,wetMix); colors.push(color.r,color.g,color.b);
-  }
-  for(let j=0;j<rings;j++) for(let i=0;i<slices;i++) {const a=j*(slices+1)+i,b=a+1,c=a+slices+1,d=c+1;indices.push(a,b,c,b,d,c);}
-  const terrainGeometry=new THREE.BufferGeometry();
-  terrainGeometry.setAttribute('position',new THREE.Float32BufferAttribute(verts,3));terrainGeometry.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));terrainGeometry.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));terrainGeometry.setIndex(indices);terrainGeometry.computeVertexNormals();
-  mesh(terrainGeometry,material(0xffffff,{vertexColors:true}));
-  let sea=mesh(new THREE.PlaneGeometry(600,600),material(0x438e97),0,.1,0);sea.rotation.x=-Math.PI/2;
-  // A separate, inaccessible landmass across the eastern water.
-  oval(material(0x698e7a),-118,3,-4,25,7,23);oval(material(0x769981),-134,4,-8,22,10,19);
-  function strip(points,width,mat,heightOffset=.09){for(let i=0;i<points.length-1;i++){const [x,z]=points[i],[xx,zz]=points[i+1],len=Math.hypot(xx-x,zz-z),steps=Math.ceil(len/1.2),v=[],ind=[],nx=-(zz-z)/len*width/2,nz=(xx-x)/len*width/2;for(let j=0;j<=steps;j++){let t=j/steps,cx=x+(xx-x)*t,cz=z+(zz-z)*t;for(let s of [-1,1]){let px=cx+nx*s,pz=cz+nz*s;v.push(px,groundHeight(px,pz)+heightOffset,pz);}}for(let j=0;j<steps;j++){let k=j*2;ind.push(k,k+2,k+1,k+1,k+2,k+3);}const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(v,3));geo.setIndex(ind);geo.computeVertexNormals();mesh(geo,mat);}}
-  for(const route of Object.values(paths))strip(route,1.15,pathMat);
-  const occluders=[];
-  function jungleTree([x,z,h],i){let y=groundHeight(x,z);occluders.push(beam(bark,[x,y,z],[x,y+h,z],.35,.22));let a=anchorFor([x,z,h]);beam(bark,[x,y+h-1,z],a,.18,.13);for(let k=0;k<3;k++)occluders.push(oval(k%2?leaf2:leaf,x+Math.cos(k*2.1)*1.5,y+h+.3,z+Math.sin(k*2.1)*1.5,2.8,1.25,2.5));}
-  trees.forEach(jungleTree);
-  function palm(x,z,h,banana=false){let y=groundHeight(x,z);occluders.push(beam(bark,[x,y,z],[x+.3,y+h,z],.23,.13));for(let i=0;i<7;i++){let a=i*Math.PI*2/7,frond=oval(i%2?leaf:leaf2,x+.3+Math.cos(a)*1.25,y+h,z+Math.sin(a)*1.25,2,.12,.42);frond.rotation.y=-a;frond.rotation.z=-.16;occluders.push(frond);}for(let i=0;i<3;i++)oval(banana?flower:darkBark,x+.4+i*.18,y+h-.35,z,.13,banana?.35:.15,.13);}
-  for(let row=0;row<4;row++)for(let col=0;col<5;col++)palm(-16+col*2+(row%2)*.5,5+row*2.6,4.8+(col%3)*.35,true);
-  for(let z=-10;z<=20;z+=5)palm(32-Math.abs(z)*.13,z,5.5,false);
-  // Camp: hammock and shelves grouped at the center.
-  const cord=material(0xcab487),cloth=material(0xc27555);beam(cord,[-1,3,2],[0,2.1,2],.04);beam(cord,[3,2.1,2],[4,3,2],.04);oval(cloth,1.5,2,2,1.7,.22,.6);for(let y of [2,3]){mesh(new THREE.BoxGeometry(2,.12,.7),bark,4,y,1);for(let x of [3.15,4.85])beam(cord,[x,y,1],[x,5,1],.035);}oval(flower,4,3.3,1,.4,.22,.25);
-  // Pond, stream and cascade among low rocks.
-  oval(water,18,.94,10,4.1,.10,2.8);for(let i=0;i<15;i++){let a=i*Math.PI*2/15;oval(rock,18+Math.cos(a)*4.2,.96,10+Math.sin(a)*2.9,.48,.23,.38);}
-  strip([[21,3],[20,5],[19,7],[18,9]],1.1,water,.07);oval(rock,21,1.7,3,2.3,1.1,1.3);let fall=mesh(new THREE.PlaneGeometry(1.15,1.55),white,21,1.85,4.15);fall.material.side=THREE.DoubleSide;
-  // Tide pools and cave are recognizable even from the orbit camera.
-  for(let i=0;i<15;i++){let a=i*2.4,r=2+(i%4)*1.1,x=22+Math.cos(a)*r,z=-20+Math.sin(a)*r;oval(rock,x,1,z,.7+(i%3)*.25,.35,.6);}for(const [x,z] of [[21,-21],[24,-19],[20,-18]])oval(water,x,.96,z,1.1,.08,.7);
-  // An open arch and recessed back replace the solid rock in the cave approach.
-  const caveY=groundHeight(-6,-32);
-  oval(rock,-8.5,caveY+1.2,-33,1.5,1.8,2.1);oval(rock,-3.5,caveY+1.2,-33,1.5,1.8,2.1);
-  oval(rock,-6,caveY+3.1,-33,3.1,.85,2.0);oval(rock,-6,caveY+1.4,-35,3.15,1.8,.65);
-  oval(dark,-6,caveY+1.2,-34.3,1.75,1.3,.12);oval(dark,-6,caveY+.02,-32.9,1.35,.035,1.25);
-  oval(material(0xe9c776),-7.55,caveY+.75,-32.2,.12,.17,.12);
-  // Meadow flowers are sparse, retaining open sky; lookout hill is the highest ground.
-  for(let i=0;i<45;i++){let a=i*2.4,r=1+(i%8)*.8,x=-20+Math.cos(a)*r,z=2+Math.sin(a)*r;oval(flower,x,groundHeight(x,z)+.08,z,.09,.11,.09);}
-  const ly=groundHeight(-16,-22);for(let x of [-17,-15])for(let z of [-23,-21])beam(bark,[x,ly,z],[x,ly+1.1,z],.08);beam(bark,[-17,ly+1,-23],[-15,ly+1,-23],.07);beam(bark,[-17,ly+1,-21],[-15,ly+1,-21],.07);
-  addWorldDressing(scene);
-  const ray = new THREE.Raycaster(), direction = new THREE.Vector3();
-  return { update(camera, target) {
-    for (const item of occluders) item.visible=true;
-    direction.subVectors(target,camera.position); const distance=direction.length();
-    ray.set(camera.position,direction.normalize()); ray.far=distance;
-    for (const hit of ray.intersectObjects(occluders)) hit.object.visible=false;
-  }};
+ // Curved sheltered cave: separate wall stones and roof leave a real opening.
+ const [cx,cz]=places.cave,cy=groundHeight(cx,cz),caveVertices=[],caveUV=[],caveIndex=[],caveLong=20,caveArch=36;
+ // A continuous arched rock shell gives the cave an actual interior.
+ for(let j=0;j<=caveLong;j++)for(let i=0;i<=caveArch;i++){const t=j/caveLong,a=i/caveArch*Math.PI,z=cz-3-t*16,rough=.25*Math.sin(i*2.1+j*1.7)+.15*Math.cos(i*3.7-j*.9),width=5.8+.5*Math.sin(t*5),x=cx+Math.cos(a)*(width+rough),y=groundHeight(x,z)+Math.sin(a)*(6.2+rough);caveVertices.push(x,y,z);caveUV.push(i/caveArch*3,t*4);}
+ for(let j=0;j<caveLong;j++)for(let i=0;i<caveArch;i++){const a=j*(caveArch+1)+i,b=a+1,c=a+caveArch+1,d=c+1;caveIndex.push(a,c,b,b,c,d);}
+ const caveGeo=new THREE.BufferGeometry();caveGeo.setAttribute('position',new THREE.Float32BufferAttribute(caveVertices,3));caveGeo.setAttribute('uv',new THREE.Float32BufferAttribute(caveUV,2));caveGeo.setIndex(caveIndex);caveGeo.computeVertexNormals();add(caveGeo,material(0xbab9ad,{map:rockMap,side:THREE.DoubleSide}));
+ for(const [x,z,sx,sy,sz] of [[cx-8,cz-5,2.3,3.6,3],[cx+8,cz-5,2.3,3.6,3],[cx-8,cz-15,2.5,3.4,3],[cx+8,cz-15,2.5,3.4,3]])stone(x,z,sx,sy,sz);
+ const floorPositions=[],floorIndices=[],floorUV=[];for(let j=0;j<=20;j++)for(let i=0;i<=10;i++){const x=cx-4.6+i*.92,z=cz-3-j*.61;floorPositions.push(x,groundHeight(x,z)+.08,z);floorUV.push(i/10*3,j/20*4);}for(let j=0;j<20;j++)for(let i=0;i<10;i++){const a=j*11+i,b=a+1,c=a+11,d=c+1;floorIndices.push(a,b,c,b,d,c);}const floorGeo=new THREE.BufferGeometry();floorGeo.setAttribute('position',new THREE.Float32BufferAttribute(floorPositions,3));floorGeo.setAttribute('uv',new THREE.Float32BufferAttribute(floorUV,2));floorGeo.setIndex(floorIndices);floorGeo.computeVertexNormals();add(floorGeo,material(0x716b5b,{map:rockMap,side:THREE.DoubleSide,emissive:0x2d1e10,emissiveIntensity:.45}));
+ const backShape=new THREE.Shape();backShape.moveTo(-5.3,0);backShape.quadraticCurveTo(-5.3,5.6,0,5.6);backShape.quadraticCurveTo(5.3,5.6,5.3,0);backShape.lineTo(-5.3,0);const caveBack=add(new THREE.ShapeGeometry(backShape,24),material(0x282e27,{side:THREE.DoubleSide}),cx,groundHeight(cx,cz-15.2),cz-15.2);
+ const lanternY=groundHeight(cx-3,cz-6)+3;beam(wood,[cx-6,lanternY+.3,cz-6],[cx-3,lanternY+.3,cz-6],.07,.05);beam(rope,[cx-3,lanternY+.3,cz-6],[cx-3,lanternY,cz-6],.025);const lantern=add(new THREE.SphereGeometry(.22,8,6),new THREE.MeshBasicMaterial({color:0xffd68b}),cx-3,lanternY,cz-6);
+ // Lookout rocks and beach driftwood are positioned away from their routes.
+ for(let i=0;i<10;i++){let a=i*6.28/10,x=places.lookout[0]+Math.cos(a)*10,z=places.lookout[1]+Math.sin(a)*9;if(pathDistance(x,z)>3)stone(x,z,1.5,1,1.2);}
+ for(const [x,z] of [[278,32],[268,41],[285,9]]){const y=groundHeight(x,z);beam(wood,[x-2.2,y+.2,z],[x+2,y+.4,z+1],.24,.14);}
+ // Coastal outcrops sit beyond the walking boundary and break up the sand rim.
+ const coastal=[];for(let i=0;i<62;i++){const band=i<35?-.72:-2.05,a=band+(rand(i+72000)-.5)*.75,q=1.015+rand(i+73000)*.055,r=coastRadius(a)*q,x=Math.cos(a)*ISLAND.radiusX*r,z=Math.sin(a)*ISLAND.radiusZ*r;coastal.push({x,z,s:2+rand(i+74000)*4,a});}
+ const coastalMesh=new THREE.InstancedMesh(boulder,rock,coastal.length);coastal.forEach((p,i)=>{pose.position.set(p.x,groundHeight(p.x,p.z)+.4,p.z);pose.rotation.set(.1,rand(i+75000)*6,.12);pose.scale.set(p.s*1.4,p.s*.65,p.s);pose.updateMatrix();coastalMesh.setMatrixAt(i,pose.matrix);});coastalMesh.instanceMatrix.needsUpdate=true;coastalMesh.computeBoundingSphere();scene.add(coastalMesh);
+ // Tidal basins are carved into the same heightfield used by visitors.
+ for(const pool of TIDE_POOLS){const [x,z,rx,rz]=pool,p=add(new THREE.CircleGeometry(1,32),water,x,tideWaterHeight(pool),z);p.rotation.x=-Math.PI/2;p.scale.set(rx*.8,rz*.8,1);for(let i=0;i<7;i++){const a=i*6.28/7,px=x+Math.cos(a)*rx*1.2,pz=z+Math.sin(a)*rz*1.2;if(pathDistance(px,pz)>3)stone(px,pz,1,.6,.8);}}
+ const boulderMesh=new THREE.InstancedMesh(boulder,rock,stones.length);stones.forEach((p,i)=>{pose.position.set(p.x,groundHeight(p.x,p.z)+p.sy*.10,p.z);pose.rotation.set(rand(p.x+p.z)*.4,rand(p.x-p.z)*6,.1);pose.scale.set(p.sx,p.sy,p.sz);pose.updateMatrix();boulderMesh.setMatrixAt(i,pose.matrix);});boulderMesh.instanceMatrix.needsUpdate=true;boulderMesh.computeBoundingSphere();scene.add(boulderMesh);
+ return { update(dt,daylight){waterTime.value+=dt;waterLight.value=daylight;flowMap.offset.y-=dt*.7;foliage.emissiveIntensity=.05+daylight*.3;foliageDark.emissiveIntensity=.05+daylight*.3;} };
 }

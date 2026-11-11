@@ -62,3 +62,33 @@ test('a long gap catches up without hanging and gives the same result each time'
 test('the clock uses New York time', () => {
   assert.equal(localMinutes(MORNING), 10 * 60);
 });
+
+
+test('body never invents speech, and AI speech only lasts eight seconds', () => {
+  const body = newBody(MORNING, 7);
+  assert.equal(view(body, MORNING).patch.says, null);
+  body.activity.says = 'A thought I chose to say.';
+  body.activity.saysAt = MORNING;
+  assert.equal(view(body, MORNING + 5000).patch.says, 'A thought I chose to say.');
+  assert.equal(view(body, MORNING + 8000).patch.says, null);
+  delete body.activity.saysAt;
+  assert.equal(view(body, MORNING + 1000).patch.says, null);
+  for (let t = MORNING; t < MORNING + 24 * HOUR; t += 10 * 60000) {
+    advance(body, t);
+    assert.equal(view(body, t).patch.says, null);
+  }
+});
+
+
+test('activity end and speech expiry are exposed without extending legacy speech', () => {
+  const now = Date.parse('2026-11-10T15:00:00Z'), state = newBody(now, 1);
+  state.activity.says = 'A thought'; state.activity.saysAt = now;
+  const current = view(state, now + 1000);
+  assert.equal(current.patch.until, new Date(state.activity.end).toISOString());
+  assert.equal(current.patch.speechUntil, new Date(now + 8000).toISOString());
+  assert.equal(view(state, now + 8000).patch.speechUntil, null);
+  delete state.activity.saysAt;
+  assert.equal(view(state, now + 1000).patch.says, null);
+  state.activity.saysAt = now + 5000;
+  assert.equal(view(state, now + 1000).patch.says, null);
+});
