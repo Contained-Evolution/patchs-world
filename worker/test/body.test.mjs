@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { advance, newBody, view, isNight, localMinutes, choose } from '../body.mjs';
+import { advance, newBody, view, isNight, localMinutes, choose, take, leave, DAD_STONE } from '../body.mjs';
+import { weatherAt } from '../senses.mjs';
 import { ACTIONS, PLACES, NEEDS } from '../../shared/state.js';
 
 const HOUR = 3600000;
@@ -133,4 +134,39 @@ test('when his mind stops working, his needs take over again', () => {
   Object.assign(body, { mindAlive: false, mindAt: MORNING });
   advance(body, MORNING + 3 * HOUR);
   assert.notEqual(body.activity.waiting, true);
+});
+
+test('he arrives with Dad\'s stone, picks things up, leaves them, and finds them again', () => {
+  const body = newBody(MORNING, 21);
+  body.activity = { ...body.activity, place: 'beach', target: null };
+  assert.deepEqual(view(body, MORNING).patch.carrying, [DAD_STONE]);
+  assert.deepEqual(take(body, ['shell', 'treasure chest'], ['shell', 'driftwood'], MORNING), ['shell']);
+  assert.deepEqual(leave(body, ['shell'], MORNING), ['shell']);
+  assert.equal(body.left.beach[0].item, 'shell');
+  assert.deepEqual(take(body, ['shell'], [], MORNING + HOUR), ['shell'], 'what he left is still there');
+  assert.equal(body.left.beach.length, 0);
+});
+
+test('food he carries can be eaten anywhere, once', () => {
+  const body = newBody(MORNING, 22);
+  Object.assign(body, { mindAlive: true, mindAt: MORNING });
+  body.activity = { ...body.activity, place: 'meadow', target: null };
+  assert.match(choose(body, { do: 'eat', where: 'meadow', minutes: 30 }, MORNING), /anywhere if you carry food/);
+  body.carrying = [{ item: 'banana' }];
+  assert.equal(choose(body, { do: 'eat', where: 'meadow', minutes: 30 }, MORNING), null);
+  assert.equal(body.activity.action, 'eat');
+  assert.equal(body.activity.end - body.activity.start, 10 * 60000);
+  assert.deepEqual(body.carrying, []);
+});
+
+test('rain makes him uncomfortable outside, but not in the cave', () => {
+  let t = MORNING; while (weatherAt(t) !== 'rain') t += 3 * HOUR;
+  const start = t - (t % (3 * HOUR));
+  const outside = newBody(start, 23), inside = newBody(start, 23);
+  for (const [body, place] of [[outside, 'meadow'], [inside, 'cave']]) {
+    Object.assign(body, { mindAlive: true, mindAt: start });
+    body.activity = { action: 'sit', place, target: null, start, end: start + 2 * HOUR, effects: {} };
+  }
+  const wet = view(outside, start + 2 * HOUR).patch.needs.comfort, dry = view(inside, start + 2 * HOUR).patch.needs.comfort;
+  assert.ok(wet < dry - 0.3, `outside ${wet}, cave ${dry}`);
 });

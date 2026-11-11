@@ -5,7 +5,7 @@
 import { CHILDHOOD, PERSONA, LIFE_STORY } from './persona.mjs';
 import { perceive, nextWeather } from './senses.mjs';
 import { lightUp, recordRecall, normalTags, strengthOf, tagsIn, conceptGraph } from './memory-graph.mjs';
-import { CHOICES, WHERE, PLACES_KNOWN, TIME_ZONE, localMinutes, choose, travelMinutes } from './body.mjs';
+import { CHOICES, WHERE, PLACES_KNOWN, TIME_ZONE, localMinutes, choose, travelMinutes, carrying, take, leave } from './body.mjs';
 import { STARTING_CATEGORIES } from '../shared/memory.js';
 
 // Main model first, backup second. OpenRouter falls back within the same request.
@@ -107,6 +107,15 @@ export function comeToMind(mind, memories, cues, now, limit = 8) {
 }
 
 const PLACE_WORDS = { hammock: 'your hammock', shelves: 'your rope shelves', pond: 'the pond', 'banana-grove': 'the banana grove', 'tall-trees': 'the tall trees', beach: 'the beach', lookout: 'the lookout', 'tide-pools': 'the tide pools', meadow: 'the meadow', cave: 'the cave' };
+function thingsLine(body, now) {
+  const { place, target } = body.activity, lines = [`You are carrying: ${carrying(body).map(thing => thing.item).join(', ') || 'nothing'}.`];
+  if (!target) {
+    const finds = perceive(place, now).finds, left = (body.left?.[place] || []).map(thing => thing.item);
+    if (finds.length) lines.push(`Things here you could pick up: ${finds.join(', ')}.`);
+    if (left.length) lines.push(`Things you left here before: ${left.join(', ')}.`);
+  }
+  return lines.join(' ');
+}
 function nowLine(body, now) {
   const { action, place, target, end, waiting } = body.activity;
   if (target) return `Right now you are on your way to ${PLACE_WORDS[target]} (${action}ing), about ${Math.max(1, Math.round((end - now) / MINUTE))} minutes away.`;
@@ -116,7 +125,7 @@ function nowLine(body, now) {
 // What he can choose from, and how far each place is from where he is.
 function choicesText(body) {
   const here = body.activity.target || body.activity.place;
-  const where = action => WHERE[action] ? ` (only at ${WHERE[action].join(', ')})` : '';
+  const where = action => WHERE[action] ? ` (only at ${WHERE[action].join(', ')}${action === 'eat' ? ', or anywhere with food you carry' : ''})` : '';
   return `Things you can do: ${CHOICES.map(action => action + where(action)).join('; ')}.
 Places, and minutes to get there from here: ${PLACES_KNOWN.map(place => `${place} ${place === here ? '(here)' : travelMinutes(here, place)}`).join(', ')}.`;
 }
@@ -133,6 +142,7 @@ function dayNotes(body, mind, memories, now, recalled = []) {
     `It is ${clockWords(now)}.`,
     nowLine(body, now),
     `Around you: ${perceive(body.activity.target || body.activity.place, now).text}`,
+    thingsLine(body, now),
     mind.problem ? `Last time you chose something you couldn't do: ${mind.problem}` : '',
     `How you feel: ${feelings(body.needs)}.`,
     log.length ? `What you did since you last stopped to think:\n${log.join('\n')}` : 'Nothing new since you last stopped to think.',
@@ -149,6 +159,8 @@ const THINK_ASK = `Stop and think for a moment, as Patch. You decide what you do
   "says": "something short you say out loud, or null",
   "plan": null to keep doing what you're doing, or { "do": "one thing you can do", "where": "a place", "minutes": how long, "how": "walk, run or swing (to the tall trees) to get there, or null", "why": "a few words" },
   "remember": null or { "category": "a memory category", "subcategory": "a smaller group", "title": "a few words", "text": "the memory in your words", "feeling": "one word", "strength": 1 to 5 (5 = you will never forget it), "tags": ["2-8 short words for the things, people, places and feelings in it"] },
+  "take": [things from here to pick up and carry, up to 3; you can carry 6 things],
+  "leave": [things you are carrying to put down here; they stay until you come back],
   "noticed": ["up to 6 short words for what you are noticing or thinking about right now"],
   "newWords": []
 }
@@ -210,6 +222,9 @@ ${THINK_ASK}` }], 'everyday', 1500);
   spend(mind, cost, now);
   const thought = clean(reply.thought, 400), says = clean(reply.says, 160);
   if (thought) mind.thoughts = [...(mind.thoughts || []), { at: now, thought, says, model }].slice(-40);
+  // He picks things up or puts them down where he is before he sets off.
+  const place = body.activity.target ? null : body.activity.place;
+  if (place) { leave(body, reply.leave, now); take(body, reply.take, perceive(place, now).finds, now); }
   // His choice is what happens next. Waiting with nothing chosen means a little more thinking.
   const plan = reply.plan && typeof reply.plan === 'object' ? reply.plan : null;
   mind.problem = plan ? choose(body, plan, now) : null;

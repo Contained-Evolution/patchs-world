@@ -3,7 +3,7 @@
 // The simulation steps from one activity to the next, so it can catch up on any gap without a timer.
 
 import { NEEDS } from '../shared/state.js';
-import { weatherAt } from './senses.mjs';
+import { weatherAt, SHELTERED, FOOD } from './senses.mjs';
 
 export const TIME_ZONE = 'America/New_York';
 const MINUTE = 60000;
@@ -86,10 +86,22 @@ export function travelMinutes(from, to) {
   return Math.max(1, Math.round(Math.hypot(ax - bx, ay - by) * 0.6));
 }
 
-function applyMinutes(needs, activity, minutes) {
-  const decay = activity.action === 'sleep' ? DECAY.asleep : DECAY.awake;
+// Rain and storms wear on him whenever he's out in them, asleep or awake.
+const WET = { rain: { comfort: -0.006 }, storm: { comfort: -0.012, energy: -0.001 } };
+function exposure(activity, minutes) {
   const out = {};
-  for (const need of NEEDS) out[need] = clamp(needs[need] + ((decay[need] || 0) + (activity.effects?.[need] || 0)) * minutes);
+  if (SHELTERED.has(activity.place) && !activity.target || !Number.isFinite(activity.start)) return out;
+  for (let done = 0; done < minutes; done += 15) {
+    const step = Math.min(15, minutes - done), wet = WET[weatherAt(activity.start + done * MINUTE)];
+    for (const [need, rate] of Object.entries(wet || {})) out[need] = (out[need] || 0) + rate * step;
+  }
+  return out;
+}
+
+function applyMinutes(needs, activity, minutes) {
+  const decay = activity.action === 'sleep' ? DECAY.asleep : DECAY.awake, wet = exposure(activity, minutes);
+  const out = {};
+  for (const need of NEEDS) out[need] = clamp(needs[need] + ((decay[need] || 0) + (activity.effects?.[need] || 0)) * minutes + (wet[need] || 0));
   return out;
 }
 
@@ -162,7 +174,10 @@ export function choose(state, plan, now) {
   const action = plan?.do, place = plan?.where || state.activity.target || state.activity.place;
   if (!CHOICES.includes(action)) return `"${action}" is not something you can do.`;
   if (!PLACES_KNOWN.includes(place)) return `"${place}" is not a place on your island.`;
-  if (WHERE[action] && !WHERE[action].includes(place)) return `You can only ${action} at: ${WHERE[action].join(', ')}.`;
+  const packed = action === 'eat' && !WHERE.eat.includes(place) ? (state.carrying || []).findIndex(thing => FOOD.includes(thing.item)) : -1;
+  if (WHERE[action] && !WHERE[action].includes(place) && packed < 0) return `You can only ${action} at: ${WHERE[action].join(', ')}${action === 'eat' ? ', or anywhere if you carry food' : ''}.`;
+  // Food he brought with him is eaten up; it lasts about ten minutes.
+  if (packed >= 0) { state.carrying.splice(packed, 1); plan = { ...plan, minutes: Math.min(10, Number(plan.minutes) || 10) }; }
   const [low, high] = action === 'sleep' ? [10, 600] : [3, 120];
   const minutes = Math.max(low, Math.min(high, Math.round(Number(plan.minutes)) || 20));
   const queued = { action, minutes, effects: EFFECTS[action], nap: action === 'sleep' };
@@ -177,6 +192,37 @@ export function choose(state, plan, now) {
   const { action: a, place: p, target } = state.activity;
   state.log = [...(state.log || []), { action: a, place: p, target, at: now }].slice(-40);
   return null;
+}
+
+// What he carries and what he has left around the island. He arrived with Dad's river stone.
+const CARRY = 6, LEAVE = 12;
+export const DAD_STONE = 'smooth river stone from Dad';
+export function carrying(state) { return (state.carrying ||= [{ item: DAD_STONE, from: 'home' }]); }
+const placeOf = state => state.activity.target ? null : state.activity.place;
+// Pick up things he can find here, including things he left before. Returns what he took.
+export function take(state, items, finds, now) {
+  const place = placeOf(state), here = state.left?.[place] || [], taken = [];
+  if (!place || !Array.isArray(items)) return taken;
+  for (const raw of items.slice(0, 3)) {
+    const item = String(raw || '').toLowerCase().trim(), left = here.findIndex(thing => thing.item === item);
+    if (carrying(state).length >= CARRY || (left < 0 && !finds.includes(item))) continue;
+    carrying(state).push(left >= 0 ? here.splice(left, 1)[0] : { item, from: place, at: now });
+    taken.push(item);
+  }
+  return taken;
+}
+// Put things down where he is; they stay there until he comes back for them.
+export function leave(state, items, now) {
+  const place = placeOf(state), left = [];
+  if (!place || !Array.isArray(items)) return left;
+  for (const raw of items.slice(0, 3)) {
+    const item = String(raw || '').toLowerCase().trim(), index = carrying(state).findIndex(thing => thing.item === item);
+    if (index < 0) continue;
+    state.left = state.left || {};
+    state.left[place] = [...(state.left[place] || []), { ...carrying(state).splice(index, 1)[0], leftAt: now }].slice(-LEAVE);
+    left.push(item);
+  }
+  return left;
 }
 
 export function newBody(now, seed = 1) {
@@ -232,6 +278,7 @@ export function view(state, now) {
       // Spoken words come from the mind, not from canned body activity lines.
       says: activity.says && Number.isFinite(activity.saysAt) && now >= activity.saysAt && now - activity.saysAt < 8000 ? activity.says : null,
       speechUntil: activity.says && Number.isFinite(activity.saysAt) && now >= activity.saysAt && now - activity.saysAt < 8000 ? new Date(activity.saysAt + 8000).toISOString() : null,
+      carrying: carrying(state).map(thing => thing.item),
       since: new Date(activity.start).toISOString(),
       until: new Date(activity.end).toISOString(),
     },

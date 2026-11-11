@@ -56,16 +56,22 @@ const WEATHER_WORDS = {
   storm: { day: 'A storm! Thunder booms and the wind pushes the trees.', night: 'A storm in the dark. Lightning flashes, then the thunder booms.', tags: ['storm', 'thunder', 'rain', 'scared'] },
 };
 // Places with a roof over him.
-const SHELTERED = new Set(['cave']);
+export const SHELTERED = new Set(['cave']);
+// Things lying around that he could pick up, and which of them he can eat.
+const FINDS = {
+  beach: ['shell', 'driftwood'], 'tide-pools': ['shell', 'pebble'], 'tall-trees': ['feather', 'vine'], 'banana-grove': ['banana'],
+  shelves: ['banana'], meadow: ['flower'], cave: ['smooth stone'], pond: ['smooth stone', 'reed'], lookout: ['pebble'], hammock: [],
+};
+export const FOOD = ['banana', 'coconut'];
 
 // Little things that happen. Each has where it can happen, when, and how often.
 const HAPPENINGS = [
   { where: ['beach'], when: ['morning', 'afternoon'], text: 'A crab is walking sideways right past your foot.', tags: ['crab', 'exploring'] },
-  { where: ['beach'], when: ['morning', 'afternoon', 'evening'], text: 'A coconut just thumped down onto the sand.', tags: ['coconut', 'food'] },
+  { where: ['beach'], when: ['morning', 'afternoon', 'evening'], text: 'A coconut just thumped down onto the sand.', tags: ['coconut', 'food'], find: 'coconut' },
   { where: ['pond'], when: ['dawn', 'morning', 'evening'], text: 'A fish jumped clean out of the pond!', tags: ['fish', 'fishing'] },
   { where: ['pond'], when: ['evening', 'night'], text: 'Fireflies are blinking over the water.', tags: ['lights', 'night'] },
   { where: ['tide-pools'], when: ['morning', 'afternoon'], text: 'A little starfish is stuck to a rock in the pool.', tags: ['stars', 'exploring'] },
-  { where: ['tall-trees'], when: ['morning', 'afternoon'], text: 'A big colourful bird is watching you from a branch.', tags: ['birds', 'friends'] },
+  { where: ['tall-trees'], when: ['morning', 'afternoon'], text: 'A big colourful bird is watching you from a branch. One bright feather floats down.', tags: ['birds', 'friends'], find: 'bright feather' },
   { where: ['tall-trees', 'banana-grove'], when: ['morning', 'afternoon', 'evening'], text: 'Some vines are hanging just right for swinging.', tags: ['swinging', 'trees'] },
   { where: ['banana-grove'], when: ['morning', 'afternoon'], text: 'One bunch of bananas has gone perfectly yellow.', tags: ['banana', 'food'] },
   { where: ['cave'], when: ['dawn', 'morning', 'afternoon', 'evening', 'night'], text: 'A cool wind is blowing from deeper in the cave.', tags: ['cave', 'wondering'] },
@@ -76,7 +82,7 @@ const HAPPENINGS = [
   { where: null, when: ['night'], weather: ['clear', 'cloudy'], text: 'The moon is out. It seems to be following you again.', tags: ['moon'] },
 ];
 
-// What he notices right now. Returns { text, tags, weather, sheltered }.
+// What he notices right now. Returns { text, tags, weather, sheltered, part, finds }.
 export function perceive(place, time) {
   const part = dayPart(time), dark = part === 'night', weather = weatherAt(time), lines = [], tags = [];
   const here = SURROUNDINGS[place];
@@ -93,11 +99,13 @@ export function perceive(place, time) {
     lines.push('The rain just stopped. There is a rainbow over the island!');
     tags.push('rainbow', 'rain');
   }
+  const finds = [...(FINDS[place] || [])];
   const slot = Math.floor(time / SLOT), options = HAPPENINGS.filter(h => (!h.where || h.where.includes(place)) && h.when.includes(part) && (!h.weather || h.weather.includes(weather)));
   if (options.length && hash(slot * 31 + place.length) < 0.55) {
     const happening = options[Math.floor(hash(slot * 17 + 3) * options.length)];
     lines.push(happening.text);
     tags.push(...happening.tags);
+    if (happening.find) finds.push(happening.find);
   }
-  return { text: lines.join(' '), tags, weather, sheltered, part };
+  return { text: lines.join(' '), tags, weather, sheltered, part, finds };
 }

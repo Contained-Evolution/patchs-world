@@ -20,6 +20,7 @@ export const sampleState = {
     mood: 'curious',
     says: null, // a short line he says out loud, or null
     speechUntil: null, // expiry for the spoken line
+    carrying: ['smooth river stone from Dad'], // what he has with him
     since: '2026-01-01T12:00:00Z', // when the current action started
     until: '2026-01-01T12:05:00Z', // when the current action ends
   },

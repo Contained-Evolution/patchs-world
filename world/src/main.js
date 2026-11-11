@@ -81,6 +81,7 @@ function renderCare(p) {
     const percent=Math.round(Math.max(0,Math.min(1,value))*100), row=document.createElement('div'), name=document.createElement('span'), meter=document.createElement('progress'), text=document.createElement('span');
     row.className='care-row'; name.textContent=label; meter.max=100; meter.value=percent; meter.setAttribute('aria-label',label); text.textContent=`${percent}%`; row.append(name,meter,text); list.append(row);
   }
+  if (Array.isArray(p.carrying) && p.carrying.length) { const carried=document.createElement('p'); carried.className='care-carrying'; carried.textContent=`Carrying: ${p.carrying.join(', ')}`; list.append(carried); }
 }
 const localPreview = isLocalPreview(location.hostname), start = performance.now();
 const mockActions=['idle','walk','run','climb','swing','swim','fish','eat','sit','sleep','think','write','phone','wave','look','explore','watch-sky'], ids=Object.keys(places);
