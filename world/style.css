@@ -17,11 +17,28 @@ dialog::backdrop { background:#08241dbb; }
   border:1px solid #ffffff54; border-radius:10px; background:#315b50; color:white;
   font-size:28px; width:44px; height:44px; flex:none;
 }
-#open-map {
+.map-dock {
   position:absolute; z-index:2; top:max(12px,env(safe-area-inset-top)); left:max(12px,env(safe-area-inset-left));
-  width:112px; padding:6px; border:1px solid #d3d7b4b3; border-radius:15px;
+  width:112px;
+}
+#open-map {
+  display:block; width:100%; padding:6px; border:1px solid #d3d7b4b3; border-radius:15px;
   background:#143e36ed; color:#fff6dd; text-align:left; box-shadow:0 3px 16px #14362d80;
 }
+#island-controls { position:relative; margin-top:6px; }
+#island-controls summary, #control-shortcuts button {
+  min-height:44px; border:1px solid #d3d7b4b3; border-radius:10px;
+  background:#143e36f5; color:#fff6dd;
+}
+#island-controls summary { align-content:center; padding:6px 10px; cursor:pointer; }
+#control-shortcuts {
+  position:absolute; top:calc(100% + 5px); left:0; width:170px;
+  display:grid; gap:4px; padding:5px; background:#172e28;
+  border:1px solid #d3d7b4b3; border-radius:12px; box-shadow:0 3px 16px #14362d80;
+  max-height:min(252px, 40dvh); overflow:auto;
+}
+#control-shortcuts button { padding:6px 9px; text-align:left; }
+#island-controls summary:focus-visible { outline:3px solid #ffdc91; outline-offset:2px; }
 .map-launch-title { display:flex; align-items:center; gap:5px; font-size:15px; line-height:1.05; padding-bottom:5px; }
 .map-launch-title img { flex:none; border-radius:9px; }
 .island-chart { position:relative; display:block; overflow:hidden; background:#123a4c; }
@@ -71,7 +88,8 @@ dialog::backdrop { background:#08241dbb; }
   #map-landmarks { columns:2; column-gap:22px; font-size:12px; }
 }
 @media (max-height:480px) {
-  #open-map { width:92px; }
+  .map-dock { width:92px; }
+  #island-controls summary { padding-inline:6px; }
   .map-launch-title img { width:30px; height:30px; }
 }
 [hidden]{display:none!important}

@@ -1,8 +1,20 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#173c38"><title>Patch's World</title><link rel="manifest" href="./manifest.webmanifest"><link rel="apple-touch-icon" href="./icons/apple-touch-icon.png"><meta name="apple-mobile-web-app-title" content="Patch"><link rel="stylesheet" href="./style.css"></head><body><main id="world" aria-label="Patch's island"></main>
-<button id="open-map" type="button" aria-haspopup="dialog" aria-label="Patch’s World map and menu">
-  <span class="map-launch-title"><img src="./icons/icon-192.png" width="40" height="40" alt=""> <span>Patch’s<br>World</span></span>
-  <span class="island-chart mini-chart" id="mini-chart" aria-hidden="true"><canvas width="360" height="380"></canvas></span>
-</button>
+<div class="map-dock">
+  <button id="open-map" type="button" aria-haspopup="dialog" aria-label="Patch’s World map and menu">
+    <span class="map-launch-title"><img src="./icons/icon-192.png" width="40" height="40" alt=""> <span>Patch’s<br>World</span></span>
+    <span class="island-chart mini-chart" id="mini-chart" aria-hidden="true"><canvas width="360" height="380"></canvas></span>
+  </button>
+  <details id="island-controls">
+    <summary aria-controls="control-shortcuts">Controls</summary>
+    <div id="control-shortcuts">
+      <button type="button" data-shortcut="island-map" aria-haspopup="dialog">Map</button>
+      <button type="button" data-shortcut="audio" aria-haspopup="dialog">Audio</button>
+      <button type="button" data-shortcut="video" aria-haspopup="dialog">Video</button>
+      <button type="button" data-shortcut="patch" aria-haspopup="dialog">Find Patch &amp; Follow</button>
+      <button type="button" data-shortcut="cameras" aria-haspopup="dialog">Island cameras</button>
+    </div>
+  </details>
+</div>
 <div class="island-movement">
   <div id="move-stick" role="group" aria-label="Movement joystick">
     <span class="move-stick-thumb" aria-hidden="true"></span>

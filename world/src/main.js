@@ -32,7 +32,6 @@ const $ = s => document.querySelector(s);
 const dialog = $('#map');
 const mapHome = $('#map-home');
 const updateMap = setupIslandMap($('#mini-chart canvas'), $('#full-chart canvas'), $('#map-landmarks'));
-$('#open-map').onclick = () => { controls.pause(); community.showPanel('map'); dialog.showModal(); };
 $('#close-map').onclick = () => dialog.close();
 const community=setupCommunity(dialog);
 setupNotifications(dialog,community,registerApp());
@@ -68,6 +67,30 @@ const scenery=createIsland(scene),solids=scenery.walkSolids;
 const sound=createIslandAudio($('#island-sound'), $('#footsteps'));
 const cameraFeeds = setupIslandCameras(renderer);
 const controls = createVisitorControls(camera, renderer.domElement, () => dialog.open, scene, solids);
+const quickControls = $('#island-controls');
+const quickSummary = quickControls.querySelector('summary');
+function openIslandMenu() {
+  quickControls.open = false;
+  controls.pause();
+  community.showPanel('map');
+  dialog.showModal();
+}
+$('#open-map').onclick = openIslandMenu;
+$('#control-shortcuts').addEventListener('click', event => {
+  const shortcut = event.target.closest('[data-shortcut]');
+  if (!shortcut) return;
+  quickSummary.focus({ preventScroll: true });
+  openIslandMenu();
+  if (shortcut.dataset.shortcut !== 'island-map') $(`#open-${shortcut.dataset.shortcut}`).click();
+});
+document.addEventListener('pointerdown', event => {
+  if (quickControls.open && !quickControls.contains(event.target)) quickControls.open = false;
+});
+quickControls.addEventListener('keydown', event => {
+  if (event.key !== 'Escape' || !quickControls.open) return;
+  quickControls.open = false;
+  quickSummary.focus();
+});
 const embeddedPage = $('#island-page');
 const menu = $('#island-menu');
 menu.addEventListener('click', event => {
