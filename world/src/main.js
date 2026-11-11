@@ -1,3 +1,4 @@
+import { createPatchMouth } from './patch-mouth.js';
 import { createPatchEyes } from './patch-eyes.js';
 import * as THREE from 'three';
 import { createVisitorControls } from './visitor-controls.js';
@@ -55,13 +56,14 @@ function pingTexture(){const c=document.createElement('canvas');c.width=c.height
 const ping=new THREE.Sprite(new THREE.SpriteMaterial({map:pingTexture(),depthTest:false,transparent:true}));ping.scale.setScalar(.42);ping.visible=false;ping.renderOrder=5;scene.add(ping);
 
 
-let patchEyes, mixer, patchModel, headBone, rightHandBone, leftHandBone, clips = {}, strideSpeed = {}, currentAction, currentName, roam = null;
+let patchMouth, patchEyes, mixer, patchModel, headBone, rightHandBone, leftHandBone, clips = {}, strideSpeed = {}, currentAction, currentName, roam = null;
 // Turn smoothly toward a heading instead of snapping at each bend.
 function face(angle,dt){const turn=Math.atan2(Math.sin(angle-patch.rotation.y),Math.cos(angle-patch.rotation.y));patch.rotation.y+=turn*Math.min(1,dt*7);}
 const lookUp = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -0.6);
 new GLTFLoader().load(new URL('./assets/patch.glb', document.baseURI).href, gltf => {
   patchModel=gltf.scene; patch.add(patchModel);
   patchEyes=createPatchEyes(patchModel);
+  patchMouth=createPatchMouth(patchModel);
   gltf.scene.traverse(node => { if (node.isBone && /mixamorig[:_]?head$/i.test(node.name)) headBone=node; if(node.isBone && /mixamorig[:_]?righthand$/i.test(node.name)) rightHandBone=node; if(node.isBone && /mixamorig[:_]?lefthand$/i.test(node.name)) leftHandBone=node; });
   mixer = new THREE.AnimationMixer(gltf.scene);
   for (const clip of gltf.animations) {
@@ -283,6 +285,7 @@ if(rightHandBone&&fishingRod.visible){patch.updateMatrixWorld(true);rightHandBon
 // Tip his head back from the held sitting pose. Set it absolutely each frame so the tilt never accumulates.
 // The ground sit animates his head, so the tilt goes on top of each frame's pose.
 if(action==='watch-sky' && headBone && currentName==='sit-ground') headBone.quaternion.multiply(lookUp);
+patchMouth?.update(says,speechUntil,Date.now()+serverOffset,action==='sleep',dt);
 const speechLive=!!says && Number.isFinite(Date.parse(speechUntil)) && Date.now()+serverOffset<Date.parse(speechUntil);$('#bubble').hidden=!speechLive;$('#bubble').textContent=speechLive?says:'';
 let day=Number.isFinite(state.clock.dayFraction)?state.clock.dayFraction:.5;let daylight=THREE.MathUtils.smoothstep(Math.sin((day-.25)*Math.PI*2),-.12,.2);let weather=state.clock.weather;let overcast=weather==='cloudy'||weather==='rain'||weather==='storm';sky.copy(skyNight).lerp(skyDay,daylight*(overcast?.65:1));updateSky(daylight);scene.background=skyTexture;scene.fog.color.copy(sky);hemi.intensity=1.25+daylight*(overcast?.4:1.15);sunLight.intensity=daylight*(overcast?.6:2.4)+(1-daylight)*.65;sunLight.color.copy(moonColor).lerp(sunColor,daylight);let angle=(day-.25)*Math.PI*2;sun.position.set(Math.cos(angle)*900,Math.sin(angle)*900,0);moon.position.copy(sun.position).multiplyScalar(-1);sunLight.position.copy(daylight>.05?sun.position:moon.position);stars.material.opacity=1-daylight;stars.visible=daylight<.98;clouds.forEach((c,i)=>{c.visible=overcast||i<5;c.position.x+=reducedMotion.matches?0:dt*.14;if(c.position.x>520)c.position.x=-520;});rain.visible=weather==='rain'||weather==='storm';if(rain.visible){rain.position.x=camera.position.x;rain.position.z=camera.position.z;rain.position.y=camera.position.y-(reducedMotion.matches?0:t*12%30);}
 scenery.update(reducedMotion.matches?0:dt,daylight);renderer.render(scene,camera);}
