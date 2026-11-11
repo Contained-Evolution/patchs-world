@@ -3,12 +3,14 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { sampleState } from '../../shared/state.js';
 import { createIsland } from './island.js';
+import { setupCommunity } from './community.js';
 import { places, groundHeight, walkRoute, swingRoute, swingLoop, statusText, isLocalPreview, safePatch } from './world-state.js';
 
 const $ = s => document.querySelector(s);
 const dialog = $('#map');
 $('#open-map').onclick = () => dialog.showModal();
 $('#close-map').onclick = () => dialog.close();
+setupCommunity(dialog);
 let renderer;
 try { renderer = new THREE.WebGLRenderer({ antialias: true }); } catch { $('#error').hidden = false; throw new Error('WebGL unavailable'); }
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
