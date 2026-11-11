@@ -243,7 +243,7 @@ if(ropeExit){
   if(wasAirborne&&action!=='climb'){const ground=groundHeight(patch.position.x,patch.position.z);if(patch.position.y>ground+.5)descent={start:patch.position.y,ground,elapsed:0};wasAirborne=false;}
   if(action!=='climb')climbTime=0;
   journey=null;
-  const names={idle:'idle',think:'idle',computer:'typing',research:'texting',write:'texting',look:'look-around',wave:'look-around',walk:'walk',run:'run',climb:'hang',swim:'swim',fish:'sit-ground',sit:'sit-ground',sleep:'sleep',eat:'idle',explore:'look-around','watch-sky':'sit-ground'};
+  const names={idle:'idle',think:'idle',computer:'typing',research:'tablet-stand',write:'tablet-stand',look:'look-around',wave:'look-around',walk:'walk',run:'run',climb:'hang',swim:'swim',fish:'sit-ground',sit:'sit-ground',sleep:'sleep',eat:'idle',explore:'look-around','watch-sky':'sit-ground'};
   // Exploring and similar activities are a shared roam: he picks spots, walks there, stops and looks around.
   const roams=!!ROAM[action]?.radius[place],roamKey=`${action}|${place}|${since||''}`;
   if(roams&&roam?.key!==roamKey)roam={key:roamKey,plan:action==='eat'&&place==='banana-grove'?foragePlan(seedFrom(roamKey)):roamPlan(action,place,seedFrom(roamKey))};
@@ -277,7 +277,7 @@ if(ropeExit){
     if(place==='computer'){const at=Number.isFinite(elapsed)?Math.max(0,elapsed):t%30,left=Number.isFinite(Date.parse(until))?(Date.parse(until)-Date.now()-serverOffset)/1000:60,desk=deskClip(action,at,left,{'sit-to-type':CLIPS['sit-to-type'].duration,'type-to-sit':CLIPS['type-to-sit'].duration,typing:CLIPS.typing.duration});poseClip(desk.clip,desk.time);}
     else playClip('sit',true);
   } else if(foodPose){if(foodPose.moving)playClip(foodPose.clip);else poseClip(foodPose.clip,foodPose.time);}
-  else if(pose?.clip==='jump'&&!arriving&&!descent)poseClip('jump',pose.time);
+  else if(['jump','tablet-stand'].includes(pose?.clip)&&!arriving&&!descent)poseClip(pose.clip,pose.time);
   else if(!arriving&&!descent&&['idle','think'].includes(action)&&state.patch.needs?.energy<.35&&elapsed%45<CLIPS.yawn.duration)poseClip('yawn',elapsed%45);
   else playClip(clip,['sit','swing-start','rope-to-ground','fall','jump-down'].includes(clip));
   }
@@ -296,11 +296,10 @@ if(rightHandBone&&heldGrip){
   if(heldRope!==null)scenery.setRope(heldRope,[handWorld.x,handWorld.y,handWorld.z]);
 }
 // The tablet sits between his hands when both hold it, otherwise in his right hand, screen turned to his face.
-tablet.visible=!!(rightHandBone&&headBone&&usesTablet(action,place)&&!target&&['texting','walk-texting'].includes(currentName));
-if(tablet.visible){patch.updateMatrixWorld(true);rightHandBone.getWorldPosition(handWorld);headBone.getWorldPosition(headWorld);if(currentName==='walk-texting'&&leftHandBone){leftHandBone.getWorldPosition(otherHand);handWorld.lerp(otherHand,.5);}tablet.position.copy(handWorld);tablet.lookAt(headWorld);tablet.translateZ(.03);}
+tablet.visible=!!(rightHandBone&&headBone&&usesTablet(action,place)&&!target&&(currentName==='walk-texting'||currentName==='tablet-stand'&&currentAction.time>=CLIPS['tablet-stand'].out));
+if(tablet.visible){patch.updateMatrixWorld(true);rightHandBone.getWorldPosition(handWorld);headBone.getWorldPosition(headWorld);if(leftHandBone&&(currentName==='walk-texting'||currentAction.time>=CLIPS['tablet-stand'].held)){leftHandBone.getWorldPosition(otherHand);handWorld.lerp(otherHand,.5);}tablet.position.copy(handWorld);tablet.lookAt(headWorld);tablet.translateZ(.03);}
 ping.visible=mail>0&&!(place==='computer'&&!target)&&action!=='sleep';if(ping.visible)ping.position.set(patch.position.x,patch.position.y+1.7+Math.sin(t*3)*.06,patch.position.z);
 if(rightHandBone&&fishingRod.visible){patch.updateMatrixWorld(true);rightHandBone.getWorldPosition(handWorld);fishingRod.position.copy(patch.worldToLocal(handWorld.clone()));}
-// Tip his head back from the held sitting pose. Set it absolutely each frame so the tilt never accumulates.
 // The ground sit animates his head, so the tilt goes on top of each frame's pose.
 if(action==='watch-sky' && headBone && currentName==='sit-ground') headBone.quaternion.multiply(lookUp);
 patchMouth?.update(says,speechUntil,Date.now()+serverOffset,action==='sleep',dt);

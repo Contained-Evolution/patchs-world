@@ -4,6 +4,7 @@ import { SEATS, COMPUTER, seatFor, usesTablet, deskClip } from '../src/furniture
 import { places, groundHeight } from '../src/terrain.js';
 import { statusText } from '../src/world-state.js';
 import { roamPlan, seedFrom } from '../src/patch-motion.js';
+import { CLIPS } from '../src/patch-clips.js';
 
 const durations = { 'sit-to-type': 29 / 24, 'type-to-sit': 23 / 24, typing: 396 / 24 };
 
@@ -45,12 +46,18 @@ test('at the desk he reaches for the keys, types, and sits back near the end', (
   assert.deepEqual(deskClip('think', 5, 300, durations), { clip: 'type-to-sit', time: durations['type-to-sit'] });
 });
 
-test('with his tablet he wanders slowly, reading as he goes', () => {
-  const plan = roamPlan('research', 'beach', seedFrom('research|beach|x'));
+test('with his tablet he pulls it out once, then wanders slowly, reading as he goes', () => {
+  const plan = roamPlan('research', 'beach', seedFrom('research|beach|x')), clip = CLIPS['tablet-stand'];
+  assert.deepEqual([plan.at(0).clip, plan.at(0).time], ['tablet-stand', 0]);
   const clips = new Set();
-  for (let s = 0; s < 600; s += 3) clips.add(plan.at(s).clip);
-  assert.ok(clips.has('texting'));
-  assert.ok([...clips].every(clip => clip === 'texting' || clip === 'walk-texting'));
+  for (let s = 0; s < 600; s += 3) {
+    const pose = plan.at(s);
+    clips.add(pose.clip);
+    if (pose.clip === 'tablet-stand') assert.ok(pose.time >= 0 && pose.time < clip.duration);
+    // Once he has walked with it, he never pulls it out again.
+    if (pose.clip === 'tablet-stand' && s > clip.duration && [...clips].includes('walk-texting')) assert.ok(pose.time >= clip.held);
+  }
+  assert.ok([...clips].every(name => name === 'tablet-stand' || name === 'walk-texting'));
 });
 
 test('status tells computer, tablet and journal work apart', () => {

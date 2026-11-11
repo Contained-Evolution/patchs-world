@@ -54,7 +54,7 @@ export function roamPlan(action,place,seed){
  function rest(walkEnd,tree){const pause=span(kind.pauses),roll=random();
   // Beside a banana tree he faces it and picks fruit for one or two reaches.
   if(tree)return{end:walkEnd+PICK*(pause>14?2:1),clip:'pick-fruit',facing:Math.atan2(tree.x-tree.fromX,tree.z-tree.fromZ)};
-  if(kind.device)return{end:walkEnd+pause,clip:'texting'};
+  if(kind.device)return{end:walkEnd+pause,clip:'tablet-stand'};
   return{end:walkEnd+pause,clip:action==='explore'&&roll<.08?'jump':roll<.15&&pause>7?'sit-ground':roll<.6?'look-around':'idle'};}
  legs.push({x0:x,z0:z,x1:x,z1:z,t0:0,t1:0,...rest(0),speed:0});time=legs[0].end;
  function addLeg(){
@@ -79,6 +79,8 @@ export function roamPlan(action,place,seed){
   let lo=0,hi=legs.length-1;while(lo<hi){const mid=(lo+hi+1)>>1;if(legs[mid].t0<=seconds)lo=mid;else hi=mid-1;}
   const leg=legs[lo];
   if(seconds<leg.t1){const p=(seconds-leg.t0)/(leg.t1-leg.t0);return{x:leg.x0+(leg.x1-leg.x0)*p,z:leg.z0+(leg.z1-leg.z0)*p,heading:Math.atan2(leg.x1-leg.x0,leg.z1-leg.z0),clip:leg.speed>=RUN_SPEED?'run':kind.device?'walk-texting':'walk',moving:true};}
+  // He pulls his tablet out once, at the start; after that each stop picks up the two-handed part of the clip.
+  if(leg.clip==='tablet-stand'){const c=CLIPS['tablet-stand'],k=seconds-leg.t1,loop=c.duration-c.held;return{x:leg.x1,z:leg.z1,heading:null,clip:leg.clip,moving:false,time:lo===0&&k<c.duration?k:c.held+(lo===0?k-c.duration:k)%loop};}
   return{x:leg.x1,z:leg.z1,heading:leg.facing??null,clip:leg.clip==='jump'&&seconds-leg.t1>=CLIPS.jump.duration?'idle':leg.clip,moving:false,time:seconds-leg.t1};
  }};
 }

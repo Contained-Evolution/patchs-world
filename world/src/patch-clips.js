@@ -25,7 +25,9 @@ export const CLIPS = {
  'sit-to-type':{label:'Sit to type',group:'Devices',duration:29/24,use:'Reaching for the keys at the coconut computer'},
  typing:{label:'Typing',group:'Devices',duration:396/24,use:'Answering letters, searching and writing at the coconut computer'},
  'type-to-sit':{label:'Type to sit',group:'Devices',duration:23/24,use:'Sitting back from the coconut computer'},
- texting:{label:'Texting',group:'Devices',duration:445/24,use:'Standing with his tablet: looking things up and writing his journal'},
+ texting:{label:'Texting',group:'Devices',duration:445/24,use:'Phone-style texting with one hand; in the locker only'},
+ // His hand brings the tablet up at `out` seconds and both hands hold it from `held`; the rest loops.
+ 'tablet-stand':{label:'Texting while standing',group:'Devices',duration:566/24,out:42/24,held:53/24,use:'Pulling out his tablet, then reading and writing on it standing up'},
  'walk-texting':{label:'Walking while texting',group:'Devices',duration:96/24,use:'Wandering about with his tablet in both hands'},
  swim:{label:'Swim',group:'Water',duration:109/24,use:'Swimming in the pond'},
  tread:{label:'Tread water',group:'Water',duration:72/24,use:'Treading water'},

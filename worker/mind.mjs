@@ -52,7 +52,7 @@ export async function think(env, messages, tier, maxTokens, extra = {}) {
   const result = await response.json();
   const text = result.choices?.[0]?.message?.content || '';
   const sources = (result.choices?.[0]?.message?.annotations || []).filter(note => note?.type === 'url_citation' && /^https:\/\//.test(note.url_citation?.url || ''))
-    .map(note => ({ title: clean(note.url_citation.title, 120) || new URL(note.url_citation.url).hostname, url: note.url_citation.url }));
+    .map(note => ({ title: clean(note.url_citation.title, 120) || new URL(note.url_citation.url).hostname, url: note.url_citation.url, content: clean(note.url_citation.content, 400) }));
   return { reply: parseJson(text), cost: Number(result.usage?.cost) || 0, model: result.model, sources };
 }
 
@@ -142,6 +142,8 @@ function devicesLine(mind, now, mail) {
   if (mail) lines.push(`Ping! Your tablet says ${mail === 1 ? 'a letter is' : `${mail} letters are`} waiting for you at the coconut computer.`);
   const last = (mind.searches || []).slice(-3).filter(entry => entry.learned).map(entry => `- "${entry.query}": ${entry.learned}`);
   if (last.length) lines.push(`Things you looked up lately:\n${last.join('\n')}`);
+  const closed = (mind.closedSites || []).slice(-10);
+  if (closed.length) lines.push(`Websites you closed because they weren't okay, and won't go back to: ${closed.join(', ')}.`);
   return lines.join('\n');
 }
 
@@ -197,7 +199,9 @@ function rememberMemory(memories, categories, raw, now, place = []) {
     const custom = categories[category] ||= { title: clean(raw.category, 40) || 'Island', subcategories: [] };
     if (!custom.subcategories.includes(subcategory)) custom.subcategories.push(subcategory);
   }
-  const memory = { id: `island-${now}`, category, subcategory, title, text, age: 5, people: [], feeling: clean(raw.feeling, 20) || 'curious', strength: strengthOf(raw.strength), tags: normalTags([...(Array.isArray(raw.tags) ? raw.tags : []), ...place]), source: 'island', at: now };
+  // Several memories can be made in one wake, so the id also counts what came before.
+  const id = memories.some(memory => memory.id === `island-${now}`) ? `island-${now}-${memories.length}` : `island-${now}`;
+  const memory = { id, category, subcategory, title, text, age: 5, people: [], feeling: clean(raw.feeling, 20) || 'curious', strength: strengthOf(raw.strength), tags: normalTags([...(Array.isArray(raw.tags) ? raw.tags : []), ...place]), source: 'island', at: now };
   memories.push(memory);
   return memory;
 }
@@ -280,16 +284,24 @@ ${DIARY_ASK}` }], 'quality', 3000);
   return { date: today, title, text, model, at: now, kind: 'evening' };
 }
 
-// Domains his searches never visit. Every search result also passes the same filter as visitors' letters.
-const NOT_FOR_KIDS = ['pornhub.com', 'xvideos.com', 'xnxx.com', 'xhamster.com', 'onlyfans.com', 'redtube.com', 'youporn.com', 'chaturbate.com', 'rule34.xxx', '4chan.org', 'reddit.com', 'liveleak.com', 'bestgore.com'];
+// He can look up anything. Adult and gore sites are never searched, nor any site he closed before;
+// each page is checked as he reads it, and an inappropriate one is closed and its site avoided from then on.
+const ADULT_SITES = ['pornhub.com', 'xvideos.com', 'xnxx.com', 'xhamster.com', 'onlyfans.com', 'redtube.com', 'youporn.com', 'chaturbate.com', 'rule34.xxx', 'e-hentai.org', 'nhentai.net', 'bestgore.com', 'liveleak.com'];
 const FORGET_WANT = 3 * 60 * MINUTE;
+export function siteOf(url) { try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return null; } }
+// Adds the sites of these pages to the ones he won't go back to. Returns the sites.
+function closeSites(mind, urls) {
+  const sites = urls.map(siteOf).filter(Boolean);
+  mind.closedSites = [...new Set([...(mind.closedSites || []), ...sites])].slice(-100);
+  return sites;
+}
 
-const RESEARCH_ASK = query => `You are on the internet, looking up: "${query}". Read what the search found and tell what you learned, as Patch.
-Only use what the web results say; if they are grown-up, scary or not right for a kid, say you closed that page and set "kidSafe" to false.
+const RESEARCH_ASK = query => `You are on the internet, looking up: "${query}". You can look up anything in the real world: sports, news, politics, science, history, faraway places, how things work.
+Read what the search found and tell what you learned, as Patch. Serious or sad news is okay to read about. If a page is inappropriate (naked or sexy stuff, gory pictures, hateful words), close it, put its web address in "closed", and don't use it.
 Reply with only a JSON object:
 {
-  "learned": "what you learned, 1-4 short sentences in your own voice",
-  "kidSafe": true or false,
+  "learned": "what you learned, 1-4 short sentences in your own voice, or null if nothing was okay to read",
+  "closed": [web addresses of pages you closed],
   "remember": null or { "category": "a memory category", "subcategory": "a smaller group", "title": "a few words", "text": "the memory in your words", "feeling": "one word", "strength": 1 to 5, "tags": ["2-8 short words"] },
   "newWords": []
 }`;
@@ -313,13 +325,18 @@ export async function research(env, { body, mind, memories, categories }, now) {
   const { reply, cost, model, sources } = await think(env, [systemMessage(), { role: 'user', content: `${dayNotes(body, mind, memories, now, recalled)}
 
 ${RESEARCH_ASK(want.query)}` }], 'everyday', 1500,
-    { plugins: [{ id: 'web', engine: 'exa', max_results: 5, exclude_domains: NOT_FOR_KIDS }] });
+    { plugins: [{ id: 'web', engine: 'exa', max_results: 5, exclude_domains: [...ADULT_SITES, ...(mind.closedSites || [])] }] });
   spend(mind, cost, now);
-  let learned = clean(reply.learned, 600), shown = sources.slice(0, 5), note = null;
-  // Safe search: his own kid check while reading, then the site's filter over what he learned and where from.
-  const check = learned && reply.kidSafe !== false ? await moderate(env, [want.query, learned, ...shown.map(source => source.title)].join('\n')) : { allowed: false, cost: 0 };
+  let learned = clean(reply.learned, 600), shown = sources.filter(source => !(mind.closedSites || []).includes(siteOf(source.url))).slice(0, 5);
+  // Pages he closed himself, then the page check over everything he read and learned.
+  const named = new Set((Array.isArray(reply.closed) ? reply.closed : []).map(url => siteOf(String(url))).filter(Boolean));
+  const closed = new Set(closeSites(mind, shown.filter(source => named.has(siteOf(source.url))).map(source => source.url)));
+  const check = learned || shown.length ? await checkPages(env, want.query, learned, shown) : { close: [], learnedOk: false, cost: 0 };
   spend(mind, check.cost, now);
-  if (!check.allowed) { learned = null; shown = []; note = 'Closed: not right for kids.'; }
+  for (const site of closeSites(mind, check.close.map(index => shown[index - 1]?.url).filter(Boolean))) closed.add(site);
+  shown = shown.filter(source => !closed.has(siteOf(source.url))).map(({ title, url }) => ({ title, url }));
+  if (!check.learnedOk) learned = null;
+  const note = closed.size ? `Closed ${[...closed].join(', ')}, and won't go back.` : null;
   const entry = { at: now, query: want.query, where, learned, sources: shown, note, model };
   mind.searches = [...(mind.searches || []), entry].slice(-30);
   if (learned) {
@@ -356,7 +373,7 @@ export async function writeJournal(env, { body, mind, memories, categories }, no
 
 ${JOURNAL_ASK(want.about, mine)}` }], 'quality', 3000);
   spend(mind, cost, now);
-  (Array.isArray(reply.memories) ? reply.memories : []).slice(0, 2).forEach((raw, i) => rememberMemory(memories, categories, raw, now + i, ['writing']));
+  for (const raw of (Array.isArray(reply.memories) ? reply.memories : []).slice(0, 2)) rememberMemory(memories, categories, raw, now, ['writing']);
   for (const raw of (Array.isArray(reply.revise) ? reply.revise : []).slice(0, 2)) reviseMemory(memories, categories, raw, now);
   learnWords(mind, reply.newWords, now);
   const title = clean(reply.journal?.title, 80), text = clean(reply.journal?.text, 2000);
@@ -409,6 +426,19 @@ export async function answerLetters(env, { body, mind, memories }, letters, peop
   return (Array.isArray(reply.replies) ? reply.replies : [])
     .filter(entry => ids.has(entry?.id) && clean(entry.reply, 1200))
     .map(entry => ({ id: entry.id, reply: clean(entry.reply, 1200), note: clean(entry.note, 160), model }));
+}
+
+const PAGES_ASK = `You check web pages that Patch, a curious young monkey character, read while searching the internet.
+He may look up anything in the real world: sports, news, politics and elections, wars and crime reported as news, history, religion, science, health, money.
+Those are fine, even when serious or sad. A page is inappropriate only if it has sexual or explicit content, graphic gore, hate speech or slurs,
+encouragement of self-harm, or step-by-step instructions for weapons, drugs or crime.
+Reply with only a JSON object: { "close": [the numbers of inappropriate pages], "learnedOk": true unless what he learned is itself inappropriate }`;
+
+// The page check for his searches. Returns { close: [page numbers], learnedOk, cost }.
+export async function checkPages(env, query, learned, pages) {
+  const list = pages.map((page, i) => `${i + 1}. ${page.title} (${page.url})${page.content ? `\n   ${page.content}` : ''}`).join('\n');
+  const { reply, cost } = await think(env, [{ role: 'system', content: PAGES_ASK }, { role: 'user', content: `He searched: "${query}"\nWhat he learned: ${learned ? `"${learned}"` : 'nothing'}\nPages:\n${list || '(none)'}` }], 'everyday', 400);
+  return { close: (Array.isArray(reply.close) ? reply.close : []).map(Number).filter(Number.isInteger), learnedOk: reply.learnedOk !== false && !!learned, cost };
 }
 
 const MODERATE_ASK = `You check messages for a family-friendly website where adults write to Patch, a cartoon monkey character.

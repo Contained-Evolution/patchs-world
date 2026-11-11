@@ -1,7 +1,7 @@
 // Patch's World Worker, reached through the company website service binding.
 
 import { DurableObject } from 'cloudflare:workers';
-import { advance, newBody, view, didSince } from './body.mjs';
+import { advance, newBody, view, didSince, localMinutes } from './body.mjs';
 import { ponder, writeDiary, answerLetters, research, writeJournal, moderate, spend, overBudget, localDate, nextWake, allMemories, webLeft, MONTHLY_BUDGET } from './mind.mjs';
 import { visitor, SIGN_IN } from './accounts.mjs';
 import { LIMITS, cleanText, freshLimits, checkLetter, checkPost, countLetter, countPost, pickLetters, postKey } from './letters.mjs';
@@ -27,8 +27,8 @@ async function readText(request) {
 }
 
 const MINUTE = 60000;
-// Journal entries sort by when he wrote them: his tablet entries through the day and the evening diary.
-const diaryKey = entry => `diary:${entry.date}T${new Date(entry.at).toISOString().slice(11, 16)}`;
+// Journal entries sort by when he wrote them, in his own time: his tablet entries through the day and the evening diary.
+const diaryKey = entry => { const m = localMinutes(entry.at); return `diary:${entry.date}T${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; };
 
 const newId = now => `${now.toString(36)}${crypto.getRandomValues(new Uint32Array(1))[0].toString(36)}`;
 
@@ -67,9 +67,6 @@ export class PatchWorld extends DurableObject {
     let body = await this.ctx.storage.get('body');
     let changed = false;
     if (!body) { body = newBody(now, now & 0xffffffff); changed = true; }
-    // He gave up his phone for the coconut computer and his tablet.
-    if (body.activity.action === 'phone') { body.activity.action = 'think'; changed = true; }
-    if (body.queued?.action === 'phone') { body.queued = null; changed = true; }
     if (advance(body, now)) changed = true;
     if (changed) await this.ctx.storage.put('body', body);
     return body;
@@ -139,7 +136,7 @@ export class PatchWorld extends DurableObject {
       decisions: (mind.decisions || []).slice(-20).reverse().map(({ at, ...rest }) => ({ at: new Date(at).toISOString(), ...rest })),
       diary: diary.map(({ date, title, text, at, kind }) => ({ date, title, text, at: at ? new Date(at).toISOString() : null, kind: kind || 'evening' })),
       searches: (mind.searches || []).slice(-20).reverse().map(({ at, query, where, learned, sources, note }) => ({ at: new Date(at).toISOString(), query, where, learned, sources, note })),
-      internet: { minutesLeft: webLeft(mind, Date.now()) },
+      internet: { minutesLeft: webLeft(mind, Date.now()), closedSites: mind.closedSites || [] },
       words: (mind.words || []).map(({ word, meaning, from, at }) => ({ word, meaning, from, at: new Date(at).toISOString() })),
       budget: { month: mind.spend?.month || null, spent: Math.round((mind.spend?.total || 0) * 10000) / 10000, limit: MONTHLY_BUDGET },
       lastError: mind.lastError && mind.lastError.at > (mind.lastWake || 0) ? { at: new Date(mind.lastError.at).toISOString(), message: mind.lastError.message } : null,

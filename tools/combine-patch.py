@@ -12,7 +12,7 @@ CLIPS = {'Breathing Idle': 'idle', 'Walking': 'walk', 'Running': 'run', 'Hanging
          'Braced Hang Shimmy left': 'braced-shimmy-left', 'Braced Hang Shimmy right': 'braced-shimmy-right',
          'Braced Hang Hop Up': 'braced-hop-up', 'Braced Hang Drop': 'braced-drop',
          'Sitting Idle': 'sit-ground', 'Typing': 'typing', 'Sit To Type': 'sit-to-type', 'Type To Sit': 'type-to-sit',
-         'Texting': 'texting', 'Walking While Texting': 'walk-texting',
+         'Texting': 'texting', 'Walking While Texting': 'walk-texting', 'Texting While Standing': 'tablet-stand',
          'Climbing To Top': 'climb-top', 'Yawn': 'yawn', 'Jumping Down': 'jump-down', 'Jump': 'jump',
          'Opening A Lid': 'open-lid', 'Falling': 'fall', 'Picking Up': 'pick-up',
          'Walking carry box': 'carry-walk', 'running carry box': 'carry-run',

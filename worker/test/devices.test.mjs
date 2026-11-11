@@ -50,42 +50,70 @@ test('he knows whether he was at the computer since he last thought', () => {
   assert.equal(didSince(w.body, at(9), { place: 'computer' }), false);
 });
 
-test('a search waits until he is on his tablet, reads the web safely, and uses up internet minutes', async () => {
+test('a search waits until he is on his tablet, can be about anything, and uses up internet minutes', async () => {
   const calls = fakeOpenRouter(
-    { thought: 'How do crabs breathe?', plan: { do: 'research', where: 'meadow', minutes: 15, search: 'how do crabs breathe' } },
-    { learned: 'Crabs breathe with gills, and they keep them wet!', kidSafe: true, remember: null, newWords: [{ word: 'gills', meaning: 'how fish and crabs breathe', from: 'the internet' }],
-      annotations: [{ type: 'url_citation', url_citation: { url: 'https://kids.example.org/crabs', title: 'Crab facts' } }, { type: 'url_citation', url_citation: { url: 'javascript:alert(1)', title: 'bad' } }] },
-    { allowed: true, reason: null },
+    { thought: 'Who won the World Cup?', plan: { do: 'research', where: 'meadow', minutes: 15, search: 'who won the last World Cup' } },
+    { learned: 'A team won the World Cup and everyone cheered!', closed: [], remember: null, newWords: [{ word: 'tournament', meaning: 'lots of games to find the best team', from: 'the internet' }],
+      annotations: [{ type: 'url_citation', url_citation: { url: 'https://www.sports.example.com/cup', title: 'World Cup final', content: 'The final was played...' } }, { type: 'url_citation', url_citation: { url: 'javascript:alert(1)', title: 'bad' } }] },
+    { close: [], learnedOk: true },
   );
   const w = world(at(10));
   await ponder(env, w, at(10));
-  assert.equal(w.mind.wantSearch.query, 'how do crabs breathe');
+  assert.equal(w.mind.wantSearch.query, 'who won the last World Cup');
   // Still walking to the meadow: nothing yet.
   assert.equal(await research(env, w, at(10, 1)), null);
   assert.equal(calls.length, 1);
   hereAt(w, 'research', 'meadow', at(10, 20));
   const entry = await research(env, w, at(10, 25));
   assert.equal(entry.where, 'tablet');
-  assert.equal(entry.learned, 'Crabs breathe with gills, and they keep them wet!');
-  assert.deepEqual(entry.sources, [{ title: 'Crab facts', url: 'https://kids.example.org/crabs' }]);
+  assert.equal(entry.learned, 'A team won the World Cup and everyone cheered!');
+  assert.deepEqual(entry.sources, [{ title: 'World Cup final', url: 'https://www.sports.example.com/cup' }]);
+  assert.equal(entry.note, null);
   assert.equal(calls[1].plugins[0].id, 'web');
   assert.ok(calls[1].plugins[0].exclude_domains.includes('pornhub.com'));
-  assert.match(calls[2].messages[1].content, /Crab facts/);
-  assert.equal(w.mind.words[0].word, 'gills');
+  assert.match(calls[1].messages[1].content, /sports, news, politics/);
+  // The page check allows real-world topics and sees each page.
+  assert.match(calls[2].messages[0].content, /politics and elections/);
+  assert.match(calls[2].messages[1].content, /1\. World Cup final \(https:\/\/www\.sports\.example\.com\/cup\)\n   The final was played/);
+  assert.equal(w.mind.words[0].word, 'tournament');
   assert.equal(webLeft(w.mind, at(10, 25)), WEB_MINUTES - SEARCH_MINUTES);
   assert.equal(w.mind.wantSearch, null);
 });
 
-test('a search the filter blocks is closed, and an empty allowance stops searching', async () => {
-  fakeOpenRouter({ learned: 'Something grown-up.', kidSafe: true }, { allowed: false, reason: 'no' });
+test('inappropriate pages are closed, kept out of what he learned, and their sites are never searched again', async () => {
+  const pages = [
+    { type: 'url_citation', url_citation: { url: 'https://news.example.com/election', title: 'Election results' } },
+    { type: 'url_citation', url_citation: { url: 'https://www.bad.example.net/x', title: 'Something explicit' } },
+    { type: 'url_citation', url_citation: { url: 'https://gory.example.org/y', title: 'Gore' } },
+  ];
+  // He closes one page himself; the page check closes another.
+  let calls = fakeOpenRouter({ learned: 'People voted for a new leader.', closed: ['https://www.bad.example.net/x', 'https://not-in-results.example.com'], annotations: pages }, { close: [3], learnedOk: true });
   const w = world(at(10));
   hereAt(w, 'computer', 'computer', at(10));
+  w.mind.wantSearch = { query: 'election results', at: at(10) };
+  const entry = await research(env, w, at(10, 5));
+  assert.equal(entry.where, 'computer');
+  assert.equal(entry.learned, 'People voted for a new leader.');
+  assert.deepEqual(entry.sources.map(source => source.title), ['Election results']);
+  assert.deepEqual(w.mind.closedSites, ['bad.example.net', 'gory.example.org']);
+  assert.match(entry.note, /Closed bad\.example\.net, gory\.example\.org, and won't go back/);
+  // Next time: those sites are excluded from the search, and he's reminded of them.
+  calls = fakeOpenRouter({ thought: 'More news.' }, { learned: 'x', closed: [], annotations: [] }, { close: [], learnedOk: true });
+  await ponder(env, w, at(10, 10));
+  assert.match(calls[0].messages[1].content, /won't go back to: bad\.example\.net, gory\.example\.org/);
+  w.mind.wantSearch = { query: 'more news', at: at(10, 10) };
+  await research(env, w, at(10, 15));
+  assert.ok(calls[1].plugins[0].exclude_domains.includes('gory.example.org'));
+});
+
+test('what he learned is dropped when it is itself inappropriate, and an empty allowance stops searching', async () => {
+  fakeOpenRouter({ learned: 'Something explicit.', closed: [] }, { close: [], learnedOk: false });
+  const w = world(at(10));
+  hereAt(w, 'research', 'beach', at(10));
   w.mind.wantSearch = { query: 'something odd', at: at(10) };
-  const blocked = await research(env, w, at(10, 5));
-  assert.equal(blocked.where, 'computer');
-  assert.equal(blocked.learned, null);
-  assert.deepEqual(blocked.sources, []);
-  assert.match(blocked.note, /not right for kids/);
+  const dropped = await research(env, w, at(10, 5));
+  assert.equal(dropped.learned, null);
+  assert.equal(w.mind.thoughts, undefined);
   const calls = fakeOpenRouter({ learned: 'x' });
   w.mind.web = { day: '2026-06-01', minutes: WEB_MINUTES };
   w.mind.wantSearch = { query: 'more', at: at(10) };
@@ -116,4 +144,17 @@ test('on his tablet he writes his own journal, adds memories and rewrites island
   assert.equal(w.memories[1].category, 'ocean-friends');
   assert.equal(w.mind.wantWrite, null);
   assert.equal(await writeJournal(env, w, at(15, 20)), null);
+});
+
+test('memories made in the same wake each get their own id', async () => {
+  fakeOpenRouter(
+    { thought: 'Crabs!', plan: { do: 'research', where: 'beach', minutes: 15, search: 'crabs' }, remember: { title: 'A crab', text: 'A crab waved at me.', tags: ['crab'] } },
+    { learned: 'Crabs have ten legs.', closed: [], remember: { title: 'Ten legs', text: 'Crabs have ten legs!', tags: ['crab'] } },
+    { close: [], learnedOk: true },
+  );
+  const w = world(at(10));
+  await ponder(env, w, at(10));
+  await research(env, w, at(10));
+  assert.equal(w.memories.length, 2);
+  assert.notEqual(w.memories[0].id, w.memories[1].id);
 });
