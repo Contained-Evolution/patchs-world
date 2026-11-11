@@ -7,7 +7,7 @@ await mkdir('dist', { recursive: true });
 await build({ entryPoints: ['src/main.js'], bundle: true, format: 'esm', minify: true, outfile: 'dist/main.js', sourcemap: true });
 await build({ entryPoints: ['src/community-page.js'], bundle: true, format: 'esm', outfile: 'dist/community-page.js' });
 await build({ entryPoints: ['src/memory-galaxy.js'], bundle: true, format: 'esm', minify: true, outfile: 'dist/memory-galaxy.js' });
-for (const name of ['memory.html', 'memory.css', 'index.html', 'community.html', 'community.css', 'style.css', 'Pangolin-Regular.ttf', 'manifest.webmanifest']) await copyFile(name, `dist/${name}`);
+for (const name of ['journal.html', 'journal.js', 'gifts.html', 'gifts.js', 'visits.css', 'memory.html', 'memory.css', 'index.html', 'community.html', 'community.css', 'style.css', 'Pangolin-Regular.ttf', 'manifest.webmanifest']) await copyFile(name, `dist/${name}`);
 await cp('assets', 'dist/assets', { recursive: true });
 await cp('icons', 'dist/icons', { recursive: true });
 // The service worker caches every built file except source maps, keyed by content so a deploy only re-downloads what changed.

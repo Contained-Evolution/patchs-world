@@ -90,4 +90,4 @@ export function addDevice(devices = [], subscription, { letters, journal } = {},
 
 const excerpt = value => { const line = String(value || '').replace(/\s+/g, ' ').trim(); return line.length > 140 ? `${line.slice(0, 139)}…` : line; };
 export const replyNote = reply => ({ title: 'Patch wrote back', body: excerpt(reply), url: '/patch/?view=letters', tag: 'patch-letter' });
-export const journalNote = entry => ({ title: 'Patch wrote in his journal', body: excerpt(entry.title ? `${entry.title}: ${entry.text}` : entry.text), url: '/patch/', tag: 'patch-journal' });
+export const journalNote = entry => ({ title: 'Patch wrote in his journal', body: excerpt(entry.title ? `${entry.title}: ${entry.text}` : entry.text), url: '/patch/journal.html', tag: 'patch-journal' });

@@ -1,0 +1,37 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { ballWear, giftView, useGift } from '../gifts.mjs';
+
+const day = 86_400_000;
+const now = Date.UTC(2026, 10, 11, 14);
+const camp = () => ({ activity: { place: 'computer' }, needs: { hunger: 0.4, fun: 0.4 } });
+
+test('the banana waits until Patch chooses to eat it at camp', () => {
+  const gifts = { meal: { day: '2026-11-11', status: 'waiting' } };
+  assert.equal(useGift(gifts, 'eat', { activity: { place: 'beach' } }, now), false);
+  const body = camp();
+  assert.ok(useGift(gifts, 'eat', body, now));
+  assert.equal(body.needs.hunger, 0.64);
+  assert.equal(useGift(gifts, 'eat', body, now), false);
+  assert.equal(giftView(gifts, '2026-11-11', now).canSendMeal, false);
+  assert.equal(giftView(gifts, '2026-11-12', now + day).canSendMeal, true);
+});
+
+test('the same ball wears down, gives less fun, and stays until Patch chooses a replacement', () => {
+  const gifts = { offer: { status: 'waiting' } };
+  assert.ok(useGift(gifts, 'keep', camp(), now));
+  const old = gifts.ball;
+  const fresh = camp(), worn = camp();
+  assert.ok(useGift(gifts, 'play', fresh, now));
+  assert.ok(useGift(gifts, 'play', worn, now + 30 * day));
+  assert.ok(fresh.needs.fun > worn.needs.fun);
+  assert.equal(ballWear(old, now + 90 * day), 1);
+  assert.equal(gifts.ball, old);
+  gifts.offer = { status: 'waiting' };
+  assert.ok(useGift(gifts, 'keep', camp(), now + 31 * day));
+  assert.equal(gifts.ball, old);
+  gifts.offer = { status: 'waiting' };
+  assert.ok(useGift(gifts, 'replace', camp(), now + 32 * day));
+  assert.notEqual(gifts.ball, old);
+  assert.equal(ballWear(gifts.ball, now + 32 * day), 0);
+});

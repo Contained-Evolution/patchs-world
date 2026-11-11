@@ -2,7 +2,8 @@
 
 import { DurableObject } from 'cloudflare:workers';
 import { advance, newBody, view, didSince, localMinutes } from './body.mjs';
-import { ponder, writeDiary, answerLetters, research, writeJournal, moderate, spend, overBudget, localDate, nextWake, allMemories, webLeft, MONTHLY_BUDGET } from './mind.mjs';
+import { ponder, writeDiary, answerLetters, research, writeJournal, moderate, spend, overBudget, localDate, nextWake, allMemories, internetStatus } from './mind.mjs';
+import { giftView, useGift } from './gifts.mjs';
 import { visitor, SIGN_IN } from './accounts.mjs';
 import { LIMITS, cleanText, freshLimits, checkLetter, checkPost, countLetter, countPost, pickLetters, postKey } from './letters.mjs';
 import { STARTING_CATEGORIES } from '../shared/memory.js';
@@ -17,8 +18,8 @@ const headers = {
 
 const json = (body, status = 200) => Response.json(body, { status, headers: { ...headers, 'cache-control': 'no-store' } });
 
-const publicLetter = ({ id, text, at, reply, repliedAt }) => ({
-  id, text, at: new Date(at).toISOString(), reply, repliedAt: repliedAt ? new Date(repliedAt).toISOString() : null,
+const publicLetter = ({ id, text, at, reply, repliedAt, lookup, acceptedLookup }) => ({
+  id, text, lookup: Boolean(lookup), acceptedLookup: Boolean(acceptedLookup), at: new Date(at).toISOString(), reply, repliedAt: repliedAt ? new Date(repliedAt).toISOString() : null,
 });
 
 async function readJson(request) {
@@ -30,7 +31,7 @@ const readText = async request => (await readJson(request))?.text;
 
 const MINUTE = 60000;
 // Journal entries sort by when he wrote them, in his own time: his tablet entries through the day and the evening diary.
-const diaryKey = entry => { const m = localMinutes(entry.at); return `diary:${entry.date}T${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; };
+const diaryKey = entry => { const m = localMinutes(entry.at); return `diary:${entry.date}T${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}:${entry.at}`; };
 
 const newId = now => `${now.toString(36)}${crypto.getRandomValues(new Uint32Array(1))[0].toString(36)}`;
 
@@ -86,14 +87,31 @@ export class PatchWorld extends DurableObject {
     const body = await this.body(now);
     const stored = await this.ctx.storage.get(['mind', 'memories', 'categories', 'unread', 'people']);
     const world = { body, mind: stored.get('mind') || {}, memories: stored.get('memories') || [], categories: stored.get('categories') || {} };
+    if (now - world.mind.lookup?.at > 7 * 86_400_000) world.mind.lookup = null;
+    world.mind.searchSpend = await this.ctx.storage.get('searchSpend');
+    world.saveSearchSpend = ledger => this.ctx.storage.put('searchSpend', ledger);
+    const selectedGifts = await this.ctx.storage.transaction(async txn => {
+      const queue = await txn.get('campGifts') || [];
+      const selected = queue.slice(0, 12);
+      if (queue.length > 12) await txn.put('campGifts', [...queue.slice(12), ...selected]);
+      return selected;
+    });
+    world.mind.gifts = selectedGifts.length ? [...(await this.ctx.storage.get(selectedGifts.map(id => `gift:${id}`))).values()] : [];
     const startSpend = world.mind.spend?.total || 0;
     const people = stored.get('people') || {};
     const answered = [], replies = [], entries = [];
     const since = world.mind.lastWake || now - 60 * MINUTE;
     try {
       if (body.activity.action !== 'sleep') {
+        const previousSearch = world.mind.wantSearch && await research(this.env, world, now);
+        const giftBody = { activity: { ...body.activity }, needs: body.needs };
         await ponder(this.env, { ...world, mail: (stored.get('unread') || []).length }, now);
-        await research(this.env, world, now);
+        const gift = world.mind.gifts.find(item => item.id === world.mind.giftChoice?.id);
+        if (gift) {
+          const result = await this.applyGift(gift.id, world.mind.giftChoice.do, giftBody, now);
+          if (result) world.mind.thoughts = [...(world.mind.thoughts || []), { at: now, thought: result, says: null }].slice(-40);
+        }
+        if (!previousSearch) await research(this.env, world, now);
         const entry = await writeJournal(this.env, world, now);
         if (entry) { await this.ctx.storage.put(diaryKey(entry), entry); entries.push(entry); }
         // Letters are read and answered only at the coconut computer.
@@ -102,7 +120,9 @@ export class PatchWorld extends DurableObject {
         const letters = ids.length ? [...(await this.ctx.storage.get(ids.map(id => `letter:${id}`))).values()] : [];
         for (const reply of await answerLetters(this.env, world, pickLetters(letters, people), people, now)) {
           const letter = letters.find(item => item.id === reply.id);
-          Object.assign(letter, { reply: reply.reply, repliedAt: now });
+          const acceptedLookup = Boolean(letter.lookup && reply.acceptLookup && !world.mind.lookup);
+          if (acceptedLookup) world.mind.lookup = { query: letter.text, at: now };
+          Object.assign(letter, { reply: reply.reply, repliedAt: now, acceptedLookup });
           await this.ctx.storage.put(`letter:${letter.id}`, letter);
           const person = people[letter.from.id] ||= { name: letter.from.name, firstAt: now, notes: [] };
           person.name = letter.from.name;
@@ -122,9 +142,12 @@ export class PatchWorld extends DurableObject {
       console.error('Patch could not think:', error);
     }
     // New letters and filter costs may have arrived while he was thinking; keep them.
+    delete world.mind.gifts;
+    delete world.mind.giftChoice;
+    delete world.mind.searchSpend;
     const latest = await this.ctx.storage.get(['mind', 'unread']);
     const latestMind = latest.get('mind');
-    const extra = latestMind?.spend?.month === world.mind.spend?.month ? (latestMind.spend.total || 0) - startSpend : 0;
+    const extra = latestMind?.spend && latestMind.spend.month === world.mind.spend?.month ? latestMind.spend.total - startSpend : 0;
     if (extra > 0) spend(world.mind, extra, now);
     const unread = (latest.get('unread') || []).filter(id => !answered.includes(id));
     await this.ctx.storage.put({ body: world.body, mind: world.mind, memories: world.memories, categories: world.categories, unread, people });
@@ -179,14 +202,10 @@ export class PatchWorld extends DurableObject {
     const mind = (await this.ctx.storage.get('mind')) || {};
     const diary = [...(await this.ctx.storage.list({ prefix: 'diary:', reverse: true, limit: 14 })).values()];
     return {
-      thoughts: (mind.thoughts || []).slice(-20).reverse().map(({ at, thought, says }) => ({ at: new Date(at).toISOString(), thought, says })),
-      decisions: (mind.decisions || []).slice(-20).reverse().map(({ at, ...rest }) => ({ at: new Date(at).toISOString(), ...rest })),
       diary: diary.map(({ date, title, text, at, kind }) => ({ date, title, text, at: at ? new Date(at).toISOString() : null, kind: kind || 'evening' })),
       searches: (mind.searches || []).slice(-20).reverse().map(({ at, query, where, learned, sources, note }) => ({ at: new Date(at).toISOString(), query, where, learned, sources, note })),
-      internet: { minutesLeft: webLeft(mind, Date.now()), closedSites: mind.closedSites || [] },
+      internet: { status: internetStatus(await this.ctx.storage.get('searchSpend'), Date.now()), closedSites: mind.closedSites || [] },
       words: (mind.words || []).map(({ word, meaning, from, at }) => ({ word, meaning, from, at: new Date(at).toISOString() })),
-      budget: { month: mind.spend?.month || null, spent: Math.round((mind.spend?.total || 0) * 10000) / 10000, limit: MONTHLY_BUDGET },
-      lastError: mind.lastError && mind.lastError.at > (mind.lastWake || 0) ? { at: new Date(mind.lastError.at).toISOString(), message: mind.lastError.message } : null,
     };
   }
 
@@ -217,8 +236,55 @@ export class PatchWorld extends DurableObject {
     return ((await this.ctx.storage.get('blocked')) || []).includes(who.id);
   }
 
+  async gifts(who) {
+    const now = Date.now();
+    const id = await this.ctx.storage.get(`gift-owner:${who.id}`);
+    return giftView(id && await this.ctx.storage.get(`gift:${id}`) || {}, localDate(now), now);
+  }
+
+  async sendGift(who, kind) {
+    const now = Date.now(), day = localDate(now);
+    if (await this.isBlocked(who)) return { status: 403, error: "You can't send gifts to Patch." };
+    if (kind !== 'meal' && kind !== 'ball') return { status: 400, error: 'Choose a banana or ball.' };
+    const result = await this.ctx.storage.transaction(async txn => {
+      const owner = `gift-owner:${who.id}`;
+      const id = await txn.get(owner) || newId(now);
+      const key = `gift:${id}`, gifts = await txn.get(key) || { id };
+      const queue = await txn.get('campGifts') || [];
+      if (kind === 'meal') {
+        if (!giftView(gifts, day, now).canSendMeal) return { status: 429, error: 'You can leave one banana a day, after Patch eats the last one.' };
+        gifts.meal = { day, status: 'waiting' };
+      } else {
+        if (gifts.offer?.status === 'waiting') return { status: 429, error: 'Your ball is already waiting for Patch.' };
+        if (!giftView(gifts, day, now).canSendBall) return { status: 429, error: 'You can offer a replacement when your ball is worn.' };
+        gifts.offer = { status: 'waiting' };
+      }
+      await txn.put({ [owner]: id, [key]: gifts, campGifts: [id, ...queue.filter(other => other !== id)] });
+      return { status: 201, ...giftView(gifts, day, now) };
+    });
+    if (result.status === 201) await this.ping(now);
+    return result;
+  }
+
+  async applyGift(id, action, body, now) {
+    const key = `gift:${id}`;
+    // Apply to a copy so storage transaction retries cannot increase needs twice.
+    const result = await this.ctx.storage.transaction(async txn => {
+      const gifts = await txn.get(key);
+      if (!gifts) return null;
+      const copy = { activity: body.activity, needs: { ...body.needs } };
+      const thought = useGift(gifts, action, copy, now);
+      if (!thought) return null;
+      await txn.put(key, gifts);
+      return { thought, needs: copy.needs };
+    });
+    if (result) Object.assign(body.needs, result.needs);
+    return result?.thought;
+  }
+
   async sendLetter(who, raw) {
-    const now = Date.now(), text = cleanText(raw);
+    const now = Date.now(), text = cleanText(raw?.text), lookup = raw?.lookup === true;
+    if (lookup && (text.length > 120 || /https?:|www\.|[\r\n]/i.test(text))) return { status: 400, error: 'Write a lookup question of up to 120 characters without links.' };
     if (await this.isBlocked(who)) return { status: 403, error: "You can't write to Patch." };
     const problem = checkLetter(text, await this.limits(who, now), ((await this.ctx.storage.get('unread')) || []).length);
     if (problem) return { status: /a day|full/.test(problem) ? 429 : 400, error: problem };
@@ -226,7 +292,7 @@ export class PatchWorld extends DurableObject {
     try { refused = await this.filter(text, now); } catch { return { status: 503, error: "Patch can't get mail right now. Try again soon." }; }
     if (refused) return { status: 400, error: refused };
     const id = newId(now);
-    const letter = { id, from: { id: who.id, name: who.name }, text, at: now, reply: null, repliedAt: null };
+    const letter = { id, from: { id: who.id, name: who.name }, text, lookup, at: now, reply: null, repliedAt: null };
     const inbox = (await this.ctx.storage.get(`inbox:${who.id}`)) || [];
     const unread = (await this.ctx.storage.get('unread')) || [];
     const limits = countLetter(await this.limits(who, now), text);
@@ -332,7 +398,9 @@ async function visitorApi(request, env, url, path) {
   if (!who) return json({ error: 'Sign in to talk to Patch.', signIn: SIGN_IN }, 401);
   const send = ({ status, ...body }) => json(body, status);
   if (path === '/api/letters' && request.method === 'GET') return json({ letters: await patch.letters(who) });
-  if (path === '/api/letters' && request.method === 'POST') return send(await patch.sendLetter(who, await readText(request)));
+  if (path === '/api/letters' && request.method === 'POST') return send(await patch.sendLetter(who, await readJson(request)));
+  if (path === '/api/gifts' && request.method === 'GET') return json(await patch.gifts(who));
+  if (path === '/api/gifts' && request.method === 'POST') return send(await patch.sendGift(who, (await readJson(request))?.kind));
   if (path === '/api/board' && request.method === 'POST') return send(await patch.sendPost(who, await readText(request)));
   if (path === '/api/push' && request.method === 'GET') return json(await patch.devices(who));
   if (path === '/api/push' && request.method === 'POST') return send(await patch.savePush(who, await readJson(request)));
@@ -354,7 +422,7 @@ export default {
       const patch = patchOf(env);
       return json(path === '/api/state' ? await patch.state() : path === '/api/journal' ? await patch.journal() : await patch.memory());
     }
-    if (path === '/api/me' || path === '/api/letters' || path.startsWith('/api/board') || path.startsWith('/api/push')) return visitorApi(request, env, url, path);
+    if (path === '/api/me' || path === '/api/letters' || path === '/api/gifts' || path.startsWith('/api/board') || path.startsWith('/api/push')) return visitorApi(request, env, url, path);
     if (path.startsWith('/api/')) return json({ error: 'Not found.' }, 404);
 
     const assetUrl = new URL(path === '/' ? '/index.html' : path, url);

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { newBody, choose, didSince, view, ACTIVITIES } from '../body.mjs';
-import { ponder, research, writeJournal, webLeft, WEB_MINUTES, SEARCH_MINUTES, MODELS } from '../mind.mjs';
+import { ponder, research, writeJournal, internetStatus, DAILY_SEARCH_BUDGET, SEARCH_RESERVE, MODELS } from '../mind.mjs';
 
 // 2026-06-01 in New York (EDT).
 const at = (h, m = 0) => Date.UTC(2026, 5, 1, h + 4, m);
@@ -50,7 +50,7 @@ test('he knows whether he was at the computer since he last thought', () => {
   assert.equal(didSince(w.body, at(9), { place: 'computer' }), false);
 });
 
-test('a search waits until he is on his tablet, can be about anything, and uses up internet minutes', async () => {
+test('a search waits until he is on his tablet, can be about anything, and records the whole search cost', async () => {
   const calls = fakeOpenRouter(
     { thought: 'Who won the World Cup?', plan: { do: 'research', where: 'meadow', minutes: 15, search: 'who won the last World Cup' } },
     { learned: 'A team won the World Cup and everyone cheered!', closed: [], remember: null, newWords: [{ word: 'tournament', meaning: 'lots of games to find the best team', from: 'the internet' }],
@@ -76,7 +76,7 @@ test('a search waits until he is on his tablet, can be about anything, and uses 
   assert.match(calls[2].messages[0].content, /politics and elections/);
   assert.match(calls[2].messages[1].content, /1\. World Cup final \(https:\/\/www\.sports\.example\.com\/cup\)\n   The final was played/);
   assert.equal(w.mind.words[0].word, 'tournament');
-  assert.equal(webLeft(w.mind, at(10, 25)), WEB_MINUTES - SEARCH_MINUTES);
+  assert.deepEqual(w.mind.searchSpend, { day: "2026-06-01", spent: 0.002 });
   assert.equal(w.mind.wantSearch, null);
 });
 
@@ -115,10 +115,10 @@ test('what he learned is dropped when it is itself inappropriate, and an empty a
   assert.equal(dropped.learned, null);
   assert.equal(w.mind.thoughts, undefined);
   const calls = fakeOpenRouter({ learned: 'x' });
-  w.mind.web = { day: '2026-06-01', minutes: WEB_MINUTES };
+  w.mind.searchSpend = { day: '2026-06-01', spent: DAILY_SEARCH_BUDGET - SEARCH_RESERVE / 2 };
   w.mind.wantSearch = { query: 'more', at: at(10) };
   const out = await research(env, w, at(10, 6));
-  assert.match(out.note, /Out of internet minutes/);
+  assert.match(out.note, /Out of internet/);
   assert.equal(calls.length, 0);
 });
 
@@ -149,7 +149,7 @@ test('on his tablet he writes his own journal, adds memories and rewrites island
 test('memories made in the same wake each get their own id', async () => {
   fakeOpenRouter(
     { thought: 'Crabs!', plan: { do: 'research', where: 'beach', minutes: 15, search: 'crabs' }, remember: { title: 'A crab', text: 'A crab waved at me.', tags: ['crab'] } },
-    { learned: 'Crabs have ten legs.', closed: [], remember: { title: 'Ten legs', text: 'Crabs have ten legs!', tags: ['crab'] } },
+    { learned: 'Crabs have ten legs.', closed: [], annotations: [{ type: 'url_citation', url_citation: { url: 'https://example.org/crabs', title: 'Crabs' } }], remember: { title: 'Ten legs', text: 'Crabs have ten legs!', tags: ['crab'] } },
     { close: [], learnedOk: true },
   );
   const w = world(at(10));
@@ -157,4 +157,25 @@ test('memories made in the same wake each get their own id', async () => {
   await research(env, w, at(10));
   assert.equal(w.memories.length, 2);
   assert.notEqual(w.memories[0].id, w.memories[1].id);
+});
+
+test('the daily search warning omits dollars and resets at New York midnight', async () => {
+  const calls = fakeOpenRouter({ thought: 'Internet.' });
+  const w = world(at(10));
+  w.mind.searchSpend = { day: '2026-06-01', spent: 22.5 };
+  await ponder(env, w, at(10));
+  assert.match(calls[0].messages[1].content, /almost out of internet for today/);
+  assert.doesNotMatch(calls[0].messages[1].content, /22\.5|\$25/);
+  assert.equal(internetStatus(w.mind.searchSpend, at(24)), 'available');
+});
+
+test('a failed provider call leaves the search reservation on the ledger', async () => {
+  globalThis.fetch = async () => new Response('Unavailable', { status: 503 });
+  const w = world(at(10));
+  hereAt(w, 'research', 'beach', at(10));
+  w.mind.wantSearch = { query: 'hermit crabs', at: at(10) };
+  const ledger = [];
+  w.saveSearchSpend = async value => ledger.push(structuredClone(value));
+  await assert.rejects(research(env, w, at(10)), /OpenRouter 503/);
+  assert.deepEqual(ledger, [{ day: '2026-06-01', spent: SEARCH_RESERVE }]);
 });

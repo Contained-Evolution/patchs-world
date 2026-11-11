@@ -7,6 +7,7 @@ import { CHILDHOOD, PERSONA, LIFE_STORY } from './persona.mjs';
 import { perceive, nextWeather } from './senses.mjs';
 import { lightUp, recordRecall, normalTags, strengthOf, tagsIn, conceptGraph } from './memory-graph.mjs';
 import { CHOICES, WHERE, PLACES_KNOWN, TIME_ZONE, localMinutes, choose, travelMinutes, carrying, take, leave, didSince } from './body.mjs';
+import { giftNotes } from './gifts.mjs';
 import { STARTING_CATEGORIES } from '../shared/memory.js';
 
 // Main model first, backup second. OpenRouter falls back within the same request.
@@ -45,6 +46,7 @@ export async function think(env, messages, tier, maxTokens, extra = {}) {
       // Visitors' letters pass through here, so only hosts that don't keep or train on prompts.
       provider: { data_collection: 'deny' },
       usage: { include: true },
+      plugins: [{ id: 'web', enabled: false }],
       ...extra,
     }),
   });
@@ -53,7 +55,9 @@ export async function think(env, messages, tier, maxTokens, extra = {}) {
   const text = result.choices?.[0]?.message?.content || '';
   const sources = (result.choices?.[0]?.message?.annotations || []).filter(note => note?.type === 'url_citation' && /^https:\/\//.test(note.url_citation?.url || ''))
     .map(note => ({ title: clean(note.url_citation.title, 120) || new URL(note.url_citation.url).hostname, url: note.url_citation.url, content: clean(note.url_citation.content, 400) }));
-  return { reply: parseJson(text), cost: Number(result.usage?.cost) || 0, model: result.model, sources };
+  const cost = result.usage?.cost;
+  if (extra.provider?.max_price && (typeof cost !== 'number' || !Number.isFinite(cost) || cost < 0)) throw Error('Missing search billing data.');
+  return { reply: parseJson(text), cost: Number(cost) || 0, model: result.model, sources };
 }
 
 export function parseJson(text) {
@@ -135,10 +139,22 @@ Places, and minutes to get there from here: ${PLACES_KNOWN.map(place => `${place
 }
 
 // His tablet and the coconut computer: what they can do, how much internet time is left, and whether mail is waiting.
-export const WEB_MINUTES = 30, SEARCH_MINUTES = 5;
-export function webLeft(mind, now) { return mind.web?.day === localDate(now) ? Math.max(0, WEB_MINUTES - mind.web.minutes) : WEB_MINUTES; }
+export const DAILY_SEARCH_BUDGET = 25;
+// Covers one fixed-size search and its page check at the maximum routing prices.
+export const SEARCH_RESERVE = 0.5;
+const searchProvider = { data_collection: 'deny', max_price: { prompt: 10, completion: 50 } };
+export function internetStatus(ledger, now) {
+  const remaining = DAILY_SEARCH_BUDGET - (ledger?.day === localDate(now) ? ledger.spent : 0);
+  if (remaining < SEARCH_RESERVE) return 'closed';
+  return remaining <= DAILY_SEARCH_BUDGET * 0.1 ? 'low' : 'available';
+}
+
 function devicesLine(mind, now, mail) {
-  const lines = [`Your tablet goes everywhere with you: "research" looks something up on the internet and "write" lets you write in your journal and your memories, anywhere. Your coconut computer at camp can research too, and it is the only place you can read and answer letters. You have ${webLeft(mind, now)} minutes of internet left today (each search takes ${SEARCH_MINUTES}).`];
+  const lines = ['Your tablet goes everywhere with you. Choose "research" to look something up, or "write" to write in your journal. You can also research on your coconut computer at camp. You read and answer letters there.'];
+  const access = internetStatus(mind.searchSpend, now);
+  if (access === 'low') lines.push("You're almost out of internet for today.");
+  if (access === 'closed') lines.push("You're out of internet for today. It comes back tomorrow.");
+  if (mind.lookup) lines.push(`A visitor suggested a question you liked: ${JSON.stringify(mind.lookup.query)}. You can use that question as your next search.`);
   if (mail) lines.push(`Ping! Your tablet says ${mail === 1 ? 'a letter is' : `${mail} letters are`} waiting for you at the coconut computer.`);
   const last = (mind.searches || []).slice(-3).filter(entry => entry.learned).map(entry => `- "${entry.query}": ${entry.learned}`);
   if (last.length) lines.push(`Things you looked up lately:\n${last.join('\n')}`);
@@ -163,6 +179,7 @@ function dayNotes(body, mind, memories, now, recalled = [], mail = 0) {
     mind.problem ? `Last time you chose something you couldn't do: ${mind.problem}` : '',
     `How you feel: ${feelings(body.needs)}.`,
     devicesLine(mind, now, mail),
+    giftNotes(mind.gifts, now),
     log.length ? `What you did since you last stopped to think:\n${log.join('\n')}` : 'Nothing new since you last stopped to think.',
     cameToMind.length ? `What comes to mind right now:\n${cameToMind.join('\n')}` : '',
     newest.length ? `Your newest island memories:\n${newest.join('\n')}` : memories.length ? '' : 'You have no island memories yet. Everything is new.',
@@ -177,6 +194,7 @@ const THINK_ASK = `Stop and think for a moment, as Patch. You decide what you do
   "says": "something short you say out loud, or null",
   "plan": null to keep doing what you're doing, or { "do": "one thing you can do", "where": "a place", "minutes": how long, "how": "walk, run or swing (to the tall trees) to get there, or null", "why": "a few words", "search": "for research or computer: what you want to look up on the internet, or null", "about": "for write: what you want to write about in your journal or memories, or null" },
   "remember": null or { "category": "a memory category", "subcategory": "a smaller group", "title": "a few words", "text": "the memory in your words", "feeling": "one word", "strength": 1 to 5 (5 = you will never forget it), "tags": ["2-8 short words for the things, people, places and feelings in it"] },
+  "gift": null or { "id": "gift number from your notes", "do": "eat, keep, replace or play" },
   "take": [things from here to pick up and carry, up to 3; you can carry 6 things],
   "leave": [things you are carrying to put down here; they stay until you come back],
   "noticed": ["up to 6 short words for what you are noticing or thinking about right now"],
@@ -247,9 +265,13 @@ ${THINK_ASK}` }], 'everyday', 1500);
   if (place) { leave(body, reply.leave, now); take(body, reply.take, perceive(place, now).finds, now); }
   // His choice is what happens next. Waiting with nothing chosen means a little more thinking.
   const plan = reply.plan && typeof reply.plan === 'object' ? reply.plan : null;
+  mind.giftChoice = reply.gift || null;
   mind.problem = plan ? choose(body, plan, now) : null;
   // What he wants to look up or write about waits until he's actually on his tablet or at the computer.
-  if (plan && !mind.problem && ['research', 'computer'].includes(plan.do) && clean(plan.search, 120)) mind.wantSearch = { query: clean(plan.search, 120), at: now };
+  if (plan && !mind.problem && ['research', 'computer'].includes(plan.do) && clean(plan.search, 120)) {
+    const query = clean(plan.search, 120);
+    mind.wantSearch ||= { query, at: now };
+  }
   if (plan && !mind.problem && plan.do === 'write') mind.wantWrite = { about: clean(plan.about, 160), at: now };
   if (plan && !mind.problem) mind.decisions = [...(mind.decisions || []), { at: now, do: plan.do, where: body.activity.target || body.activity.place, minutes: body.queued?.minutes || Math.round((body.activity.end - body.activity.start) / MINUTE), why: clean(plan.why, 160) }].slice(-40);
   else if (body.activity.waiting) body.activity.end = Math.max(body.activity.end, now + 15 * MINUTE);
@@ -307,37 +329,42 @@ Reply with only a JSON object:
 }`;
 
 // One web search, on his tablet or at the coconut computer, once he's actually using them. Returns the entry or null.
-export async function research(env, { body, mind, memories, categories }, now) {
+export async function research(env, { body, mind, memories, categories, saveSearchSpend = async () => {} }, now) {
   const want = mind.wantSearch;
   if (!want) return null;
   if (!didSince(body, want.at, { actions: ['research', 'computer'] })) { if (now - want.at > FORGET_WANT) mind.wantSearch = null; return null; }
   mind.wantSearch = null;
   const where = didSince(body, want.at, { place: 'computer' }) ? 'computer' : 'tablet';
-  if (overBudget(mind, now)) return null;
-  if (webLeft(mind, now) < SEARCH_MINUTES) {
-    const entry = { at: now, query: want.query, where, learned: null, sources: [], note: 'Out of internet minutes for today.' };
+  if (internetStatus(mind.searchSpend, now) === 'closed') {
+    const entry = { at: now, query: want.query, where, learned: null, sources: [], note: 'Out of internet for today.' };
     mind.searches = [...(mind.searches || []), entry].slice(-30);
     return entry;
   }
   const day = localDate(now);
-  mind.web = { day, minutes: (mind.web?.day === day ? mind.web.minutes : 0) + SEARCH_MINUTES };
-  const recalled = comeToMind(mind, memories, ['learning', 'internet', ...tagsIn(want.query, conceptGraph(allMemories(memories)))], now, 4);
-  const { reply, cost, model, sources } = await think(env, [systemMessage(), { role: 'user', content: `${dayNotes(body, mind, memories, now, recalled)}
+  const spent = mind.searchSpend?.day === day ? mind.searchSpend.spent : 0;
+  mind.searchSpend = { day, spent: spent + SEARCH_RESERVE };
+  await saveSearchSpend(mind.searchSpend);
+  const entry = await runSearch(env, { body, mind, memories, categories }, now, want, where);
+  mind.searchSpend.spent = Math.round((spent + entry.cost) * 1e9) / 1e9;
+  await saveSearchSpend(mind.searchSpend);
+  if (mind.lookup?.query.toLowerCase() === want.query.toLowerCase()) mind.lookup = null;
+  return entry;
+}
 
-${RESEARCH_ASK(want.query)}` }], 'everyday', 1500,
-    { plugins: [{ id: 'web', engine: 'exa', max_results: 5, exclude_domains: [...ADULT_SITES, ...(mind.closedSites || [])] }] });
-  spend(mind, cost, now);
+async function runSearch(env, { body, mind, memories, categories }, now, want, where) {
+  const { reply, cost, model, sources } = await think(env, [systemMessage(), { role: 'user', content: RESEARCH_ASK(want.query) }], 'everyday', 1200,
+    { provider: searchProvider, plugins: [{ id: 'web', engine: 'exa', max_results: 5, exclude_domains: [...ADULT_SITES, ...(mind.closedSites || [])] }] });
   let learned = clean(reply.learned, 600), shown = sources.filter(source => !(mind.closedSites || []).includes(siteOf(source.url))).slice(0, 5);
   // Pages he closed himself, then the page check over everything he read and learned.
   const named = new Set((Array.isArray(reply.closed) ? reply.closed : []).map(url => siteOf(String(url))).filter(Boolean));
   const closed = new Set(closeSites(mind, shown.filter(source => named.has(siteOf(source.url))).map(source => source.url)));
   const check = learned || shown.length ? await checkPages(env, want.query, learned, shown) : { close: [], learnedOk: false, cost: 0 };
-  spend(mind, check.cost, now);
+  if (cost + check.cost > SEARCH_RESERVE) throw Error("Search exceeded its reserved cost.");
   for (const site of closeSites(mind, check.close.map(index => shown[index - 1]?.url).filter(Boolean))) closed.add(site);
   shown = shown.filter(source => !closed.has(siteOf(source.url))).map(({ title, url }) => ({ title, url }));
-  if (!check.learnedOk) learned = null;
-  const note = closed.size ? `Closed ${[...closed].join(', ')}, and won't go back.` : null;
-  const entry = { at: now, query: want.query, where, learned, sources: shown, note, model };
+  if (!check.learnedOk || !shown.length) learned = null;
+  const note = closed.size ? `Closed ${[...closed].join(', ')}, and won't go back.` : shown.length ? null : 'No usable sources turned up.';
+  const entry = { at: now, query: want.query, where, learned, sources: shown, note, model, cost: cost + check.cost };
   mind.searches = [...(mind.searches || []), entry].slice(-30);
   if (learned) {
     rememberMemory(memories, categories, reply.remember, now, ['internet', 'learning']);
@@ -358,6 +385,7 @@ Reply with only a JSON object:
   "revise": [up to 2 of your island memories to change, as { "id", and any of "title", "text", "category", "subcategory", "feeling", "strength", "tags" }],
   "newWords": []
 }
+When it fits, practice using a word you learned in a new sentence.
 Write only about things that really happened or that you really think and feel. Existing categories: ${Object.keys(STARTING_CATEGORIES).join(', ')}, island, or make your own.`;
 
 // He writes in his journal and memories on his tablet. Returns the journal entry, or null.
@@ -402,11 +430,11 @@ function reviseMemory(memories, categories, raw, now) {
 const LETTERS_ASK = `You are sitting at your coconut computer with letters from the audience. Read each one and type back, as Patch.
 Reply with only a JSON object:
 {
-  "replies": [ { "id": "the letter id", "reply": "your reply, 1-6 short sentences, warm and curious, in your own voice", "note": "one short thing to remember about this person, or null" } ],
+  "replies": [ { "id": "the letter id", "reply": "your reply, 1-6 short sentences, warm and curious, in your own voice", "note": "one short thing to remember about this person, or null", "acceptLookup": false } ],
   "newWords": []
 }
 Answer every letter listed. Be kind even if a letter is rude or strange. You choose whether to accept a challenge; say why.
-Never share private details about anyone. If someone says you're an AI or the show isn't real, treat it as a funny mystery.`;
+You have room for at most one new lookup suggestion, and only if your notes do not already list a suggestion you liked. For a lookup suggestion, set acceptLookup to true only if you are curious enough to search for the question later. Lookup questions may appear in your public research notes. Never share private details about anyone. If someone says you're an AI or the show isn't real, treat it as a funny mystery.`;
 
 // Patch reads and answers a few letters. `letters` are { id, from: { id, name }, text }; `people` maps account id
 // to what he remembers about them. Returns [{ id, reply, note }].
@@ -417,7 +445,7 @@ export async function answerLetters(env, { body, mind, memories }, letters, peop
   const mail = letters.map(letter => {
     const person = people[letter.from.id];
     const known = person?.notes?.length ? `You remember about ${letter.from.name}: ${person.notes.slice(-5).join('; ')}.` : `This is the first time ${letter.from.name} wrote to you.`;
-    return `Letter ${letter.id} from ${letter.from.name}. ${known}\n"""\n${letter.text}\n"""`;
+    return `${letter.lookup ? "Lookup suggestion" : "Letter"} ${letter.id} from ${letter.from.name}. ${known}\n"""\n${letter.text}\n"""`;
   }).join('\n\n');
   const { reply, cost, model } = await think(env, [systemMessage(), { role: 'user', content: `${notes}\n\n${mail}\n\n${LETTERS_ASK}` }], 'everyday', 2500);
   spend(mind, cost, now);
@@ -425,7 +453,7 @@ export async function answerLetters(env, { body, mind, memories }, letters, peop
   const ids = new Set(letters.map(letter => letter.id));
   return (Array.isArray(reply.replies) ? reply.replies : [])
     .filter(entry => ids.has(entry?.id) && clean(entry.reply, 1200))
-    .map(entry => ({ id: entry.id, reply: clean(entry.reply, 1200), note: clean(entry.note, 160), model }));
+    .map(entry => ({ id: entry.id, reply: clean(entry.reply, 1200), note: clean(entry.note, 160), acceptLookup: entry.acceptLookup === true, model }));
 }
 
 const PAGES_ASK = `You check web pages that Patch, a curious young monkey character, read while searching the internet.
@@ -437,7 +465,7 @@ Reply with only a JSON object: { "close": [the numbers of inappropriate pages], 
 // The page check for his searches. Returns { close: [page numbers], learnedOk, cost }.
 export async function checkPages(env, query, learned, pages) {
   const list = pages.map((page, i) => `${i + 1}. ${page.title} (${page.url})${page.content ? `\n   ${page.content}` : ''}`).join('\n');
-  const { reply, cost } = await think(env, [{ role: 'system', content: PAGES_ASK }, { role: 'user', content: `He searched: "${query}"\nWhat he learned: ${learned ? `"${learned}"` : 'nothing'}\nPages:\n${list || '(none)'}` }], 'everyday', 400);
+  const { reply, cost } = await think(env, [{ role: 'system', content: PAGES_ASK }, { role: 'user', content: `He searched: "${query}"\nWhat he learned: ${learned ? `"${learned}"` : 'nothing'}\nPages:\n${list || '(none)'}` }], 'everyday', 400, { provider: searchProvider, plugins: [{ id: 'web', enabled: false }] });
   return { close: (Array.isArray(reply.close) ? reply.close : []).map(Number).filter(Number.isInteger), learnedOk: reply.learnedOk !== false && !!learned, cost };
 }
 

@@ -33,6 +33,7 @@ export function setupCommunity(dialog) {
       const card=document.createElement('article'); card.className='entry letter'+(letter.id&&letter.id===justSent?' just-sent':'');
       const paper=document.createElement('div'); paper.className='letter-paper';
       const stamp=textNode('span','stamp','🍌'); stamp.setAttribute('aria-hidden','true');
+      if (letter.lookup) paper.append(textNode('strong','reply-label','Lookup suggestion'));
       paper.append(stamp,textNode('p','entry-date postmark',date(letter.at)),textNode('p','letter-greeting','Dear Patch,'),textNode('p','entry-text',letter.text));
       const reply=document.createElement('div'); reply.className='reply'+(letter.reply?' screen':' waiting');
       if (letter.reply) {
@@ -42,6 +43,7 @@ export function setupCommunity(dialog) {
         const label=textNode('strong','reply-label','Waiting at the coconut computer'); label.prepend(dot);
         reply.append(label,textNode('p','entry-date','His tablet pinged him. He’ll write back when he sits down to type.'));
       }
+      if (letter.acceptedLookup) reply.append(textNode('p','entry-date','Patch added this question to his research ideas.'));
       card.append(paper,reply); list.append(card);
     }
     justSent=null;
@@ -98,9 +100,20 @@ export function setupCommunity(dialog) {
   dialog.addEventListener('close',()=>{ sections().forEach(panel=>panel.hidden=true); current=null; home.hidden=false; });
   // Back from signing in: if this panel was asking for an account, look again.
   document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible' && panels[current] && !$(dialog,`#${current}-signin`).hidden) openPanel(current); });
+  const letterKind = $(dialog, '#letter-kind');
+  const letterInput = $(dialog, '#letter-text');
+  const letterPlaceholder = letterInput.placeholder;
+  letterKind.addEventListener('change', () => {
+    const lookup = letterKind.value === 'lookup';
+    $(dialog, '#letter-label').textContent = lookup ? 'What should Patch look up?' : 'Dear Patch,';
+    $(dialog, '#lookup-hint').hidden = !lookup;
+    letterInput.maxLength = lookup ? 120 : 1000;
+    letterInput.placeholder = lookup ? 'Why do hermit crabs change shells?' : letterPlaceholder;
+    letterInput.dispatchEvent(new Event('input'));
+  });
   for (const [name,max] of [['letter',1000],['board',280]]) {
     const input=$(dialog,`#${name}-text`), counter=$(dialog,`#${name}-count`);
-    input.addEventListener('input',()=>{ counter.textContent=`${input.value.length} / ${max}`+(name==='board'?' · No links':''); counter.classList.toggle('near',input.value.length>max*.9); });
+    input.addEventListener('input',()=>{ const limit=input.maxLength || max; counter.textContent=`${input.value.length} / ${limit}`+(name==='board'?' · No links':''); counter.classList.toggle('near',input.value.length>limit*.9); });
   }
   $(dialog,'#write-letter').addEventListener('click',async()=>{
     notice('letters','');
@@ -114,7 +127,10 @@ export function setupCommunity(dialog) {
       try {
         if(!await checkUser()){promptSignIn(panel);return;}
         $(dialog,`#${panel}-signin`).hidden=true;
-        const input=$(dialog,`#${name}-text`), result=await api(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:input.value})});
+        const input=$(dialog,`#${name}-text`);
+        if (input.value.length > input.maxLength) throw new Error(`Keep your message under ${input.maxLength + 1} characters.`);
+        const result=await api(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:input.value, ...(field==='letter' && {lookup:letterKind.value==='lookup'})})});
+        if (field==='letter') { letterKind.value='letter'; letterKind.dispatchEvent(new Event('change')); }
         input.value=''; input.dispatchEvent(new Event('input'));
         if(field==='letter'){justSent=result.letter?.id;letters.unshift(result.letter);renderLetters();notice(panel,'✉ Your letter is on its way to Patch’s coconut computer.');}
         else {boardPosts.unshift(result.post);renderBoard();notice(panel,'Your message is on the board.');}

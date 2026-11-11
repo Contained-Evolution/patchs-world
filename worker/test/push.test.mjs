@@ -70,7 +70,7 @@ test('push: sending posts an encrypted body with the push headers', async () => 
   assert.equal(status, 201);
   assert.equal(calls[0].url, device.subscription.endpoint);
   assert.equal(calls[0].init.headers['content-encoding'], 'aes128gcm');
-  assert.deepEqual(JSON.parse(await decrypt(device, calls[0].init.body)), { title: 'Patch wrote in his journal', body: 'Rain day: I stayed in the cave.', url: '/patch/', tag: 'patch-journal' });
+  assert.deepEqual(JSON.parse(await decrypt(device, calls[0].init.body)), { title: 'Patch wrote in his journal', body: 'Rain day: I stayed in the cave.', url: '/patch/journal.html', tag: 'patch-journal' });
 });
 
 test('push: an account keeps its newest devices and refreshes a known one', async () => {
