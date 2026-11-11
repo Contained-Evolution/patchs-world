@@ -244,9 +244,9 @@ export function createVisitorControls(camera, canvas, isModalOpen, scene, walkSo
         view.updateProjectionMatrix();
       }
     },
-    findPatch(position) {
-      if (follow.checked || position.y > groundHeight(position.x, position.z) + 3) {
-        setMode(follow.checked ? 'follow' : 'watch');
+    findPatch(position, tracking = false) {
+      if (tracking || position.y > groundHeight(position.x, position.z) + 3) {
+        setMode(tracking ? 'follow' : 'watch');
         viewAngle = Math.PI / 4;
         viewOffset = viewOffsets[0];
         positionPatchView(position, 0, true);

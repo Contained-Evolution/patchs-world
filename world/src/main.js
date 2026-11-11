@@ -31,7 +31,6 @@ import { seatFor, usesTablet, deskClip } from './furniture.js';
 const $ = s => document.querySelector(s);
 const dialog = $('#map');
 const mapHome = $('#map-home');
-const updateMap = setupIslandMap($('#mini-chart canvas'), $('#full-chart canvas'), $('#map-landmarks'));
 $('#close-map').onclick = () => dialog.close();
 const community=setupCommunity(dialog);
 setupNotifications(dialog,community,registerApp());
@@ -64,33 +63,33 @@ const scene = new THREE.Scene();
 scene.fog = new THREE.Fog(0xadd9d4, 750, 1650);
 const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, .1, 12000);
 const scenery=createIsland(scene),solids=scenery.walkSolids;
-const sound=createIslandAudio($('#island-sound'), $('#footsteps'));
+const soundSetting = $('#island-sound'), soundShortcut = $('#sound-shortcut');
+const sound = createIslandAudio(soundSetting, $('#footsteps'));
+function syncSoundShortcut() {
+  soundShortcut.setAttribute('aria-pressed', String(soundSetting.checked));
+  soundShortcut.title = soundSetting.checked ? 'Mute island sound' : 'Unmute island sound';
+}
+soundSetting.addEventListener('change', syncSoundShortcut);
+soundShortcut.onclick = () => soundSetting.click();
+syncSoundShortcut();
 const cameraFeeds = setupIslandCameras(renderer);
 const controls = createVisitorControls(camera, renderer.domElement, () => dialog.open, scene, solids);
-const quickControls = $('#island-controls');
-const quickSummary = quickControls.querySelector('summary');
-function openIslandMenu() {
-  quickControls.open = false;
+const updateMap = setupIslandMap(renderer, $('#mini-chart canvas'), $('#full-chart canvas'), $('#map-landmarks'), renderAerial);
+
+function openIslandMenu(panel) {
   controls.pause();
-  community.showPanel('map');
   dialog.showModal();
+  community.showPanel(panel);
 }
-$('#open-map').onclick = openIslandMenu;
-$('#control-shortcuts').addEventListener('click', event => {
-  const shortcut = event.target.closest('[data-shortcut]');
-  if (!shortcut) return;
-  quickSummary.focus({ preventScroll: true });
-  openIslandMenu();
-  if (shortcut.dataset.shortcut !== 'island-map') $(`#open-${shortcut.dataset.shortcut}`).click();
-});
-document.addEventListener('pointerdown', event => {
-  if (quickControls.open && !quickControls.contains(event.target)) quickControls.open = false;
-});
-quickControls.addEventListener('keydown', event => {
-  if (event.key !== 'Escape' || !quickControls.open) return;
-  quickControls.open = false;
-  quickSummary.focus();
-});
+$('#open-map').onclick = () => openIslandMenu('map');
+$('#open-cameras').onclick = () => {
+  cameraFeeds.showGrid();
+  openIslandMenu('cameras');
+};
+$('#back-to-map').onclick = () => {
+  if (animations.isOpen()) animations.close();
+  community.showPanel('map');
+};
 const embeddedPage = $('#island-page');
 const menu = $('#island-menu');
 menu.addEventListener('click', event => {
@@ -103,8 +102,7 @@ menu.addEventListener('click', event => {
     embeddedPage.title = $('#page-title').textContent = button.textContent;
     community.showPanel('page');
     embeddedPage.src = `./${page}.html`;
-  } else if (['map', 'audio', 'video', 'patch', 'cameras', 'animations'].includes(panel)) {
-    if (panel === 'cameras') cameraFeeds.showGrid();
+  } else if (['audio', 'video', 'patch', 'animations'].includes(panel)) {
     community.showPanel(panel);
     if (panel === 'animations') animations.open();
   }
@@ -302,17 +300,42 @@ const rainGeo=new THREE.BufferGeometry(),drops=[];for(let i=0;i<500;i++)drops.pu
 let last=performance.now();const spawn=nearestWalkable(0,0,solids);patch.position.set(spawn[0],groundHeight(...spawn),spawn[1]);
 const findPatch = $('#find-patch'), followPatch = $('#follow-patch');
 findPatch.onclick = () => {
-  if (!state) return;
-  dialog.close();
-  controls.findPatch(patch.position);
+  if (state) controls.findPatch(patch.position);
 };
 followPatch.onchange = () => {
-  if (followPatch.checked && state) {
-    dialog.close();
-    controls.findPatch(patch.position);
-  }
+  if (followPatch.checked && state) controls.findPatch(patch.position, true);
   else controls.stopFollowing();
 };
+
+const aerialSunPosition = new THREE.Vector3(), aerialSunColor = new THREE.Color();
+function renderAerial(view) {
+  const background = scene.background, fog = scene.fog;
+  const hemiIntensity = hemi.intensity, sunIntensity = sunLight.intensity, wasRaining = rain.visible;
+  const cloudVisibility = clouds.map(cloud => cloud.visible);
+  aerialSunPosition.copy(sunLight.position);
+  aerialSunColor.copy(sunLight.color);
+  scene.background = skyDay;
+  scene.fog = null;
+  rain.visible = false;
+  clouds.forEach(cloud => { cloud.visible = false; });
+  hemi.intensity = 2.2;
+  sunLight.intensity = 2.5;
+  sunLight.position.set(-250, 650, 180);
+  sunLight.color.copy(sunColor);
+  scenery.setTrackingTarget(null);
+  try {
+    renderer.render(scene, view);
+  } finally {
+    scene.background = background;
+    scene.fog = fog;
+    rain.visible = wasRaining;
+    clouds.forEach((cloud, index) => { cloud.visible = cloudVisibility[index]; });
+    hemi.intensity = hemiIntensity;
+    sunLight.intensity = sunIntensity;
+    sunLight.position.copy(aerialSunPosition);
+    sunLight.color.copy(aerialSunColor);
+  }
+}
 function renderIsland(now, rainOffset = 0) {
   updateMap(now, camera.position, patch.visible ? patch.position : null, dialog.open && !mapHome.hidden);
   const renderView = view => {

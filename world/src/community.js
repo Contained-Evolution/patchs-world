@@ -86,9 +86,11 @@ export function setupCommunity(dialog) {
   }
   const sections = () => dialog.querySelectorAll('section.community');
   const menu = $(dialog, '#island-menu');
+  const backToMap = $(dialog, '#back-to-map');
   function showPanel(name) {
     current=name;
     home.hidden=name!=='map';
+    if (backToMap) backToMap.hidden = name === 'map';
     sections().forEach(panel=>{ panel.hidden=panel.id!==`${name}-panel`; });
     if (menu) {
       for (const button of menu.querySelectorAll('button[aria-current]')) button.removeAttribute('aria-current');
@@ -101,7 +103,7 @@ export function setupCommunity(dialog) {
       }
     }
     dialog.scrollTop=0;
-    const focus = name === 'map' ? $(dialog, '#open-island-map') : $(dialog,`#${name}-title`);
+    const focus = name === 'map' ? $(dialog, '#map-overview') : $(dialog,`#${name}-title`);
     focus?.focus({preventScroll:true});
   }
   async function openPanel(name) {
