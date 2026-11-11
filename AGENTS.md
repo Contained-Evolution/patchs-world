@@ -1,5 +1,6 @@
 # Rules
 
-- Everything for Patch lives in this folder. Don't create git worktrees or sibling folders; switch branches here.
+- Everything for Patch lives in this folder. A session working while another is already here uses a worktree under `.worktrees/` (`git worktree add .worktrees/<name> -b <branch>`), never a sibling folder.
+- When the work is done and pushed, remove the worktree (`git worktree remove .worktrees/<name>`), delete its merged branch, and delete any scratch files the session made.
 - Test screenshots, smoke scripts and PR drafts go in your scratch or temp directory, never in this folder or the home folder.
 - `art/` holds the source model and Mixamo clips that [tools/combine-patch.py](tools/combine-patch.py) builds into [world/assets/patch.glb](world/assets/patch.glb). Git ignores it because Mixamo's terms don't allow redistributing the raw files.
