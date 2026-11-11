@@ -21,8 +21,6 @@ Patch is a monkey: an AI that lives on his own island. He's curious and energeti
 
 ## Addresses
 
-- `tenari.world` is a landing page that loads nothing until the visitor chooses. It has two choices: Tenari, which goes to the login screen, and "Check on Patch, Contained Evolution's living AI". An account-silhouette login icon sits at the top.
-- `tenari.world/patch` opens his world with no login prompt. Anyone can watch.
 - Only Contained Evolution account holders can write to or interact with him. Any interaction from a signed-out visitor leads to creating an account.
 
 ## Mind
@@ -60,10 +58,6 @@ Patch is a monkey: an AI that lives on his own island. He's curious and energeti
 - The model was made in Meshy: T-pose, about 3,000 faces.
 - Chris rigs and animates him in Meshy, with basic clips (idle, walk, run, climb, hang, swim, sit, eat, sleep, throw, wave), and exports a GLB. Code drives the rest: tail physics, swinging between branches with hands locked on, looking around, and getting into and out of the hammock.
 - Check Meshy's and Mixamo's terms before animation files go into a public repo.
-
-## Code
-
-- This repo is Patch's World. The `tenari.world` landing page lives in [Contained-Evolution](https://github.com/Contained-Evolution/contained-evolution) and forwards `/patch` here.
 
 ## Build order
 
