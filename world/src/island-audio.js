@@ -1,4 +1,4 @@
-import { ACTIONS } from '../../shared/state.js';
+import { ACTIONS, GIFT_SOUND_DURATION } from '../../shared/state.js';
 import { ISLAND, places, pondFraction, shoreFraction, streamInfo, TIDE_POOLS } from './terrain.js';
 
 const steps = new Set(['walk', 'run', 'walk-texting', 'carry-walk', 'carry-jog', 'carry-run']);
@@ -50,6 +50,14 @@ const effects = {
 const clamp = value => Math.max(0, Math.min(1, value));
 export function actionSound(action) {
   return ACTIONS.includes(action) ? actionSounds[action] : undefined;
+}
+
+export function giftSoundAt(gift, now) {
+  if (!gift || !Object.hasOwn(places, gift.place) || !Number.isFinite(gift.at) ||
+      now - gift.at >= GIFT_SOUND_DURATION) return null;
+  if (gift.action === 'play') return 'bounce';
+  if (gift.action === 'eat') return 'bite';
+  return 'rustle';
 }
 
 export function ambienceAt(x, z, daylight, weather) {
@@ -282,12 +290,13 @@ export function createIslandAudio(button) {
       lastCarrying = carrying;
 
       const gift = state.gift;
-      if (gift && places[gift.place] && gift.at !== lastGift) {
+      const giftCue = giftSoundAt(gift, state.now);
+      if (giftCue && gift.at !== lastGift) {
         lastGift = gift.at;
         const [gx, gz] = places[gift.place];
         const distance = Math.hypot(gx - x, gz - z);
         const pan = Math.max(-.85, Math.min(.85, ((gx - x) * right[0] + (gz - z) * right[2]) / Math.max(2, distance)));
-        play(gift.action === 'play' ? 'bounce' : gift.action === 'eat' ? 'bite' : 'rustle',
+        play(giftCue,
           .91 / (1 + (distance / 8) ** 2), pan);
       }
     }

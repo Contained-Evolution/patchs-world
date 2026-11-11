@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ACTIONS } from '../../shared/state.js';
-import { actionSound, ambienceAt } from '../src/island-audio.js';
+import { actionSound, ambienceAt, giftSoundAt } from '../src/island-audio.js';
 import { ISLAND, places, STREAM } from '../src/terrain.js';
 
 test('every visible Patch activity has a sound cue', () => {
@@ -20,4 +20,12 @@ test('weather, shelter, daylight and water proximity set the sound mix', () => {
   assert.equal(ambienceAt(ISLAND.pondX, ISLAND.pondZ, 1, 'clear').water, 1);
   assert.equal(ambienceAt(...STREAM.at(-1).slice(0, 2), 1, 'clear').surface, 'wet');
   assert.ok(ambienceAt(315, 0, 1, 'clear').surf > camp.surf);
+});
+
+test('a gift plays its own cue only while the event is fresh', () => {
+  const gift = { action: 'play', place: 'hammock', at: 1000 };
+  assert.equal(giftSoundAt(gift, 5000), 'bounce');
+  assert.equal(giftSoundAt({ ...gift, action: 'eat' }, 5000), 'bite');
+  assert.equal(giftSoundAt(gift, 9000), null);
+  assert.equal(giftSoundAt({ ...gift, place: 'constructor' }, 5000), null);
 });

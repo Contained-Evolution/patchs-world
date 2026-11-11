@@ -27,6 +27,7 @@ export function walkStep(x, z, dx, dz, solids) {
 
 export function createVisitorControls(camera, canvas, isModalOpen, scene, walkSolids) {
   const walk = document.querySelector('#walk');
+  const sound = document.querySelector('#island-sound');
   const follow = document.querySelector('#follow-patch');
   const mouseLock = document.querySelector('#mouse-lock');
   const hint = document.querySelector('#explore-hint');
@@ -171,6 +172,9 @@ export function createVisitorControls(camera, canvas, isModalOpen, scene, walkSo
   }
 
   const canWalk = () => mode === 'walk' && !isModalOpen();
+  sound.addEventListener('click', event => {
+    if (event.detail && canWalk()) canvas.focus({ preventScroll: true });
+  });
   canvas.addEventListener('click', () => {
     if (!canWalk() || !lockedLook || Date.now() - lastTouch < 800 || matchMedia('(pointer: coarse)').matches) return;
     canvas.requestPointerLock?.();

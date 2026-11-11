@@ -1,6 +1,7 @@
 // Patch's World Worker, reached through the company website service binding.
 
 import { DurableObject } from 'cloudflare:workers';
+import { GIFT_SOUND_DURATION } from '../shared/state.js';
 import { advance, newBody, view, didSince, localMinutes } from './body.mjs';
 import { ponder, writeDiary, answerLetters, research, writeJournal, moderate, spend, overBudget, localDate, nextWake, allMemories, internetStatus } from './mind.mjs';
 import { giftView, useGift } from './gifts.mjs';
@@ -82,7 +83,7 @@ export class PatchWorld extends DurableObject {
     const stored = await this.ctx.storage.get(['unread', 'giftSound']);
     const result = view(body, now, (stored.get('unread') || []).length);
     const sound = stored.get('giftSound');
-    if (sound && now - sound.at < 8000) result.patch.giftSound = sound;
+    if (sound && now - sound.at < GIFT_SOUND_DURATION) result.patch.giftSound = sound;
     return result;
   }
 

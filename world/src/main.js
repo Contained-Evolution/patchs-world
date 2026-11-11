@@ -343,7 +343,7 @@ controls.track(patch.position,dt);
 sound.update(cameraFeeds.camera || controls.camera, {
   daylight, weather, walked, patch: patch.position, previousPatch: previousPatchPosition,
   clip: currentName, clipTime: currentAction?.time, action, place, since, mail, target,
-  carrying: state.patch.carrying, gift: state.patch.giftSound,
+  carrying: state.patch.carrying, gift: state.patch.giftSound, now: Date.now() + serverOffset,
   silent: cameraFeeds.open && !cameraFeeds.camera
 });
 scenery.update(reducedMotion.matches?0:dt,daylight);renderIsland(now,reducedMotion.matches?0:t*12%30);}
