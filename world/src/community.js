@@ -1,5 +1,5 @@
 const $ = (root, selector) => root.querySelector(selector);
-const DEFAULT_SIGN_IN = '/auth/start?next=patch%2F';
+const DEFAULT_SIGN_IN = '/';
 
 export function setupCommunity(dialog) {
   const home = $(dialog, '#map-home'), panels = { letters: $(dialog, '#letters-panel'), board: $(dialog, '#board-panel') };
@@ -14,7 +14,7 @@ export function setupCommunity(dialog) {
   }
   function setSignIn(value) {
     // The account endpoint returns a same-origin path. Ignore unexpected destinations.
-    if (typeof value === 'string' && value.startsWith('/auth/') && !value.startsWith('//')) signIn=value;
+    if (typeof value === 'string' && value === '/' && !value.startsWith('//')) signIn=value;
     dialog.querySelectorAll('.signin a').forEach(link => { link.href=signIn; });
   }
   function notice(panel, message) { const box=$(dialog, `#${panel}-notice`); box.textContent=message || ''; box.hidden=!message; }
@@ -106,4 +106,5 @@ export function setupCommunity(dialog) {
     });
   }
   $(dialog,'#board-more').addEventListener('click',()=>loadBoard(true));
+  return { openPanel };
 }

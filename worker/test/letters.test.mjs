@@ -55,16 +55,15 @@ test('board keys list newest first', () => {
   assert.ok(postKey(NOW + 1000, 'b') < postKey(NOW, 'a'));
 });
 
-test('a visitor is read from the Tenari session through the account service', async () => {
+test('a visitor is read from the Contained Evolution session through the account service', async () => {
   const token = 't'.repeat(43);
   const env = { AUTH_SERVICE: { fetch: async request => {
-    const url = new URL(request.url);
-    if (url.pathname.endsWith('/validate')) return request.headers.get('authorization') === `Bearer ${token}` ? Response.json({ ok: true }) : Response.json({}, { status: 401 });
-    return Response.json({ user: { id: 7, gamertag: 'kiwi_fan', email: 'containedevolution@gmail.com' } });
+    assert.equal(new URL(request.url).pathname, '/api/me');
+    return request.headers.get('cookie') === `ce_session=${token}` ? Response.json({ user: { id: 7, gamertag: 'kiwi_fan', email: 'containedevolution@gmail.com' } }) : Response.json({}, { status: 401 });
   } } };
-  const request = cookie => new Request('https://tenari.world/patch/api/me', { headers: { cookie } });
-  assert.deepEqual(await visitor(request(`__Host-tenari_session=${token}`), env), { id: '7', name: 'kiwi_fan', admin: true });
-  assert.equal(await visitor(request(`__Host-tenari_session=${'x'.repeat(43)}`), env), null);
+  const request = cookie => new Request('https://containedevolution.com/patch/api/me', { headers: { cookie } });
+  assert.deepEqual(await visitor(request(`ce_session=${token}`), env), { id: '7', name: 'kiwi_fan', admin: true });
+  assert.equal(await visitor(request(`ce_session=${'x'.repeat(43)}`), env), null);
   assert.equal(await visitor(request(''), env), null);
 });
 

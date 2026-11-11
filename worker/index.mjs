@@ -1,4 +1,4 @@
-// Patch's World Worker. Tenari's Worker forwards tenari.world/patch* here through a service binding.
+// Patch's World Worker, reached through the company website service binding.
 
 import { DurableObject } from 'cloudflare:workers';
 import { advance, newBody, view } from './body.mjs';
@@ -218,7 +218,7 @@ const patchOf = env => env.PATCH_WORLD.get(env.PATCH_WORLD.idFromName('patch'));
 async function visitorApi(request, env, url, path) {
   const patch = patchOf(env);
   if (path === '/api/board' && request.method === 'GET') return json(await patch.board(url.searchParams.get('before')));
-  if (request.method === 'POST' && request.headers.get('origin') !== 'https://tenari.world') return json({ error: 'Invalid origin.' }, 403);
+  if (request.method === 'POST' && request.headers.get('origin') !== 'https://containedevolution.com') return json({ error: 'Invalid origin.' }, 403);
   let who;
   try { who = await visitor(request, env); } catch { return json({ error: 'Account check is unavailable. Try again soon.' }, 503); }
   if (path === '/api/me' && request.method === 'GET') return json({ user: who && { name: who.name, admin: who.admin }, signIn: SIGN_IN });

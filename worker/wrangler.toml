@@ -3,7 +3,7 @@ compatibility_date = "2026-10-01"
 main = "index.mjs"
 workers_dev = false
 
-# No public route: Tenari's Worker forwards tenari.world/patch* through a service binding.
+# The company website forwards /patch* through a service binding.
 
 [assets]
 directory = "../world/dist"
