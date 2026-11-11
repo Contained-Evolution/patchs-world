@@ -79,18 +79,24 @@ export function ambienceAt(x, z, daylight, weather) {
   };
 }
 
-export function createIslandAudio(button) {
+export function createIslandAudio(button, footsteps) {
   let context, output, noise, layers, soundOn = true, paused = false;
+  let nextVisitorStep = 0, nextPatchStep = 0;
+  let footstepsOn = true;
   let nextBird = 0, nextThunder = 0, nextRepeat = 0, visitorStride = 0, patchStride = 0;
   let lastClip, lastActivity, lastMail, lastGift, lastCarrying, lastCueTime = -1;
   let lastMix = -1, environment, leftFoot = false;
-  try { soundOn = localStorage.getItem('patch-sound') !== 'muted'; } catch {}
-
-  function syncButton() {
-    const active = soundOn && context?.state === 'running';
-    button.setAttribute('aria-pressed', String(Boolean(active)));
-    button.title = active ? 'Sound on' : 'Sound off';
-  }
+  try {
+    soundOn = localStorage.getItem('patch-sound') !== 'muted';
+    footstepsOn = localStorage.getItem('patch-footsteps') !== 'muted';
+  } catch {}
+  button.checked = soundOn;
+  footsteps.checked = footstepsOn;
+  footsteps.addEventListener('change', () => {
+    footstepsOn = footsteps.checked;
+    visitorStride = patchStride = 0;
+    try { localStorage.setItem('patch-footsteps', footstepsOn ? 'on' : 'muted'); } catch {}
+  });
 
   function start() {
     if (!soundOn || document.hidden || paused) return;
@@ -98,7 +104,6 @@ export function createIslandAudio(button) {
       const Audio = window.AudioContext || window.webkitAudioContext;
       if (!Audio) { button.disabled = true; return; }
       try { context = new Audio(); } catch { button.disabled = true; return; }
-      context.addEventListener('statechange', syncButton);
       output = context.createGain();
       output.gain.value = .64;
       output.connect(context.destination);
@@ -109,7 +114,7 @@ export function createIslandAudio(button) {
         wind: layer(380), rain: layer(3000), surf: layer(245), water: layer(1170)
       };
     }
-    context.resume().then(syncButton, syncButton);
+    context.resume().catch(() => {});
   }
 
   function layer(frequency) {
@@ -128,11 +133,11 @@ export function createIslandAudio(button) {
 
   function applyVolume() {
     if (output) output.gain.setTargetAtTime(soundOn && !paused && !document.hidden ? .64 : 0, context.currentTime, .04);
-    syncButton();
   }
 
-  button.addEventListener('click', () => {
-    soundOn = !(soundOn && context?.state === 'running');
+  button.addEventListener('change', () => {
+    soundOn = button.checked;
+    visitorStride = patchStride = 0;
     try { localStorage.setItem('patch-sound', soundOn ? 'on' : 'muted'); } catch {}
     if (soundOn) start();
     applyVolume();
@@ -153,7 +158,6 @@ export function createIslandAudio(button) {
     if (!document.hidden && context) start();
     applyVolume();
   });
-  syncButton();
 
   function voice(duration, volume, pan, time) {
     const gain = context.createGain();
@@ -234,12 +238,15 @@ export function createIslandAudio(button) {
         play('thunder', .38);
       }
 
-      visitorStride += state.walked;
-      if (visitorStride >= 1.22) {
-        leftFoot = !leftFoot;
-        play(environment.surface, .85, leftFoot ? -.11 : .11);
-        visitorStride %= 1.22;
-      }
+      if (footstepsOn && state.walked > 0) {
+        visitorStride = Math.min(1.48, visitorStride + state.walked);
+        if (visitorStride >= 1.48 && time >= nextVisitorStep) {
+          leftFoot = !leftFoot;
+          play(environment.surface, .72, leftFoot ? -.11 : .11);
+          visitorStride = 0;
+          nextVisitorStep = time + .23;
+        }
+      } else visitorStride = 0;
       const { patch, previousPatch, clip, clipTime, action, place, since, target, mail } = state;
       if (!patch) return;
       const dx = patch.x - x, dz = patch.z - z;
@@ -249,11 +256,12 @@ export function createIslandAudio(button) {
       const volume = .91 / (1 + (distance / 8) ** 2);
       const moving = steps.has(clip);
       const patchTravel = Math.hypot(patch.x - previousPatch.x, patch.z - previousPatch.z);
-      if (moving && patchTravel < 1) patchStride += patchTravel;
+      if (footstepsOn && moving && patchTravel < 1) patchStride = Math.min(.9, patchStride + patchTravel);
       else patchStride = 0;
-      if (patchStride >= .79) {
+      if (patchStride >= .9 && time >= nextPatchStep) {
         play(ambienceAt(patch.x, patch.z, state.daylight, state.weather).surface, volume, pan);
-        patchStride %= .79;
+        patchStride = 0;
+        nextPatchStep = time + .23;
       }
 
       const activity = [action, place, since].join('|');

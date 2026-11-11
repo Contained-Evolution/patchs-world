@@ -82,9 +82,24 @@ export function setupCommunity(dialog) {
     finally { button.disabled=false; }
   }
   const sections = () => dialog.querySelectorAll('section.community');
+  const menu = $(dialog, '#island-menu');
   function showPanel(name) {
-    current=name; home.hidden=true; sections().forEach(panel=>{ panel.hidden=panel.id!==`${name}-panel`; });
-    dialog.scrollTop=0; $(dialog,`#${name}-title`).focus({preventScroll:true});
+    current=name;
+    home.hidden=name!=='map';
+    sections().forEach(panel=>{ panel.hidden=panel.id!==`${name}-panel`; });
+    if (menu) {
+      for (const button of menu.querySelectorAll('button[aria-current]')) button.removeAttribute('aria-current');
+      const selected = name === 'page' ? `#open-${$(dialog, '#island-page').dataset.page}` : `[data-panel="${name}"]`;
+      $(menu, selected)?.setAttribute('aria-current', 'true');
+      if (name !== 'page') {
+        const frame = $(dialog, '#island-page');
+        if (frame.hasAttribute('src')) frame.removeAttribute('src');
+        delete frame.dataset.page;
+      }
+    }
+    dialog.scrollTop=0;
+    const focus = name === 'map' ? $(dialog, '#open-island-map') : $(dialog,`#${name}-title`);
+    focus?.focus({preventScroll:true});
   }
   async function openPanel(name) {
     user=null;
@@ -97,7 +112,11 @@ export function setupCommunity(dialog) {
   }
   for(const name of ['letters','board']) $(dialog,`#open-${name}`).addEventListener('click',()=>openPanel(name));
   dialog.querySelectorAll('.back-map').forEach(button=>button.addEventListener('click',()=>{ sections().forEach(panel=>panel.hidden=true); current=null; const active=button.closest('section').id.replace(/-panel$/,''); home.hidden=false; dialog.scrollTop=0; $(dialog,`#open-${active}`)?.focus(); }));
-  dialog.addEventListener('close',()=>{ sections().forEach(panel=>panel.hidden=true); current=null; home.hidden=false; });
+  dialog.addEventListener('close',()=>{
+    if (dialog.open) return;
+    if (menu) showPanel('map');
+    else { sections().forEach(panel=>panel.hidden=true); current=null; home.hidden=false; }
+  });
   // Back from signing in: if this panel was asking for an account, look again.
   document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible' && panels[current] && !$(dialog,`#${current}-signin`).hidden) openPanel(current); });
   const letterKind = $(dialog, '#letter-kind');

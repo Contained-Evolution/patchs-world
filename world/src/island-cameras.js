@@ -15,12 +15,13 @@ const mounts = [
 ];
 const aspect = 16 / 9;
 
-export function setupIslandCameras(renderer, pauseWalking) {
-  const dialog = document.querySelector('#island-cameras');
+export function setupIslandCameras(renderer) {
+  const panel = document.querySelector('#cameras-panel');
+  const dialog = panel.closest('dialog');
+  const isOpen = () => dialog.open && !panel.hidden;
   const grid = document.querySelector('#camera-grid');
-  const title = document.querySelector('#camera-title');
+  const title = document.querySelector('#cameras-title');
   const back = document.querySelector('#camera-back');
-  const close = document.querySelector('#close-cameras');
   const feed = document.querySelector('#camera-feed');
   const feedContext = feed.getContext('2d');
   let selected = null, previewIndex = 0, nextPreview = 0;
@@ -61,27 +62,21 @@ export function setupIslandCameras(renderer, pauseWalking) {
     return view;
   });
 
-  function showGrid() {
+  function showGrid(restoreFocus = false) {
     const previous = selected;
     selected = null;
     title.textContent = 'Island cameras';
     feed.hidden = back.hidden = true;
     grid.hidden = false;
     nextPreview = 0;
-    if (previous && dialog.open) previous.button.focus();
+    if (restoreFocus && previous && isOpen()) previous.button.focus();
   }
-  document.querySelector('#open-cameras').onclick = () => {
-    pauseWalking();
-    showGrid();
-    dialog.showModal();
-    close.focus();
-  };
-  close.onclick = () => dialog.close();
-  back.onclick = showGrid;
+  back.onclick = () => showGrid(true);
 
   return {
-    get open() { return dialog.open; },
-    get camera() { return dialog.open ? selected?.camera : null; },
+    showGrid,
+    get open() { return isOpen(); },
+    get camera() { return isOpen() ? selected?.camera : null; },
     render(now, renderScene) {
       if (!selected && now < nextPreview) return;
       const source = renderer.domElement;

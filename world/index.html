@@ -1,49 +1,9 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#173c38"><title>Patch's World</title><link rel="manifest" href="./manifest.webmanifest"><link rel="apple-touch-icon" href="./icons/apple-touch-icon.png"><meta name="apple-mobile-web-app-title" content="Patch"><link rel="stylesheet" href="./style.css"></head><body><main id="world" aria-label="Patch's island"></main>
-<header class="island-hud">
-  <div class="island-title">
-    <span class="eyebrow">Contained Evolution presents</span>
-    <h1>Patch's World</h1>
-    <p id="status" aria-live="polite">Checking on Patch…</p>
-    <p id="connection" role="status" hidden>Can’t reach Patch right now</p>
-  </div>
-  <div class="island-menu">
-    <button id="open-map" type="button" aria-haspopup="dialog">Island map ☰</button>
-    <details class="island-tools">
-      <summary>Controls</summary>
-      <div class="island-tool-panel">
-        <div class="patch-controls">
-          <button id="find-patch" type="button" disabled>Find Patch</button>
-          <label><input id="follow-patch" type="checkbox" aria-label="Follow Patch" disabled> Follow</label>
-        </div>
-        <button id="open-cameras" type="button" aria-haspopup="dialog" aria-label="Island cameras" title="Island cameras">
-          <svg aria-hidden="true" viewBox="0 0 40 32" width="38" height="30" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M20 16v8h11m0-5v10" fill="none"/>
-            <path d="M4 6h30l-4 13H7Z" fill="#f0c47e"/>
-            <path d="M4 6h7v13H7Z" fill="#23443b"/>
-            <circle cx="8" cy="13" r="2" fill="#d6ede4" stroke="none"/>
-          </svg>
-        </button>
-        <button id="island-sound" type="button" aria-label="Island sound" aria-pressed="false" title="Sound off">
-          <svg aria-hidden="true" viewBox="0 0 32 32" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M4 12h5l7-6v20l-7-6H4z" fill="currentColor"/>
-            <path class="sound-waves" d="M21 11a7 7 0 0 1 0 10m4-14a13 13 0 0 1 0 18"/>
-            <path class="sound-muted" d="m22 13 6 6m0-6-6 6"/>
-          </svg>
-        </button>
-        <button id="mouse-lock" type="button" aria-pressed="false" aria-label="Mouse look off: drag to look" title="Mouse look off: drag to look"><svg aria-hidden="true" viewBox="0 0 32 32" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="25" rx="8"/><path d="M12 3v8"/><rect x="17" y="18" width="12" height="10" rx="2"/><path class="lock-shackle" d="M20 18v-3a3 3 0 0 1 6 0v3"/></svg></button>
-        <button id="install-app" type="button" aria-haspopup="dialog" hidden>Get the Patch app ⬇</button>
-      </div>
-    </details>
-  </div>
-  <details id="care" class="care" hidden>
-    <summary>How Patch is doing</summary>
-    <div id="care-mood" class="care-mood"></div>
-    <div id="care-needs"></div>
-  </details>
-</header>
-<div id="bubble" hidden></div>
+<button id="open-map" type="button" aria-haspopup="dialog" aria-label="Patch’s World map and menu">
+  <span class="map-launch-title"><img src="./icons/icon-192.png" width="40" height="40" alt=""> <span>Patch’s<br>World</span></span>
+  <span class="island-chart mini-chart" id="mini-chart" aria-hidden="true"><canvas width="360" height="380"></canvas></span>
+</button>
 <div class="island-movement">
-  <p id="explore-hint">Drag the island to look · WASD or arrows to move · Shift to go faster</p>
   <div id="move-stick" role="group" aria-label="Movement joystick">
     <span class="move-stick-thumb" aria-hidden="true"></span>
   </div>
@@ -54,17 +14,60 @@
     </svg>
   </button>
 </div>
-<dialog id="island-cameras" aria-labelledby="camera-title">
+<dialog id="map" aria-labelledby="island-menu-title">
+  <div class="map-head">
+    <h1 id="island-menu-title">Patch’s World</h1>
+    <button id="close-map" type="button" aria-label="Close island menu" autofocus>×</button>
+  </div>
+  <section id="map-home" aria-label="Island map">
+    <div class="map-layout">
+      <div class="island-chart full-chart" id="full-chart" role="img" aria-label="Island terrain and live positions of you and Patch">
+        <canvas width="360" height="380" aria-hidden="true"></canvas>
+        <span class="map-compass" aria-hidden="true">▲ N</span>
+      </div>
+      <div class="map-key">
+        <div class="map-position-key"><span><i class="map-pin visitor-pin"></i>You</span><span><i class="map-pin patch-pin"></i>Patch</span></div>
+        <ol id="map-landmarks" aria-label="Island landmarks"></ol>
+      </div>
+    </div>
+  </section>
+  <section class="community island-panel" id="patch-panel" aria-labelledby="patch-title" hidden>
+    <h2 id="patch-title" tabindex="-1">Patch</h2>
+    <p id="status">Checking on Patch…</p>
+    <p id="connection" role="status" hidden>Can’t reach Patch right now</p>
+    <p id="bubble" hidden></p>
+    <div class="patch-controls">
+      <button class="primary" id="find-patch" type="button" disabled>Find Patch</button>
+      <label><input id="follow-patch" type="checkbox" aria-label="Follow Patch" disabled> Follow</label>
+    </div>
+    <div id="care" class="care" hidden>
+      <h3>How Patch is doing</h3>
+      <div id="care-mood" class="care-mood"></div>
+      <div id="care-needs"></div>
+    </div>
+  </section>
+  <section class="community island-panel" id="audio-panel" aria-labelledby="audio-title" hidden>
+    <h2 id="audio-title" tabindex="-1">Audio</h2>
+    <label class="setting-row"><span>Island sound</span><input id="island-sound" type="checkbox" checked></label>
+    <label class="setting-row"><span>Footsteps</span><input id="footsteps" type="checkbox" checked></label>
+  </section>
+  <section class="community island-panel" id="video-panel" aria-labelledby="video-title" hidden>
+    <h2 id="video-title" tabindex="-1">Video</h2>
+    <label class="setting-row">Render quality
+      <select id="render-quality"><option value="auto">Automatic</option><option value="reduced">Reduced</option><option value="full">Full</option></select>
+    </label>
+    <button id="mouse-lock" type="button" aria-pressed="false" aria-label="Mouse look off: drag to look" title="Mouse look off: drag to look"><svg aria-hidden="true" viewBox="0 0 32 32" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="25" rx="8"/><path d="M12 3v8"/><rect x="17" y="18" width="12" height="10" rx="2"/><path class="lock-shackle" d="M20 18v-3a3 3 0 0 1 6 0v3"/></svg></button>
+    <p id="explore-hint"></p>
+  </section>
+  <section class="community island-panel" id="cameras-panel" aria-labelledby="cameras-title" hidden>
   <div class="camera-toolbar">
     <button id="camera-back" type="button" hidden>All cameras</button>
-    <h2 id="camera-title">Island cameras</h2>
-    <button id="close-cameras" type="button" aria-label="Close island cameras">×</button>
+    <h2 id="cameras-title" tabindex="-1">Island cameras</h2>
   </div>
   <div id="camera-grid" class="camera-grid"></div>
   <canvas id="camera-feed" aria-label="Selected island camera feed" hidden></canvas>
-</dialog><dialog id="map"><div class="map-head"><div><span class="eyebrow">EXPLORE</span><h2>Patch's island</h2></div><button id="close-map" aria-label="Close map">×</button></div><div class="map-body" id="map-home"><div class="map-art" aria-label="Illustrated map of Patch's island"><span class="land"><i class="map-label grove">Banana grove</i><i class="map-label trees">Tall trees</i><i class="map-label pond">Pond</i><i class="map-label camp">Hammock &amp; shelves</i><i class="map-label computer">Coconut computer</i><i class="map-label beach">Beach</i><i class="map-label lookout">Lookout</i><i class="map-label meadow">Meadow</i><i class="map-label cave">Cave</i><i class="map-label tide">Tide pools</i></span></div><nav aria-label="Island menu"><p>A little place to keep up with Patch.</p><button id="open-letters" type="button">✉ <span>Letters</span></button><button id="open-board" type="button">☼ <span>Message board</span></button><button id="open-memory" type="button">✦ <span>Memory</span></button><button id="open-alerts" type="button">🔔 <span>Notifications</span></button><button id="open-animations" type="button" hidden>▶ <span>Animations</span></button><a href="./journal.html">Journal</a><a href="./gifts.html">Leave a gift</a></nav></div>
+  </section>
 <section class="community" id="letters-panel" aria-labelledby="letters-title" hidden>
-  <button class="back-map" type="button">← Back to map</button>
   <div class="panel-intro"><span class="panel-icon" aria-hidden="true">✉</span><div><p class="panel-kicker">A LITTLE NOTE FROM YOU</p><h3 id="letters-title" tabindex="-1">Letters to Patch</h3><p>Letters land on Patch's coconut computer. His tablet pings him, and he writes back when he sits down to type.</p></div></div>
   <button class="primary" id="write-letter" type="button">✎ Write to Patch</button>
   <form id="letter-form" class="stationery" hidden><span class="stamp" aria-hidden="true">🍌</span><label for="letter-kind">What are you sending?</label><select id="letter-kind"><option value="letter">Letter</option><option value="lookup">Ask Patch to look something up</option></select><label id="letter-label" for="letter-text">Dear Patch,</label><p id="lookup-hint" hidden>Patch can choose whether to look it up. Your question may appear in his public research notes.</p><textarea id="letter-text" maxlength="1000" rows="6" placeholder="Tell him about your day, ask him a question, or send him a challenge…" aria-describedby="letter-count"></textarea><div class="form-footer"><span id="letter-count" aria-live="polite">0 / 1000</span><button class="primary" type="submit">Send letter ✉</button></div></form>
@@ -73,7 +76,6 @@
   <h4>Your letters</h4><div class="entries" id="letters-list"><p class="empty">No letters yet. Patch would love to hear from you!</p></div>
 </section>
 <section class="community" id="board-panel" aria-labelledby="board-title" hidden>
-  <button class="back-map" type="button">← Back to map</button>
   <div class="panel-intro"><span class="panel-icon" aria-hidden="true">☼</span><div><p class="panel-kicker">NOTES FROM THE ISLAND COMMUNITY</p><h3 id="board-title" tabindex="-1">Message board</h3><p>Leave a little hello for everyone.</p></div></div>
   <form id="board-form"><label for="board-text">Your message</label><textarea id="board-text" maxlength="280" rows="3" placeholder="Say hello to the island…"></textarea><div class="form-footer"><span id="board-count">0 / 280 · No links</span><button class="primary" type="submit">Post</button></div></form>
   <div class="notice" id="board-notice" role="status" hidden></div>
@@ -81,10 +83,34 @@
   <h4>On the board</h4><div class="entries" id="board-list"><p class="empty">Loading the board…</p></div><button class="secondary" id="board-more" type="button" hidden>Load more</button>
 </section>
 <section class="community" id="alerts-panel" aria-labelledby="alerts-title" hidden>
-  <button class="back-map" type="button">← Back to map</button>
   <div class="panel-intro"><span class="panel-icon" aria-hidden="true">🔔</span><div><p class="panel-kicker">NEWS FROM THE ISLAND</p><h3 id="alerts-title" tabindex="-1">Notifications</h3><p>Patch can let you know when he has something for you.</p></div></div>
   <div class="notice" id="alerts-notice" role="status" hidden></div>
   <div class="signin" id="alerts-signin" hidden><p>Sign in to get Patch's notifications</p><a class="primary" href="https://containedevolution.com/" target="_blank" rel="noopener">Sign in</a></div>
   <div class="notice" id="alerts-install" hidden>On iPhone and iPad, add Patch to your Home Screen first: tap Share, then Add to Home Screen, and open him from there.</div>
   <form id="alerts-form" class="alerts" hidden><label><input type="checkbox" id="alerts-letters"><span>When Patch writes back to me</span></label><label><input type="checkbox" id="alerts-journal"><span>When Patch writes in his journal</span></label><small>These choices are for this device.</small></form>
-</section></dialog><section id="animations" class="locker" role="dialog" aria-modal="true" aria-labelledby="locker-title" hidden><canvas id="locker-canvas" aria-label="Patch on a turntable. Drag to turn him, scroll to zoom."></canvas><div class="locker-head"><div><span class="eyebrow">PATCH'S LOCKER</span><h2 id="locker-title">Animations</h2></div><button id="close-animations" type="button" aria-label="Close animations">×</button></div><div class="locker-list" id="locker-list" aria-label="Animations wired to Patch"></div><div class="locker-now" aria-live="polite"><strong id="locker-name">Loading Patch…</strong><span id="locker-use"></span><small id="locker-meta"></small><div class="locker-controls"><button id="locker-play" type="button">Pause</button><input id="locker-scrub" type="range" min="0" max="1000" value="0" aria-label="Position in the animation"><button id="locker-speed" type="button" aria-label="Playback speed">1×</button><button id="locker-spin" type="button" aria-pressed="true">Spin</button></div></div></section><dialog id="install-help" class="install-help" aria-labelledby="install-title"><h2 id="install-title">Get Patch's World as an app</h2><p id="install-steps"></p><p>The app opens straight to Patch's island and keeps the island on your device, so it loads fast.</p><form method="dialog"><button class="primary" type="submit">Got it</button></form></dialog><button id="app-update" type="button" hidden>Patch's island has an update · Reload</button><div id="error" hidden>Patch's island couldn't load on this device.</div><script type="module" src="./main.js"></script></body></html>
+</section>
+  <section class="community island-panel" id="page-panel" aria-labelledby="page-title" hidden>
+    <h2 id="page-title" tabindex="-1"></h2>
+    <iframe id="island-page" title="Patch’s World"></iframe>
+  </section>
+  <section class="community island-panel" id="animations-panel" aria-labelledby="animations-title" hidden>
+    <h2 id="animations-title" tabindex="-1">Animations</h2>
+    <section id="animations" class="locker" aria-labelledby="locker-title" hidden><canvas id="locker-canvas" aria-label="Patch on a turntable. Drag to turn him, scroll to zoom."></canvas><div class="locker-head"><div><span class="eyebrow">PATCH'S LOCKER</span><h3 id="locker-title">Animation viewer</h3></div><button id="close-animations" type="button" aria-label="Close animations">×</button></div><div class="locker-list" id="locker-list" aria-label="Animations wired to Patch"></div><div class="locker-now" aria-live="polite"><strong id="locker-name">Loading Patch…</strong><span id="locker-use"></span><small id="locker-meta"></small><div class="locker-controls"><button id="locker-play" type="button">Pause</button><input id="locker-scrub" type="range" min="0" max="1000" value="0" aria-label="Position in the animation"><button id="locker-speed" type="button" aria-label="Playback speed">1×</button><button id="locker-spin" type="button" aria-pressed="true">Spin</button></div></div></section>
+  </section>
+  <nav id="island-menu" aria-label="Island menu">
+    <button id="open-island-map" type="button" data-panel="map" aria-current="true">Map</button>
+    <button id="open-audio" type="button" data-panel="audio">Audio</button>
+    <button id="open-video" type="button" data-panel="video">Video</button>
+    <button id="open-patch" type="button" data-panel="patch">Patch</button>
+    <button id="open-cameras" type="button" data-panel="cameras">Island cameras</button>
+    <button id="open-letters" type="button" data-panel="letters">Letters</button>
+    <button id="open-board" type="button" data-panel="board">Message board</button>
+    <button id="open-memory" type="button" data-page="memory">Memory</button>
+    <button id="open-alerts" type="button" data-panel="alerts">Notifications</button>
+    <button id="open-journal" type="button" data-page="journal">Journal</button>
+    <button id="open-gifts" type="button" data-page="gifts">Leave a gift</button>
+    <button id="open-animations" type="button" data-panel="animations" hidden>Animations</button>
+    <button id="install-app" type="button" aria-haspopup="dialog" hidden>Get the Patch app</button>
+    <button id="app-update" type="button" hidden>Reload to update</button>
+  </nav>
+</dialog><dialog id="install-help" class="install-help" aria-labelledby="install-title"><h2 id="install-title">Get Patch's World as an app</h2><p id="install-steps"></p><p>The app opens straight to Patch's island and keeps the island on your device, so it loads fast.</p><form method="dialog"><button class="primary" type="submit">Got it</button></form></dialog><div id="error" hidden>Patch's island couldn't load on this device.</div><script type="module" src="./main.js"></script></body></html>

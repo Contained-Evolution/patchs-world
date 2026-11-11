@@ -5,6 +5,7 @@ import { createPatchEyes } from './patch-eyes.js';
 import * as THREE from 'three';
 import { createVisitorControls } from './visitor-controls.js';
 import { setupIslandCameras } from './island-cameras.js';
+import { setupIslandMap } from './island-map.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { sampleState } from '../../shared/state.js';
 import { hammock } from './hammock.js';
@@ -28,21 +29,34 @@ import { seatFor, usesTablet, deskClip } from './furniture.js';
 
 const $ = s => document.querySelector(s);
 const dialog = $('#map');
-for(const [label,id] of Object.entries({grove:'banana-grove',trees:'tall-trees',pond:'pond',camp:'hammock',computer:'computer',beach:'beach',lookout:'lookout',meadow:'meadow',cave:'cave',tide:'tide-pools'})){const [x,z]=places[id],node=document.querySelector('.map-label.'+label);node.style.left=`${50+x/6.4}%`;node.style.top=`${50+z/7.2}%`;node.style.right='auto';node.style.bottom='auto';}
-
-$('#open-map').onclick = () => { controls.pause(); dialog.showModal(); };
+const mapHome = $('#map-home');
+const updateMap = setupIslandMap($('#mini-chart canvas'), $('#full-chart canvas'), $('#map-landmarks'));
+$('#open-map').onclick = () => { controls.pause(); community.showPanel('map'); dialog.showModal(); };
 $('#close-map').onclick = () => dialog.close();
 const community=setupCommunity(dialog);
 setupNotifications(dialog,community,registerApp());
 setupInstall();
 // Chris's account sees an Animations button in the menu that opens Patch's clip locker.
 const animations=setupAnimationViewer();
-$('#open-animations').onclick=()=>{dialog.close();controls.pause();animations.open();};
+
 fetch('/api/me',{credentials:'same-origin',cache:'no-store'}).then(r=>r.ok?r.json():null).then(me=>{if(me?.user?.admin||isLocalPreview(location.hostname))$('#open-animations').hidden=false;}).catch(()=>{if(isLocalPreview(location.hostname))$('#open-animations').hidden=false;});
 let renderer;
 try { renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' }); } catch { $('#error').hidden = false; throw new Error('WebGL unavailable'); }
 const basePixelRatio=Math.min(devicePixelRatio,1.5);renderer.setPixelRatio(basePixelRatio);
-const updateQuality=adaptiveQuality(renderer,basePixelRatio),reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
+const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
+const quality = $('#render-quality');
+try { quality.value = localStorage.getItem('patch-render-quality') || 'auto'; } catch {}
+if (!quality.value) quality.value = 'auto';
+let adaptiveTick;
+function applyQuality() {
+  renderer.setPixelRatio(quality.value === 'reduced' ? Math.min(.75, basePixelRatio) : basePixelRatio);
+  adaptiveTick = quality.value === 'auto' ? adaptiveQuality(renderer, basePixelRatio) : null;
+}
+quality.onchange = () => {
+  try { localStorage.setItem('patch-render-quality', quality.value); } catch {}
+  applyQuality();
+};
+applyQuality();
 renderer.setSize(innerWidth, innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 $('#world').append(renderer.domElement);
@@ -50,9 +64,39 @@ const scene = new THREE.Scene();
 scene.fog = new THREE.Fog(0xadd9d4, 750, 1650);
 const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, .1, 12000);
 const scenery=createIsland(scene),solids=scenery.walkSolids;
-const sound=createIslandAudio($('#island-sound'));
-const cameraFeeds = setupIslandCameras(renderer, () => controls.pause());
-const controls = createVisitorControls(camera, renderer.domElement, () => dialog.open || cameraFeeds.open || animations.isOpen(), scene, solids);
+const sound=createIslandAudio($('#island-sound'), $('#footsteps'));
+const cameraFeeds = setupIslandCameras(renderer);
+const controls = createVisitorControls(camera, renderer.domElement, () => dialog.open, scene, solids);
+const embeddedPage = $('#island-page');
+const menu = $('#island-menu');
+menu.addEventListener('click', event => {
+  const button = event.target.closest('button');
+  if (!button) return;
+  const { panel, page } = button.dataset;
+  if (animations.isOpen() && panel !== 'animations') animations.close();
+  if (page) {
+    embeddedPage.dataset.page = page;
+    embeddedPage.title = $('#page-title').textContent = button.textContent;
+    community.showPanel('page');
+    embeddedPage.src = `./${page}.html`;
+  } else if (['map', 'audio', 'video', 'patch', 'cameras', 'animations'].includes(panel)) {
+    if (panel === 'cameras') cameraFeeds.showGrid();
+    community.showPanel(panel);
+    if (panel === 'animations') animations.open();
+  }
+});
+embeddedPage.addEventListener('load', () => {
+  const page = embeddedPage.contentDocument;
+  if (!page || !embeddedPage.dataset.page) return;
+  // The island menu provides the navigation in the embedded view.
+  const navigation = page.querySelector('header nav, header > a');
+  if (navigation) navigation.style.display = 'none';
+});
+$('#close-animations').onclick = () => {
+  animations.close();
+  community.showPanel('map');
+};
+dialog.addEventListener('close', () => { if (!dialog.open && animations.isOpen()) animations.close(); });
 // A notification opens the island at its panel: ?view=letters.
 const view=new URLSearchParams(location.search).get('view');
 if(view==='letters'||view==='board'){history.replaceState(null,'',location.pathname);controls.pause();dialog.showModal();community.openPanel(view);}
@@ -220,12 +264,20 @@ const cloudMap=cloudTexture(),clouds=[];for(let i=0;i<10;i++){const m=new THREE.
 const rainGeo=new THREE.BufferGeometry(),drops=[];for(let i=0;i<500;i++)drops.push((Math.random()-.5)*50,Math.random()*35,(Math.random()-.5)*50);rainGeo.setAttribute('position',new THREE.Float32BufferAttribute(drops,3));const rain=new THREE.Points(rainGeo,new THREE.PointsMaterial({color:0xd6edf2,size:.12,transparent:true,opacity:.7}));scene.add(rain);
 let last=performance.now();const spawn=nearestWalkable(0,0,solids);patch.position.set(spawn[0],groundHeight(...spawn),spawn[1]);
 const findPatch = $('#find-patch'), followPatch = $('#follow-patch');
-findPatch.onclick = () => { if (state) controls.findPatch(patch.position); };
+findPatch.onclick = () => {
+  if (!state) return;
+  dialog.close();
+  controls.findPatch(patch.position);
+};
 followPatch.onchange = () => {
-  if (followPatch.checked && state) controls.findPatch(patch.position);
+  if (followPatch.checked && state) {
+    dialog.close();
+    controls.findPatch(patch.position);
+  }
   else controls.stopFollowing();
 };
 function renderIsland(now, rainOffset = 0) {
+  updateMap(now, camera.position, patch.visible ? patch.position : null, dialog.open && !mapHome.hidden);
   const renderView = view => {
     if (rain.visible) rain.position.set(view.position.x, view.position.y - rainOffset, view.position.z);
     scenery.setTrackingTarget(patch.visible && !cameraFeeds.open && followPatch.checked ? patch.position : null);
@@ -234,7 +286,7 @@ function renderIsland(now, rainOffset = 0) {
   if (cameraFeeds.open) cameraFeeds.render(now, renderView);
   else renderView(controls.camera);
 }
-function frame(now){requestAnimationFrame(frame);sound.pause(animations.isOpen());if(animations.isOpen()){last=now;return;}updateQuality(now);const dt=Math.min((now-last)/1000,.05);last=now;let t=(now-start)/1000;
+function frame(now){requestAnimationFrame(frame);sound.pause(animations.isOpen());if(animations.isOpen()){last=now;return;}adaptiveTick?.(now);const dt=Math.min((now-last)/1000,.05);last=now;let t=(now-start)/1000;
 if (demo) { let n=Math.floor(t/9); const mockAction=mockActions[n%mockActions.length];state={patch:{...sampleState.patch,mail:n%3,action:mockAction,place:mockAction==='computer'?'computer':ids[Math.floor(n/2)%ids.length],target:['walk','run','swing'].includes(mockActions[n%mockActions.length]) ? ids[(Math.floor(n/2)+1)%ids.length] : null,since:String(n),says:null},clock:{dayFraction:(.38+t/240)%1,weather:['clear','cloudy','rain','storm'][Math.floor(t/60)%4]}}; }
 if (demo) renderCare(state.patch);
 const walked = controls.update(dt) || 0;
@@ -435,5 +487,3 @@ sound.update(cameraFeeds.camera || controls.camera, {
 });
 scenery.update(reducedMotion.matches?0:dt,daylight);renderIsland(now,reducedMotion.matches?0:t*12%30);}
 requestAnimationFrame(frame);addEventListener('resize',()=>{controls.resize(innerWidth/innerHeight);renderer.setSize(innerWidth,innerHeight);});
-
-document.getElementById('open-memory')?.addEventListener('click', () => { location.href = './memory.html'; });

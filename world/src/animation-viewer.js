@@ -86,7 +86,6 @@ export function setupAnimationViewer() {
   spin.onclick=()=>setSpin(!spinning);
   scrub.oninput=()=>{if(!action)return;action.time=Number(scrub.value)/1000*action.getClip().duration;if(paused)mixer.update(0);};
   $('#close-animations').onclick=()=>close();
-  addEventListener('keydown',e=>{if(isOpen()&&e.key==='Escape'){e.preventDefault();close();}});
   addEventListener('resize',()=>{if(isOpen())resize();});
   function open(){returnFocus=document.activeElement;root.hidden=false;if(!renderer)build();resize();last=performance.now();cancelAnimationFrame(frame);frame=requestAnimationFrame(loop);if(!selected)select('idle');list.querySelector('.selected')?.focus();}
   function close(){root.hidden=true;cancelAnimationFrame(frame);returnFocus?.focus?.();}

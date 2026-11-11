@@ -64,7 +64,6 @@ export function createVisitorControls(camera, canvas, isModalOpen, scene, walkSo
 
   function updateLook() {
     const walking = mode === 'walk';
-    document.body.classList.toggle('walking', walking);
     returnToWalk.hidden = walking;
     mouseLock.hidden = !walking;
     mouseLock.setAttribute('aria-pressed', String(lockedLook));
@@ -178,7 +177,8 @@ export function createVisitorControls(camera, canvas, isModalOpen, scene, walkSo
   const canWalk = () => mode === 'walk' && !isModalOpen();
   moveStick.addEventListener('contextmenu', event => event.preventDefault());
   moveStick.addEventListener('pointerdown', event => {
-    if (!canWalk() || stickPointer !== null || event.button !== 0) return;
+    if (isModalOpen() || stickPointer !== null || event.button !== 0) return;
+    if (mode !== 'walk') setMode('walk');
     event.preventDefault();
     stickPointer = event.pointerId;
     moveStick.setPointerCapture(stickPointer);
