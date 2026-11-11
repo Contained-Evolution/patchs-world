@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#101523"><title>Patch's memory galaxy</title><link rel="stylesheet" href="./memory.css"></head>
+<body>
+<main id="galaxy" aria-label="Interactive memory galaxy"></main>
+<header><a href="./index.html">← Patch's island</a><span class="eyebrow">A LITTLE UNIVERSE INSIDE</span><h1>Patch's memory galaxy</h1><p id="status" role="status">Gathering his memories…</p></header>
+<nav id="navigation" aria-label="Galaxy controls"><button id="home">⌂ Home view</button><button id="zoom-in" aria-label="Zoom in">＋</button><button id="zoom-out" aria-label="Zoom out">−</button><button id="motion" aria-pressed="false">Pause orbits</button><button id="browse">Browse memories</button></nav>
+<aside id="explorer" aria-label="Find a memory" hidden><div class="panel-head"><h2>Find a memory</h2><button id="close-explorer" aria-label="Close memory browser">×</button></div><label>Galaxy<select id="category"><option value="">All galaxies</option></select></label><label>Search memories<input id="search" type="search" placeholder="A person, a place, a feeling…"></label><div id="memory-list"></div></aside>
+<section id="reader" aria-labelledby="memory-title" hidden><div class="panel-head"><span id="memory-category" class="eyebrow"></span><button id="close-reader" aria-label="Close memory">×</button></div><h2 id="memory-title"></h2><p id="memory-meta"></p><div id="memory-text"></div><div id="memory-tags" class="tags"></div><button id="fly">Fly to this memory</button></section>
+<footer><details id="connections"><summary>Tags &amp; connections</summary><p id="thought"></p><button id="clear-tag" hidden>Return to his last thought</button><div id="tags" class="tags"></div></details><p class="hint">Drag to orbit · Scroll or pinch to zoom · Right-drag or two fingers to travel · Tap a star to read</p><p class="legend">Larger stars hold stronger memories. Colours follow feelings; light follows his last thought.</p></footer>
+<script type="module" src="./memory-galaxy.js"></script></body></html>
