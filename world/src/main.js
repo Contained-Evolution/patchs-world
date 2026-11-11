@@ -4,6 +4,7 @@ import { createFoodProps } from './food-props.js';
 import { createPatchEyes } from './patch-eyes.js';
 import * as THREE from 'three';
 import { createVisitorControls } from './visitor-controls.js';
+import { setupIslandCameras } from './island-cameras.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { sampleState } from '../../shared/state.js';
 import { createIsland } from './island.js';
@@ -43,7 +44,8 @@ $('#world').append(renderer.domElement);
 const scene = new THREE.Scene();
 scene.fog = new THREE.Fog(0xadd9d4, 750, 1650);
 const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, .1, 12000);
-const controls = createVisitorControls(camera, renderer.domElement, dialog, scene);
+const cameraFeeds = setupIslandCameras(renderer, () => controls.pause());
+const controls = createVisitorControls(camera, renderer.domElement, () => dialog.open || cameraFeeds.open || animations.isOpen(), scene);
 // A notification opens the island at its panel: ?view=letters.
 const view=new URLSearchParams(location.search).get('view');
 if(view==='letters'||view==='board'){history.replaceState(null,'',location.pathname);controls.pause();dialog.showModal();community.openPanel(view);}
@@ -178,13 +180,26 @@ function cloudTexture(){const c=document.createElement('canvas');c.width=512;c.h
 const cloudMap=cloudTexture(),clouds=[];for(let i=0;i<10;i++){const m=new THREE.Sprite(new THREE.SpriteMaterial({map:cloudMap,transparent:true,opacity:.75,depthWrite:false}));m.scale.set(190+i%3*35,90,1);m.position.set(Math.cos(i*2.4)*510,650+i%3*45,Math.sin(i*2.4)*510);scene.add(m);clouds.push(m);}
 const rainGeo=new THREE.BufferGeometry(),drops=[];for(let i=0;i<500;i++)drops.push((Math.random()-.5)*50,Math.random()*35,(Math.random()-.5)*50);rainGeo.setAttribute('position',new THREE.Float32BufferAttribute(drops,3));const rain=new THREE.Points(rainGeo,new THREE.PointsMaterial({color:0xd6edf2,size:.12,transparent:true,opacity:.7}));scene.add(rain);
 let last=performance.now();patch.position.set(0,groundHeight(0,0),0);
-$('#find-patch').onclick=()=>{ if (state) controls.findPatch(patch.position,patchVelocity); };
+const findPatch = $('#find-patch'), followPatch = $('#follow-patch');
+findPatch.onclick = () => { if (state) controls.findPatch(patch.position); };
+followPatch.onchange = () => {
+  if (followPatch.checked && state) controls.findPatch(patch.position);
+  else controls.stopFollowing();
+};
+function renderIsland(now, rainOffset = 0) {
+  const renderView = view => {
+    if (rain.visible) rain.position.set(view.position.x, view.position.y - rainOffset, view.position.z);
+    renderer.render(scene, view);
+  };
+  if (cameraFeeds.open) cameraFeeds.render(now, renderView);
+  else renderView(controls.camera);
+}
 function frame(now){requestAnimationFrame(frame);if(animations.isOpen()){last=now;return;}updateQuality(now);const dt=Math.min((now-last)/1000,.05);last=now;let t=(now-start)/1000;
 if (demo) { let n=Math.floor(t/9); const mockAction=mockActions[n%mockActions.length];state={patch:{...sampleState.patch,mail:n%3,action:mockAction,place:mockAction==='computer'?'computer':ids[Math.floor(n/2)%ids.length],target:['walk','run','swing'].includes(mockActions[n%mockActions.length]) ? ids[(Math.floor(n/2)+1)%ids.length] : null,since:String(n),says:null},clock:{dayFraction:(.38+t/240)%1,weather:['clear','cloudy','rain','storm'][Math.floor(t/60)%4]}}; }
 if (demo) renderCare(state.patch);
 controls.update(dt);
-$('#find-patch').disabled=!state;
-if (!state) { patch.visible=false; scene.background=skyDay; scenery.update(reducedMotion.matches?0:dt,1); renderer.render(scene,camera); return; }
+findPatch.disabled = followPatch.disabled = !state;
+if (!state) { patch.visible=false; scene.background=skyDay; rain.visible=false; scenery.update(reducedMotion.matches?0:dt,1); renderIsland(now); return; }
 patch.visible=true;previousPatchPosition.copy(patch.position);
 const {action,place,target,says,since,until,speechUntil}=state.patch,mail=Number(state.patch.mail)||0;scenery.setMail(mail);
 $('#status').textContent = statusText(state.patch)+(mail&&!(place==='computer'&&!target)?` ✉ ${mail} letter${mail===1?'':'s'} waiting at his coconut computer.`:'');
@@ -311,8 +326,8 @@ if(rightHandBone&&fishingRod.visible){patch.updateMatrixWorld(true);rightHandBon
 if(action==='watch-sky' && headBone && currentName==='sit-ground') headBone.quaternion.multiply(lookUp);
 patchMouth?.update(says,speechUntil,Date.now()+serverOffset,action==='sleep',dt);
 const speechLive=!!says && Number.isFinite(Date.parse(speechUntil)) && Date.now()+serverOffset<Date.parse(speechUntil);$('#bubble').hidden=!speechLive;$('#bubble').textContent=speechLive?says:'';
-let day=Number.isFinite(state.clock.dayFraction)?state.clock.dayFraction:.5;let daylight=THREE.MathUtils.smoothstep(Math.sin((day-.25)*Math.PI*2),-.12,.2);let weather=state.clock.weather;let overcast=weather==='cloudy'||weather==='rain'||weather==='storm';sky.copy(skyNight).lerp(skyDay,daylight*(overcast?.65:1));updateSky(daylight);scene.background=skyTexture;scene.fog.color.copy(sky);hemi.intensity=1.25+daylight*(overcast?.4:1.15);sunLight.intensity=daylight*(overcast?.6:2.4)+(1-daylight)*.65;sunLight.color.copy(moonColor).lerp(sunColor,daylight);let angle=(day-.25)*Math.PI*2;sun.position.set(Math.cos(angle)*900,Math.sin(angle)*900,0);moon.position.copy(sun.position).multiplyScalar(-1);sunLight.position.copy(daylight>.05?sun.position:moon.position);stars.material.opacity=1-daylight;stars.visible=daylight<.98;clouds.forEach((c,i)=>{c.visible=overcast||i<5;c.position.x+=reducedMotion.matches?0:dt*.14;if(c.position.x>520)c.position.x=-520;});rain.visible=weather==='rain'||weather==='storm';if(rain.visible){rain.position.x=camera.position.x;rain.position.z=camera.position.z;rain.position.y=camera.position.y-(reducedMotion.matches?0:t*12%30);}
-scenery.update(reducedMotion.matches?0:dt,daylight);renderer.render(scene,camera);}
-requestAnimationFrame(frame);addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
+let day=Number.isFinite(state.clock.dayFraction)?state.clock.dayFraction:.5;let daylight=THREE.MathUtils.smoothstep(Math.sin((day-.25)*Math.PI*2),-.12,.2);let weather=state.clock.weather;let overcast=weather==='cloudy'||weather==='rain'||weather==='storm';sky.copy(skyNight).lerp(skyDay,daylight*(overcast?.65:1));updateSky(daylight);scene.background=skyTexture;scene.fog.color.copy(sky);hemi.intensity=1.25+daylight*(overcast?.4:1.15);sunLight.intensity=daylight*(overcast?.6:2.4)+(1-daylight)*.65;sunLight.color.copy(moonColor).lerp(sunColor,daylight);let angle=(day-.25)*Math.PI*2;sun.position.set(Math.cos(angle)*900,Math.sin(angle)*900,0);moon.position.copy(sun.position).multiplyScalar(-1);sunLight.position.copy(daylight>.05?sun.position:moon.position);stars.material.opacity=1-daylight;stars.visible=daylight<.98;clouds.forEach((c,i)=>{c.visible=overcast||i<5;c.position.x+=reducedMotion.matches?0:dt*.14;if(c.position.x>520)c.position.x=-520;});rain.visible=weather==='rain'||weather==='storm';
+controls.track(patch.position,dt);scenery.update(reducedMotion.matches?0:dt,daylight);renderIsland(now,reducedMotion.matches?0:t*12%30);}
+requestAnimationFrame(frame);addEventListener('resize',()=>{controls.resize(innerWidth/innerHeight);renderer.setSize(innerWidth,innerHeight);});
 
 document.getElementById('open-memory')?.addEventListener('click', () => { location.href = './memory.html'; });
