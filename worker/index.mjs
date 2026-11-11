@@ -79,7 +79,11 @@ export class PatchWorld extends DurableObject {
     const now = Date.now();
     const body = await this.body(now);
     if (this.env.OPENROUTER_API_KEY && !(await this.ctx.storage.getAlarm())) await this.ctx.storage.setAlarm(now + 60000);
-    return view(body, now, ((await this.ctx.storage.get('unread')) || []).length);
+    const stored = await this.ctx.storage.get(['unread', 'giftSound']);
+    const result = view(body, now, (stored.get('unread') || []).length);
+    const sound = stored.get('giftSound');
+    if (sound && now - sound.at < 8000) result.patch.giftSound = sound;
+    return result;
   }
 
   async alarm() {
@@ -268,6 +272,7 @@ export class PatchWorld extends DurableObject {
 
   async applyGift(id, action, body, now) {
     const key = `gift:${id}`;
+    const sound = { action, place: body.activity.place, at: Date.now() };
     // Apply to a copy so storage transaction retries cannot increase needs twice.
     const result = await this.ctx.storage.transaction(async txn => {
       const gifts = await txn.get(key);
@@ -275,7 +280,7 @@ export class PatchWorld extends DurableObject {
       const copy = { activity: body.activity, needs: { ...body.needs } };
       const thought = useGift(gifts, action, copy, now);
       if (!thought) return null;
-      await txn.put(key, gifts);
+      await txn.put({ [key]: gifts, giftSound: sound });
       return { thought, needs: copy.needs };
     });
     if (result) Object.assign(body.needs, result.needs);

@@ -5,6 +5,8 @@ import { anchorFor, holdFor, ROPE_TREES, trees } from './world-state.js';
 import { forest, isReserved } from './forest.js';
 import { createTerrainTiles } from './terrain-mesh.js';
 import { CLIMB_WALLS } from './climbing.js';
+import { createWalkSolids } from './walk-solids.js';
+import { hammock, hammockHeight } from './hammock.js';
 import { createFurniture } from './camp-furniture.js';
 const rand=n=>{const v=Math.sin(n*127.1+311.7)*43758.5453123;return v-Math.floor(v);};
 function surfaceTexture(base, strokes, seed=1){
@@ -21,6 +23,11 @@ function leafGeometry(){
 }
 function rockGeometry(){let g=mergeVertices(new THREE.IcosahedronGeometry(1,2));const p=g.attributes.position;for(let i=0;i<p.count;i++){let x=p.getX(i),y=p.getY(i),z=p.getZ(i);let f=1+.16*Math.sin(x*7+z*4)*Math.cos(y*9-z*2);p.setXYZ(i,x*f,y*f,z*f);}g.computeVertexNormals();return g;}
 export function createIsland(scene){
+ const walkSolids = createWalkSolids();
+ function block(mesh) {
+  const bounds = new THREE.Box3().setFromObject(mesh);
+  walkSolids.box(bounds.min.x, bounds.min.z, bounds.max.x, bounds.max.z);
+ }
  const material=(color,extra={})=>new THREE.MeshStandardMaterial({color,roughness:1,...extra});
  const groundMat=material(0xffffff,{vertexColors:true,map:surfaceTexture('#dfdfdf',['#898989','#ffffff','#bbbbbb'])});
  const grassDetail=new THREE.TextureLoader().load(new URL('./assets/tropical-grass.png',document.baseURI).href);grassDetail.colorSpace=THREE.SRGBColorSpace;grassDetail.wrapS=grassDetail.wrapT=THREE.RepeatWrapping;grassDetail.anisotropy=4;
@@ -34,7 +41,7 @@ vec3 detail=texture2D(grassDetail,islandGround*.18).rgb;float inland=1.0-smooths
  const wet=material(0x67836b,{roughness:.55});
  const add=(geo,mat,x=0,y=0,z=0)=>{const o=new THREE.Mesh(geo,mat);o.position.set(x,y,z);scene.add(o);return o;};
  const beam=(mat,a,b,r1,r2=r1)=>{const av=new THREE.Vector3(...a),bv=new THREE.Vector3(...b),d=bv.clone().sub(av);const o=add(new THREE.CylinderGeometry(r2,r1,d.length(),8),mat);o.position.copy(av).add(bv).multiplyScalar(.5);o.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize());return o;};
- const stones=[];const stone=(x,z,sx,sy,sz)=>{stones.push({x,z,sx,sy,sz});};
+ const stones=[];const stone=(x,z,sx,sy,sz)=>{stones.push({x,z,sx,sy,sz});walkSolids.ellipse(x,z,sx,sz);};
  const boulder=rockGeometry(),blade=leafGeometry();
  // Heightfield follows the exact same coast and ground query as movement and Patch.
  for(const geometry of createTerrainTiles())add(geometry,groundMat);
@@ -117,19 +124,32 @@ if (trackingPatch) {
  }
  function setRope(i,end){const line=ropes.get(i);if(!line)return;const p=line.geometry.attributes.position,hold=holdFor(i),tip=end||[hold.anchor[0],groundHeight(hold.anchor[0],hold.anchor[2])+.3,hold.anchor[2]];p.setXYZ(1,...tip);p.needsUpdate=true;line.geometry.computeBoundingSphere();}
  // Scrub, flowers and coastal stones are instanced rather than individual meshes.
- for(let i=0;i<600;i++){let x=(rand(i+16000)*2-1)*300,z=(rand(i+18000)*2-1)*340;if(shoreFraction(x,z)>.93||reserved(x,z)||rand(i+19000)<.5)continue;rocks.push({x,z,s:.4+rand(i+20000)*2});}
+ for(let i=0;i<600;i++){let x=(rand(i+16000)*2-1)*300,z=(rand(i+18000)*2-1)*340;if(shoreFraction(x,z)>.93||reserved(x,z)||rand(i+19000)<.5)continue;const s=.4+rand(i+20000)*2;rocks.push({x,z,s});walkSolids.ellipse(x,z,s*1.15,s*1.15);}
  const rockMesh=new THREE.InstancedMesh(boulder,rock,rocks.length);rocks.forEach((r,i)=>{pose.position.set(r.x,groundHeight(r.x,r.z)+r.s*.25,r.z);pose.rotation.set(.1,rand(i+41)*6,.15);pose.scale.set(r.s*1.3,r.s*.55,r.s);pose.updateMatrix();rockMesh.setMatrixAt(i,pose.matrix);});rockMesh.instanceMatrix.needsUpdate=true;rockMesh.computeBoundingSphere();scene.add(rockMesh);
  // Home: two living supports, hanging ropes and a curved cloth bed.
- const hy=groundHeight(0,0);for(const x of [-3.4,3.4]){beam(bark,[x,hy,1],[x,hy+6,1],.38,.24);for(let j=0;j<5;j++){let a=j*1.25;const f=add(blade,foliageDark,x,hy+5.8,1);f.rotation.set(-.3,a,0);f.scale.setScalar(1.1);}}
- const bedGeo=new THREE.PlaneGeometry(5,1.3,24,4);bedGeo.rotateX(-Math.PI/2);const bp=bedGeo.attributes.position;for(let i=0;i<bp.count;i++){const x=bp.getX(i);bp.setY(i,Math.pow(Math.abs(x)/2.5,2)*.55);}bedGeo.computeVertexNormals();add(bedGeo,cloth,0,hy+1.35,1);
- for(const x of [-1,1])beam(rope,[x*2.5,hy+1.9,1],[x*3.4,hy+4.2,1],.035);
- for(const x of [4.2,6.2])beam(wood,[x,hy,2],[x,hy+3.4,2],.07);for(const y of [hy+1.35,hy+2.5]){const shelf=add(new THREE.BoxGeometry(2.5,.13,.9),wood,5.2,y,2);shelf.rotation.y=.03;}
+ const hy=groundHeight(hammock.x,hammock.z);
+ for(const x of [-3.4,3.4]){
+  beam(bark,[x,hy,1],[x,hy+6,1],.38,.24);
+  walkSolids.ellipse(x,1,.38,.38);
+  for(let j=0;j<5;j++){let a=j*1.25;const f=add(blade,foliageDark,x,hy+5.8,1);f.rotation.set(-.3,a,0);f.scale.setScalar(1.1);}
+ }
+ const bedGeo=new THREE.PlaneGeometry(2,2,48,24);
+ const bp=bedGeo.attributes.position;
+ for(let i=0;i<bp.count;i++){
+  const u=bp.getX(i),v=bp.getY(i);
+  bp.setXYZ(i,u*hammock.halfLength,hammockHeight(u,v),v*hammock.halfWidth*Math.cos(u*Math.PI/2));
+ }
+ bedGeo.computeVertexNormals();
+ add(bedGeo,cloth,hammock.x,hy,hammock.z);
+ walkSolids.ellipse(hammock.x,hammock.z,hammock.halfLength,hammock.halfWidth);
+ for(const x of [-1,1])beam(rope,[x*hammock.halfLength,hy+hammockHeight(1,0),1],[x*3.4,hy+4.2,1],.035);
+ for(const x of [4.2,6.2])beam(wood,[x,hy,2],[x,hy+3.4,2],.07);for(const y of [hy+1.35,hy+2.5]){const shelf=add(new THREE.BoxGeometry(2.5,.13,.9),wood,5.2,y,2);shelf.rotation.y=.03;block(shelf);}
  // Simple useful objects make the clearing feel inhabited without moving Patch's anchors.
  const lamp=add(new THREE.SphereGeometry(.18,8,6),new THREE.MeshBasicMaterial({color:0xffd99c}),5,hy+2.74,2);
- const basket=add(new THREE.CylinderGeometry(.65,.48,.65,12),wood,6,hy+.33,-1);basket.rotation.z=.05;
+ const basket=add(new THREE.CylinderGeometry(.65,.48,.65,12),wood,6,hy+.33,-1);basket.rotation.z=.05;walkSolids.ellipse(6,-1,.65,.65);
  const basketRim=add(new THREE.TorusGeometry(.65,.045,6,24),rope,6,hy+.68,-1);basketRim.rotation.x=Math.PI/2;
  for(let i=0;i<4;i++){const fruit=add(new THREE.TorusGeometry(.23,.065,6,12,Math.PI*1.25),material(0xd7bc58),5.7+i*.19,hy+.75,-1);fruit.rotation.set(.4,i*.8,.25);}
- for(const [x,z] of [[-5,5],[-7,4],[8,-4]]){let y=groundHeight(x,z);beam(wood,[x-1,y+.12,z],[x+1,y+.2,z+.35],.12,.08);}
+ for(const [x,z] of [[-5,5],[-7,4],[8,-4]]){let y=groundHeight(x,z);walkSolids.log(x-1,z,x+1,z+.35,.12);beam(wood,[x-1,y+.12,z],[x+1,y+.2,z+.35],.12,.08);}
  // Pond edge, stream, falls and waterside boulders; geometry sits on the basin.
  for(let i=0;i<30;i++){const a=i*Math.PI*2/30,x=ISLAND.pondX+Math.cos(a)*(ISLAND.pondRX+1.4),z=ISLAND.pondZ+Math.sin(a)*(ISLAND.pondRZ+1.3);if(i%4!==0&&Math.hypot(x-places.pond[0],z-places.pond[1])>5)stone(x,z,.7+rand(i)*.6,.45+rand(i+40)*.5,.6+rand(i+90)*.5);}
  const reedData=[];for(let i=0;i<22;i++){let a=i*6.28/22,x=ISLAND.pondX+Math.cos(a)*27,z=ISLAND.pondZ+Math.sin(a)*19,y=groundHeight(x,z);for(let j=0;j<3;j++)reedData.push({x:x+j*.2,y,z,h:1.4+rand(i+j)*.8});}
@@ -155,7 +175,7 @@ if (trackingPatch) {
  for(let i=0;i<10;i++){let a=i*6.28/10,x=places.lookout[0]+Math.cos(a)*10,z=places.lookout[1]+Math.sin(a)*9;stone(x,z,1.5,1,1.2);}
  // Climbing rocks keep their front exactly flat for Patch's braced feet; only the sides, back and top are rough.
  for(const w of CLIMB_WALLS){const height=w.top-w.bottom,geo=new THREE.BoxGeometry(w.width,height,w.depth,14,8,6),p=geo.attributes.position;for(let i=0;i<p.count;i++){const x=p.getX(i),y=p.getY(i),z=p.getZ(i),behind=Math.max(0,Math.min(1,(w.depth/2-z)/.35)),bump=(Math.sin(x*3.1+y*2.3)*Math.cos(z*4.7-x)*.12+Math.sin(y*5.3+z*2.9)*.05)*behind;p.setXYZ(i,x*(1+bump*.25),y+(y>height/2-.01?bump*.6-.12*behind:0),z+bump);}geo.computeVertexNormals();const face=add(geo,rock,w.x-w.normal[0]*w.depth/2,w.bottom+height/2,w.z-w.normal[1]*w.depth/2);face.rotation.y=Math.atan2(w.normal[0],w.normal[1]);const lip=add(new THREE.BoxGeometry(w.width-.5,.09,.14),rock,w.x+w.normal[0]*.07,w.ledges[0]-.045,w.z+w.normal[1]*.07);lip.rotation.y=face.rotation.y;}
- for(const [x,z] of [[278,32],[268,41],[285,9]]){const y=groundHeight(x,z);beam(wood,[x-2.2,y+.2,z],[x+2,y+.4,z+1],.24,.14);}
+ for(const [x,z] of [[278,32],[268,41],[285,9]]){const y=groundHeight(x,z);walkSolids.log(x-2.2,z,x+2,z+1,.24);beam(wood,[x-2.2,y+.2,z],[x+2,y+.4,z+1],.24,.14);}
  // Coastal outcrops sit beyond the walking boundary and break up the sand rim.
  const coastal=[];for(let i=0;i<62;i++){const band=i<35?-.72:-2.05,a=band+(rand(i+72000)-.5)*.75,q=1.015+rand(i+73000)*.055,r=coastRadius(a)*q,x=Math.cos(a)*ISLAND.radiusX*r,z=Math.sin(a)*ISLAND.radiusZ*r;coastal.push({x,z,s:2+rand(i+74000)*4,a});}
  const coastalMesh=new THREE.InstancedMesh(boulder,rock,coastal.length);coastal.forEach((p,i)=>{pose.position.set(p.x,groundHeight(p.x,p.z)+.4,p.z);pose.rotation.set(.1,rand(i+75000)*6,.12);pose.scale.set(p.s*1.4,p.s*.65,p.s);pose.updateMatrix();coastalMesh.setMatrixAt(i,pose.matrix);});coastalMesh.instanceMatrix.needsUpdate=true;coastalMesh.computeBoundingSphere();scene.add(coastalMesh);
@@ -163,6 +183,6 @@ if (trackingPatch) {
  for(const pool of TIDE_POOLS){const [x,z,rx,rz]=pool,p=add(new THREE.CircleGeometry(1,32),water,x,tideWaterHeight(pool),z);p.rotation.x=-Math.PI/2;p.scale.set(rx*.8,rz*.8,1);for(let i=0;i<7;i++){const a=i*6.28/7,px=x+Math.cos(a)*rx*1.2,pz=z+Math.sin(a)*rz*1.2;stone(px,pz,1,.6,.8);}}
  const boulderMesh=new THREE.InstancedMesh(boulder,rock,stones.length);stones.forEach((p,i)=>{pose.position.set(p.x,groundHeight(p.x,p.z)+p.sy*.10,p.z);pose.rotation.set(rand(p.x+p.z)*.4,rand(p.x-p.z)*6,.1);pose.scale.set(p.sx,p.sy,p.sz);pose.updateMatrix();boulderMesh.setMatrixAt(i,pose.matrix);});boulderMesh.instanceMatrix.needsUpdate=true;boulderMesh.computeBoundingSphere();scene.add(boulderMesh);
  // Chairs, the camp table and the coconut computer.
- const furniture=createFurniture(scene,{bark,wood,blade,foliage});
- return { setRope, setTrackingTarget, setMail:furniture.setMail, resetRopes(){for(const i of ROPE_TREES)setRope(i,null);}, update(dt,daylight){furniture.update(dt,daylight);waterTime.value+=dt;waterLight.value=daylight;flowMap.offset.y-=dt*.7;foliage.emissiveIntensity=.05+daylight*.3;foliageDark.emissiveIntensity=.05+daylight*.3;} };
+ const furniture=createFurniture(scene,{bark,wood,blade,foliage},block);
+ return { walkSolids, block, setRope, setTrackingTarget, setMail:furniture.setMail, resetRopes(){for(const i of ROPE_TREES)setRope(i,null);}, update(dt,daylight){furniture.update(dt,daylight);waterTime.value+=dt;waterLight.value=daylight;flowMap.offset.y-=dt*.7;foliage.emissiveIntensity=.05+daylight*.3;foliageDark.emissiveIntensity=.05+daylight*.3;} };
 }

@@ -1,22 +1,31 @@
 import * as THREE from 'three';
-import { groundHeight, trees } from './world-state.js';
+import { groundHeight } from './world-state.js';
+import { VISITOR_RADIUS } from './walk-solids.js';
 import { forestCollision } from './forest.js';
 import { insideRock } from './climbing.js';
 import { shoreFraction, walkShoreLimit, places, pondFraction, TIDE_POOLS } from './terrain.js';
 
-// The swing trees and cave walls remain solid without blocking their routes.
-export const obstacles = [...trees.map(([x,z])=>[x,z,.8])];
 const [caveX,caveZ]=places.cave;
-obstacles.push([caveX-7,caveZ-5,3],[caveX+7,caveZ-5,3],[caveX-8,caveZ-12,3],[caveX+8,caveZ-12,3],[caveX,caveZ-19,4]);
-function caveSolid(x,z){const dx=Math.abs(x-caveX),depth=caveZ-z;return depth>3&&depth<20&&((dx>5&&dx<8)||(depth>15&&dx<8));}
-export function walkable(x,z,fromX=x,fromZ=z) {
+function caveSolid(x,z){const dx=Math.abs(x-caveX),depth=caveZ-z;return depth>3&&depth<20&&((dx>5&&dx<7.3)||(depth>14.9&&dx<8));}
+export function walkable(x,z,fromX=x,fromZ=z,solids) {
   if ((caveSolid(x,z)&&!caveSolid(fromX,fromZ))||(insideRock(x,z)&&!insideRock(fromX,fromZ))) return false;
-  if (shoreFraction(x,z) > walkShoreLimit || pondFraction(x,z)<.94 || TIDE_POOLS.some(([px,pz,rx,rz])=>Math.hypot((x-px)/rx,(z-pz)/rz)<.72) || forestCollision(x,z,fromX,fromZ)) return false;
+  if (shoreFraction(x,z) > walkShoreLimit || pondFraction(x,z)<.94 || TIDE_POOLS.some(([px,pz,rx,rz])=>Math.hypot((x-px)/rx,(z-pz)/rz)<.72) || forestCollision(x,z,fromX,fromZ,solids ? VISITOR_RADIUS : 0)) return false;
   const d=Math.hypot(x-fromX,z-fromZ);
   if (d && Math.abs(groundHeight(x,z)-groundHeight(fromX,fromZ))/d > 1.1) return false;
-  return !obstacles.some(([ox,oz,r]) => Math.hypot(x-ox,z-oz)<r && Math.hypot(x-ox,z-oz)<Math.hypot(fromX-ox,fromZ-oz));
+  return !solids?.blocks(x, z, fromX, fromZ);
 }
-export function createVisitorControls(camera, canvas, isModalOpen, scene) {
+export function walkStep(x, z, dx, dz, solids) {
+  const steps = Math.max(1, Math.ceil(Math.hypot(dx, dz) / (VISITOR_RADIUS / 2)));
+  dx /= steps;
+  dz /= steps;
+  for (let i = 0; i < steps; i++) {
+    if (dx && walkable(x + dx, z, x, z, solids)) x += dx;
+    if (dz && walkable(x, z + dz, x, z, solids)) z += dz;
+  }
+  return [x, z];
+}
+
+export function createVisitorControls(camera, canvas, isModalOpen, scene, walkSolids) {
   const walk = document.querySelector('#walk');
   const follow = document.querySelector('#follow-patch');
   const mouseLock = document.querySelector('#mouse-lock');
@@ -97,7 +106,7 @@ export function createVisitorControls(camera, canvas, isModalOpen, scene) {
     for (let radius = 0; radius <= 60; radius += 1.5) {
       for (let i = 0; i < (radius ? 24 : 1); i++) {
         const a = i * Math.PI / 12, px = x + Math.cos(a) * radius, pz = z + Math.sin(a) * radius;
-        if (walkable(px, pz, px + 10000, pz + 10000)) return [px, pz];
+        if (walkable(px, pz, px + 10000, pz + 10000, walkSolids)) return [px, pz];
       }
     }
     return [0, 12];
@@ -251,10 +260,10 @@ export function createVisitorControls(camera, canvas, isModalOpen, scene) {
       const speed = 3.5 * (has('ShiftLeft', 'ShiftRight') ? 2 : 1) * dt / length;
       const dx = (-Math.sin(yaw) * forward + Math.cos(yaw) * side) * speed;
       const dz = (-Math.cos(yaw) * forward - Math.sin(yaw) * side) * speed;
-      let { x, z } = camera.position;
-      if (walkable(x + dx, z, x, z)) x += dx;
-      if (walkable(x, z + dz, x, z)) z += dz;
-      camera.position.set(x, groundHeight(x, z) + 1.6, z);
+      const { x, z } = camera.position;
+      const [nextX, nextZ] = walkStep(x, z, dx, dz, walkSolids);
+      camera.position.set(nextX, groundHeight(nextX, nextZ) + 1.6, nextZ);
+      return Math.hypot(nextX - x, nextZ - z);
     }
   };
 }

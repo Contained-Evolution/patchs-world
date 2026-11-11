@@ -81,6 +81,7 @@ export function setupIslandCameras(renderer, pauseWalking) {
 
   return {
     get open() { return dialog.open; },
+    get camera() { return dialog.open ? selected?.camera : null; },
     render(now, renderScene) {
       if (!selected && now < nextPreview) return;
       const source = renderer.domElement;

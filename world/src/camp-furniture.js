@@ -3,13 +3,13 @@ import * as THREE from 'three';
 import { groundHeight } from './terrain.js';
 import { SEATS, SEAT_HEIGHT, COMPUTER } from './furniture.js';
 
-export function createFurniture(scene, { bark, wood, blade, foliage }) {
+export function createFurniture(scene, { bark, wood, blade, foliage }, block) {
  const material = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 1, ...extra });
  const bamboo = material(0xc9b26a), shell = material(0x6b4a2e), husk = material(0x8a6a3e), lightWood = material(0xa7794c);
  // Each piece is built around its seat: +z is the way he faces, the seat sits just behind his feet.
  function group(x, z, heading) { const g = new THREE.Group(); g.position.set(x, groundHeight(x, z), z); g.rotation.y = heading; scene.add(g); return g; }
- function box(parent, mat, w, h, d, x, y, z) { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); parent.add(m); return m; }
- function post(parent, mat, r, h, x, z, y = 0) { const m = new THREE.Mesh(new THREE.CylinderGeometry(r * .85, r, h, 7), mat); m.position.set(x, y + h / 2, z); parent.add(m); return m; }
+ function box(parent, mat, w, h, d, x, y, z) { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); parent.add(m); block(m); return m; }
+ function post(parent, mat, r, h, x, z, y = 0) { const m = new THREE.Mesh(new THREE.CylinderGeometry(r * .85, r, h, 7), mat); m.position.set(x, y + h / 2, z); parent.add(m); block(m); return m; }
 
  function chair(parent, back = .12) {
   box(parent, lightWood, .44, .05, .34, 0, SEAT_HEIGHT - .025, -back);
@@ -30,8 +30,8 @@ export function createFurniture(scene, { bark, wood, blade, foliage }) {
  }
  function driftwoodChair(seat) {
   const g = group(seat.x, seat.z, seat.heading);
-  const log = new THREE.Mesh(new THREE.CylinderGeometry(.16, .19, .7, 9), material(0x9c8a72)); log.rotation.z = Math.PI / 2; log.position.set(0, SEAT_HEIGHT - .16, -.12); g.add(log);
-  const back = new THREE.Mesh(new THREE.CylinderGeometry(.08, .1, .8, 8), material(0x9c8a72)); back.rotation.set(-.35, 0, Math.PI / 2); back.position.set(0, SEAT_HEIGHT + .3, -.34); g.add(back);
+  const log = new THREE.Mesh(new THREE.CylinderGeometry(.16, .19, .7, 9), material(0x9c8a72)); log.rotation.z = Math.PI / 2; log.position.set(0, SEAT_HEIGHT - .16, -.12); g.add(log); block(log);
+  const back = new THREE.Mesh(new THREE.CylinderGeometry(.08, .1, .8, 8), material(0x9c8a72)); back.rotation.set(-.35, 0, Math.PI / 2); back.position.set(0, SEAT_HEIGHT + .3, -.34); g.add(back); block(back);
   for (const x of [-.3, .3]) { const prop = post(g, material(0x8f7c63), .05, .55, x, -.32); prop.rotation.x = -.3; }
  }
  function stump(seat) {
@@ -58,7 +58,7 @@ export function createFurniture(scene, { bark, wood, blade, foliage }) {
  // The palm: a curved trunk of stacked rings, coconuts and fronds.
  const trunk = new THREE.Group(); trunk.position.set(0, 0, palmBase); computer.add(trunk);
  const rings = 14;
- for (let i = 0; i < rings; i++) { const t = i / rings, ring = new THREE.Mesh(new THREE.CylinderGeometry(.2 - t * .06, .23 - t * .06, .42, 9), bark); ring.position.set(Math.sin(t * 1.6) * .5, .21 + i * .4, -Math.sin(t * 1.2) * .25); ring.rotation.z = -Math.cos(t * 1.6) * .1; trunk.add(ring); }
+ for (let i = 0; i < rings; i++) { const t = i / rings, ring = new THREE.Mesh(new THREE.CylinderGeometry(.2 - t * .06, .23 - t * .06, .42, 9), bark); ring.position.set(Math.sin(t * 1.6) * .5, .21 + i * .4, -Math.sin(t * 1.2) * .25); ring.rotation.z = -Math.cos(t * 1.6) * .1; trunk.add(ring); if (i < 5) block(ring); }
  const crown = new THREE.Vector3(Math.sin(1.6) * .5, rings * .4 + .1, -Math.sin(1.2) * .25);
  for (let j = 0; j < 9; j++) { const frond = new THREE.Mesh(blade, foliage); frond.position.copy(crown); frond.rotation.set(-.15 - (j % 3) * .15, j * Math.PI * 2 / 9, 0); frond.scale.setScalar(1.15); trunk.add(frond); }
  for (let k = 0; k < 4; k++) { const nut = new THREE.Mesh(new THREE.SphereGeometry(.13, 10, 8), husk); nut.position.set(crown.x + Math.cos(k * 1.7) * .2, crown.y - .2, crown.z + Math.sin(k * 1.7) * .2); trunk.add(nut); }

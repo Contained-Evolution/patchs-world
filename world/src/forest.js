@@ -19,4 +19,4 @@ export const forest=forestTrees();
 const cellSize=12,cells=new Map();
 for(const tree of forest){const key=`${Math.floor(tree.x/cellSize)},${Math.floor(tree.z/cellSize)}`;if(!cells.has(key))cells.set(key,[]);cells.get(key).push(tree);}
 export function treesNear(x,z){const cx=Math.floor(x/cellSize),cz=Math.floor(z/cellSize),near=[];for(let a=-1;a<=1;a++)for(let b=-1;b<=1;b++)near.push(...(cells.get(`${cx+a},${cz+b}`)||[]));return near;}
-export function forestCollision(x,z,fromX,fromZ){const cx=Math.floor(x/cellSize),cz=Math.floor(z/cellSize);for(let a=-1;a<=1;a++)for(let b=-1;b<=1;b++)for(const tree of cells.get(`${cx+a},${cz+b}`)||[]){const radius=tree.grove?.48:.7,dist=Math.hypot(x-tree.x,z-tree.z);if(dist<radius&&dist<Math.hypot(fromX-tree.x,fromZ-tree.z))return true;}return false;}
+export function forestCollision(x,z,fromX,fromZ,padding=0){const cx=Math.floor(x/cellSize),cz=Math.floor(z/cellSize);for(let a=-1;a<=1;a++)for(let b=-1;b<=1;b++)for(const tree of cells.get(`${cx+a},${cz+b}`)||[]){const radius=(tree.grove?.48:.7)+padding,dist=Math.hypot(x-tree.x,z-tree.z);if(dist<radius&&dist<Math.hypot(fromX-tree.x,fromZ-tree.z))return true;}return false;}

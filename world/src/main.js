@@ -7,6 +7,8 @@ import { createVisitorControls } from './visitor-controls.js';
 import { setupIslandCameras } from './island-cameras.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { sampleState } from '../../shared/state.js';
+import { hammock } from './hammock.js';
+import { createIslandAudio } from './island-audio.js';
 import { createIsland } from './island.js';
 import { setupCommunity } from './community.js';
 import { setupNotifications } from './notifications.js';
@@ -44,8 +46,10 @@ $('#world').append(renderer.domElement);
 const scene = new THREE.Scene();
 scene.fog = new THREE.Fog(0xadd9d4, 750, 1650);
 const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, .1, 12000);
+const scenery=createIsland(scene);
+const sound=createIslandAudio($('#island-sound'));
 const cameraFeeds = setupIslandCameras(renderer, () => controls.pause());
-const controls = createVisitorControls(camera, renderer.domElement, () => dialog.open || cameraFeeds.open || animations.isOpen(), scene);
+const controls = createVisitorControls(camera, renderer.domElement, () => dialog.open || cameraFeeds.open || animations.isOpen(), scene, scenery.walkSolids);
 // A notification opens the island at its panel: ?view=letters.
 const view=new URLSearchParams(location.search).get('view');
 if(view==='letters'||view==='board'){history.replaceState(null,'',location.pathname);controls.pause();dialog.showModal();community.openPanel(view);}
@@ -55,8 +59,7 @@ const sunColor=new THREE.Color(0xffedbe),moonColor=new THREE.Color(0x91b7e0);
 const mat = color => new THREE.MeshStandardMaterial({color, roughness: 1});
 function mesh(geo,material,x=0,y=0,z=0,parent=scene){const m=new THREE.Mesh(geo,material);m.position.set(x,y,z);parent.add(m);return m;}
 function ellipsoid(material,x,y,z,sx,sy,sz,parent=scene){const m=mesh(new THREE.SphereGeometry(1,12,8),material,x,y,z,parent);m.scale.set(sx,sy,sz);return m;}
-const scenery=createIsland(scene);
-const foodProps=createFoodProps(scene);let foodPose=null;
+const foodProps=createFoodProps(scene, scenery.block);let foodPose=null;
 const patch = new THREE.Group(); scene.add(patch);const patchVelocity=new THREE.Vector3(),previousPatchPosition=new THREE.Vector3();
 const fishingRod=new THREE.Group(),rodDirection=new THREE.Vector3(.1,.65,2.2),rod=new THREE.Mesh(new THREE.CylinderGeometry(.025,.045,rodDirection.length(),6),new THREE.MeshStandardMaterial({color:0x6b4d31}));rod.position.copy(rodDirection).multiplyScalar(.5);rod.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),rodDirection.clone().normalize());fishingRod.add(rod);const lineGeo=new THREE.BufferGeometry().setFromPoints([rodDirection,new THREE.Vector3(.1,-.7,3.3)]);fishingRod.add(new THREE.Line(lineGeo,new THREE.LineBasicMaterial({color:0xd8d1b7})));patch.add(fishingRod);const handWorld=new THREE.Vector3();
 // His tablet: a thin bamboo-cased slate with a glowing screen, held in his hands when he reads or writes away from the computer.
@@ -195,12 +198,12 @@ function renderIsland(now, rainOffset = 0) {
   if (cameraFeeds.open) cameraFeeds.render(now, renderView);
   else renderView(controls.camera);
 }
-function frame(now){requestAnimationFrame(frame);if(animations.isOpen()){last=now;return;}updateQuality(now);const dt=Math.min((now-last)/1000,.05);last=now;let t=(now-start)/1000;
+function frame(now){requestAnimationFrame(frame);sound.pause(animations.isOpen());if(animations.isOpen()){last=now;return;}updateQuality(now);const dt=Math.min((now-last)/1000,.05);last=now;let t=(now-start)/1000;
 if (demo) { let n=Math.floor(t/9); const mockAction=mockActions[n%mockActions.length];state={patch:{...sampleState.patch,mail:n%3,action:mockAction,place:mockAction==='computer'?'computer':ids[Math.floor(n/2)%ids.length],target:['walk','run','swing'].includes(mockActions[n%mockActions.length]) ? ids[(Math.floor(n/2)+1)%ids.length] : null,since:String(n),says:null},clock:{dayFraction:(.38+t/240)%1,weather:['clear','cloudy','rain','storm'][Math.floor(t/60)%4]}}; }
 if (demo) renderCare(state.patch);
-controls.update(dt);
+const walked = controls.update(dt) || 0;
 findPatch.disabled = followPatch.disabled = !state;
-if (!state) { patch.visible=false; scene.background=skyDay; rain.visible=false; scenery.update(reducedMotion.matches?0:dt,1); renderIsland(now); return; }
+if (!state) { sound.update(controls.camera,{daylight:1,weather:'clear',walked}); patch.visible=false; scene.background=skyDay; rain.visible=false; scenery.update(reducedMotion.matches?0:dt,1); renderIsland(now); return; }
 patch.visible=true;previousPatchPosition.copy(patch.position);
 const {action,place,target,says,since,until,speechUntil}=state.patch,mail=Number(state.patch.mail)||0;scenery.setMail(mail);
 $('#status').textContent = statusText(state.patch)+(mail&&!(place==='computer'&&!target)?` ✉ ${mail} letter${mail===1?'':'s'} waiting at his coconut computer.`:'');
@@ -213,7 +216,7 @@ if(climb?.line.kind==='rope'&&(climb.key!==climbKey||target)&&wasAirborne&&!rope
 
 if(!ropeExit&&action==='climb'&&!target&&(place==='lookout'||place==='tall-trees')){if(climb?.key!==climbKey){climb=startClimb(place,climbKey,since,until);climbTime=0;}}else climb=null;
 const activityTime=(Date.now()+serverOffset-Date.parse(since))/1000,lap=action==='swim'&&place==='pond'&&!target?swimAt(activityTime):null;
-const seat=target?null:seatFor(action,place),dest=seat?[seat.x,seat.z]:climb?climb.start:lap?[lap.x,lap.z]:action==='sleep'&&place==='hammock'&&!target?[0,1]:places[target]||places[place];
+const seat=target?null:seatFor(action,place),dest=seat?[seat.x,seat.z]:climb?climb.start:lap?[lap.x,lap.z]:action==='sleep'&&place==='hammock'&&!target?[hammock.x,hammock.z]:places[target]||places[place];
 const travel = !!(target && places[target] && ['walk','run','swing'].includes(action));
 const swinging = action === 'swing';
 const key = `${action}|${place}|${target||''}|${since||''}`;
@@ -281,7 +284,7 @@ if(ropeExit){
   const arriving=pose?dist>=1.5:lap?dist>=.6:dist>.5;
   if(pose?.basket&&!arriving&&!descent)foodPose=pose;
   if(climb&&!arriving)climbTime=Math.min(4,climbTime+dt);
-  patch.position.y=action==='swim'?ISLAND.pondY-.35:climb&&!arriving?THREE.MathUtils.lerp(groundHeight(patch.position.x,patch.position.z),climb.line.point(0)[1]-1.8,THREE.MathUtils.smoothstep(climbTime/4,0,1)):action==='sleep'&&place==='hammock'&&!arriving?groundHeight(0,0)+1.5:groundHeight(patch.position.x,patch.position.z);
+  patch.position.y=action==='swim'?ISLAND.pondY-.35:climb&&!arriving?THREE.MathUtils.lerp(groundHeight(patch.position.x,patch.position.z),climb.line.point(0)[1]-1.8,THREE.MathUtils.smoothstep(climbTime/4,0,1)):groundHeight(patch.position.x,patch.position.z);
   patch.rotation.z=0;
   if(action==='fish'&&!arriving)face(Math.atan2(ISLAND.pondX-patch.position.x,ISLAND.pondZ-patch.position.z),dt);
   let clip=arriving&&action!=='swim'?'walk':pose?pose.clip:names[action]||'idle';
@@ -290,10 +293,18 @@ if(ropeExit){
   if(descent){descent.elapsed+=dt;const f=Math.min(1,descent.elapsed/2);patch.position.y=THREE.MathUtils.lerp(descent.start,descent.ground,f);clip='fall';heldGrip=null;if(f===1)descent=null;}
   // In the hammock he sleeps either on his back or on his side, rolling over now and then.
   if(action==='sleep'&&place==='hammock'&&!arriving&&!descent){
-    const at=Number.isFinite(elapsed)?Math.max(0,elapsed):t,back=seedFrom(roamKey)%2===0;face(back?Math.PI/2:0,dt);
-    if(at<CLIPS.yawn.duration){patch.position.y=groundHeight(0,0);poseClip('yawn',at);}
-    else if(back){patch.position.y=groundHeight(0,0)+.9;poseClip('sleep-lay',at%CLIPS['sleep-lay'].duration);}
-    else{const still=15*CLIPS.sleep.duration,k=at%(still+CLIPS['sleep-roll'].duration);if(k<still)poseClip('sleep',k%CLIPS.sleep.duration);else poseClip('sleep-roll',k-still);}
+    const at=Number.isFinite(elapsed)?Math.max(0,elapsed):t,back=seedFrom(roamKey)%2===0;
+    patch.rotation.y=back?Math.PI/2:0;
+    if(at<CLIPS.yawn.duration) poseClip('yawn',at);
+    else {
+      patch.position.set(hammock.x,groundHeight(hammock.x,hammock.z)+(back?hammock.backPose:hammock.sidePose),hammock.z);
+      if(back) poseClip('sleep-lay',at%CLIPS['sleep-lay'].duration);
+      else {
+        const still=15*CLIPS.sleep.duration,k=at%(still+CLIPS['sleep-roll'].duration);
+        if(k<still) poseClip('sleep',k%CLIPS.sleep.duration);
+        else poseClip('sleep-roll',k-still);
+      }
+    }
   } else if(seat&&!arriving&&!descent){
     // On a seat he settles onto it facing its way; at the coconut computer he reaches for the keys, types, and sits back near the end.
     patch.position.x+=(seat.x-patch.position.x)*Math.min(1,dt*6);patch.position.z+=(seat.z-patch.position.z)*Math.min(1,dt*6);face(seat.heading,dt);
@@ -328,7 +339,14 @@ if(action==='watch-sky' && headBone && currentName==='sit-ground') headBone.quat
 patchMouth?.update(says,speechUntil,Date.now()+serverOffset,action==='sleep',dt);
 const speechLive=!!says && Number.isFinite(Date.parse(speechUntil)) && Date.now()+serverOffset<Date.parse(speechUntil);$('#bubble').hidden=!speechLive;$('#bubble').textContent=speechLive?says:'';
 let day=Number.isFinite(state.clock.dayFraction)?state.clock.dayFraction:.5;let daylight=THREE.MathUtils.smoothstep(Math.sin((day-.25)*Math.PI*2),-.12,.2);let weather=state.clock.weather;let overcast=weather==='cloudy'||weather==='rain'||weather==='storm';sky.copy(skyNight).lerp(skyDay,daylight*(overcast?.65:1));updateSky(daylight);scene.background=skyTexture;scene.fog.color.copy(sky);hemi.intensity=1.25+daylight*(overcast?.4:1.15);sunLight.intensity=daylight*(overcast?.6:2.4)+(1-daylight)*.65;sunLight.color.copy(moonColor).lerp(sunColor,daylight);let angle=(day-.25)*Math.PI*2;sun.position.set(Math.cos(angle)*900,Math.sin(angle)*900,0);moon.position.copy(sun.position).multiplyScalar(-1);sunLight.position.copy(daylight>.05?sun.position:moon.position);stars.material.opacity=1-daylight;stars.visible=daylight<.98;clouds.forEach((c,i)=>{c.visible=overcast||i<5;c.position.x+=reducedMotion.matches?0:dt*.14;if(c.position.x>520)c.position.x=-520;});rain.visible=weather==='rain'||weather==='storm';
-controls.track(patch.position,dt);scenery.update(reducedMotion.matches?0:dt,daylight);renderIsland(now,reducedMotion.matches?0:t*12%30);}
+controls.track(patch.position,dt);
+sound.update(cameraFeeds.camera || controls.camera, {
+  daylight, weather, walked, patch: patch.position, previousPatch: previousPatchPosition,
+  clip: currentName, clipTime: currentAction?.time, action, place, since, mail, target,
+  carrying: state.patch.carrying, gift: state.patch.giftSound,
+  silent: cameraFeeds.open && !cameraFeeds.camera
+});
+scenery.update(reducedMotion.matches?0:dt,daylight);renderIsland(now,reducedMotion.matches?0:t*12%30);}
 requestAnimationFrame(frame);addEventListener('resize',()=>{controls.resize(innerWidth/innerHeight);renderer.setSize(innerWidth,innerHeight);});
 
 document.getElementById('open-memory')?.addEventListener('click', () => { location.href = './memory.html'; });
