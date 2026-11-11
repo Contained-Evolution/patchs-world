@@ -1,0 +1,45 @@
+import { ACTIONS } from '../../shared/state.js';
+export const places = { hammock:[0,0], shelves:[2,0], 'banana-grove':[-12,8], 'tall-trees':[8,-14], pond:[14,10], beach:[26,-2], 'tide-pools':[22,-20], lookout:[-16,-22], meadow:[-20,2], cave:[-6,-30] };
+// Footpaths meet at the camp, following the body's relative island layout.
+export const paths = {
+  hammock:[[0,0]], shelves:[[0,0],[2,0]],
+  'banana-grove':[[0,0],[-5,3],[-12,8]], 'tall-trees':[[0,0],[4,-6],[8,-14]],
+  pond:[[0,0],[6,5],[14,10]], beach:[[0,0],[9,0],[18,-1],[26,-2]],
+  'tide-pools':[[0,0],[7,-5],[14,-12],[22,-20]],
+  lookout:[[0,0],[-4,-6],[-10,-14],[-16,-22]],
+  meadow:[[0,0],[-9,1],[-20,2]], cave:[[0,0],[-3,-9],[-5,-20],[-6,-30]],
+};
+export const groundHeight = (x,z) => .9 + 5.2 * Math.exp(-(((x+16)/6.5)**2 + ((z+22)/7)**2));
+export const trees = [];
+for(let row=0;row<5;row++) for(let col=0;col<7;col++) {
+  const x=-4+col*4.2+(row%2)*1.2, z=-23+row*4.3;
+  trees.push([x,z,8.5+((row*7+col)%4)*.65]);
+}
+export const anchorFor = ([x,z,h]) => [x+1.4,groundHeight(x,z)+h-1,z];
+const distance = (a,b) => Math.hypot(a[0]-b[0],a[1]-b[1]);
+export function walkRoute(from,to) {
+  const a=paths[from]||paths.hammock,b=paths[to]||paths.hammock;
+  const route=[...a.slice(0,-1).reverse(), ...b.slice(1)];
+  if (!route.length) route.push(places[to] || places.hammock);
+  return route;
+}
+export function swingRoute(from,to) {
+  const nearest = p => trees.reduce((best,t,i)=>distance(p,t)<distance(p,trees[best])?i:best,0);
+  const start=nearest(from), end=nearest(to), costs=trees.map(()=>Infinity), prev=trees.map(()=>-1), seen=new Set(); costs[start]=0;
+  while(seen.size<trees.length){let cur=-1; for(let i=0;i<trees.length;i++) if(!seen.has(i)&&(cur<0||costs[i]<costs[cur]))cur=i; if(cur===end||!Number.isFinite(costs[cur]))break;seen.add(cur);for(let i=0;i<trees.length;i++){let d=distance(trees[cur],trees[i]);if(i!==cur&&d<6.5&&costs[cur]+d<costs[i]){costs[i]=costs[cur]+d;prev[i]=cur;}}}
+  const route=[];for(let i=end;i!==-1;i=prev[i]){route.unshift(anchorFor(trees[i]));if(i===start)break;} if(route.length===1){const i=start, neighbor=i%7<6?i+1:i-1;route.push(anchorFor(trees[neighbor]),anchorFor(trees[start]));}
+  return route;
+}
+export function swingLoop() { return [15,16,23,22,15].map(i=>anchorFor(trees[i])); }
+const activity={idle:'looking around',think:'thinking',phone:'checking his phone',write:'writing',look:'looking around',wave:'waving',walk:'walking',run:'running',climb:'climbing',swing:'swinging through the trees',swim:'swimming',fish:'fishing',eat:'eating',sit:'sitting',sleep:'asleep',explore:'exploring','watch-sky':'watching the sky'};
+const location={hammock:'in his hammock',shelves:'by his rope shelves',pond:'at the pond','banana-grove':'in the banana grove','tall-trees':'in the tall trees',beach:'on the beach',lookout:'at the lookout','tide-pools':'at the tide pools',meadow:'in the meadow',cave:'in the cave'};
+const destination={hammock:'his hammock',shelves:'his rope shelves',pond:'the pond','banana-grove':'the banana grove','tall-trees':'the tall trees',beach:'the beach',lookout:'the lookout','tide-pools':'the tide pools',meadow:'the meadow',cave:'the cave'};
+export function statusText(p){if(p.target&&destination[p.target])return `Patch is on his way to ${destination[p.target]}.`;if(p.action==='explore'&&p.place==='cave')return 'Patch is exploring the cave.';return `Patch is ${activity[p.action]||'looking around'} ${location[p.place]||'on the island'}.`;}
+export const isLocalPreview = h => h==='localhost'||/^127(?:\.\d{1,3}){3}$/.test(h)||h==='[::1]'||h.endsWith('.localhost');
+
+export function safePatch(patch) {
+  if (!patch || !Object.hasOwn(places, patch.place) || !ACTIONS.includes(patch.action) || (patch.target && !Object.hasOwn(places,patch.target))) {
+    return { ...(patch || {}), place:'hammock', action:'idle', target:null, says:null };
+  }
+  return patch;
+}
