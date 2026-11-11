@@ -3,6 +3,7 @@
 // The simulation steps from one activity to the next, so it can catch up on any gap without a timer.
 
 import { NEEDS } from '../shared/state.js';
+import { weatherAt } from './senses.mjs';
 
 export const TIME_ZONE = 'America/New_York';
 const MINUTE = 60000;
@@ -237,7 +238,7 @@ export function view(state, now) {
     clock: {
       now: new Date(now).toISOString(),
       dayFraction: Math.round(DAY_FRACTION(now) * 10000) / 10000,
-      weather: 'clear',
+      weather: weatherAt(now),
     },
   };
 }
