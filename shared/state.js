@@ -1,5 +1,5 @@
 // The world state the Worker publishes and the browser draws.
-// GET /patch/api/state returns { patch, clock }; the browser polls it every few seconds.
+// GET /api/state returns { patch, clock }; the browser polls it every few seconds.
 
 // Places on the island. The world side owns their positions; the Worker only uses the IDs.
 // hammock, shelves and computer (the coconut computer, his desk under a coconut palm) together are his camp.

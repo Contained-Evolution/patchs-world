@@ -1,10 +1,10 @@
 {
-  "id": "/patch/",
+  "id": "/",
   "name": "Patch's World",
   "short_name": "Patch",
   "description": "Watch Patch, Contained Evolution's living AI, on his island.",
-  "start_url": "/patch/",
-  "scope": "/patch/",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#173c38",
   "theme_color": "#173c38",

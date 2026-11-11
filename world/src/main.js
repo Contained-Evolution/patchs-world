@@ -37,7 +37,7 @@ setupInstall();
 // Chris's account sees an Animations button in the menu that opens Patch's clip locker.
 const animations=setupAnimationViewer();
 $('#open-animations').onclick=()=>{dialog.close();controls.pause();animations.open();};
-fetch('/patch/api/me',{credentials:'same-origin',cache:'no-store'}).then(r=>r.ok?r.json():null).then(me=>{if(me?.user?.admin||isLocalPreview(location.hostname))$('#open-animations').hidden=false;}).catch(()=>{if(isLocalPreview(location.hostname))$('#open-animations').hidden=false;});
+fetch('/api/me',{credentials:'same-origin',cache:'no-store'}).then(r=>r.ok?r.json():null).then(me=>{if(me?.user?.admin||isLocalPreview(location.hostname))$('#open-animations').hidden=false;}).catch(()=>{if(isLocalPreview(location.hostname))$('#open-animations').hidden=false;});
 let renderer;
 try { renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' }); } catch { $('#error').hidden = false; throw new Error('WebGL unavailable'); }
 const basePixelRatio=Math.min(devicePixelRatio,1.5);renderer.setPixelRatio(basePixelRatio);
@@ -154,7 +154,7 @@ const localPreview = isLocalPreview(location.hostname), start = performance.now(
 const mockActions=['idle','walk','run','climb','swing','swim','fish','eat','sit','sleep','think','write','research','computer','wave','look','explore','watch-sky'], ids=Object.keys(places);
 async function poll() {
   try {
-    const response = await fetch('/patch/api/state', {cache:'no-store'});
+    const response = await fetch('/api/state', {cache:'no-store'});
     if (!response.ok) throw new Error('State unavailable');
     const next = await response.json();
     if (!next.patch || !next.clock) throw new Error('Invalid state');

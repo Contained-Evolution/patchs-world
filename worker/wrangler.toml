@@ -3,7 +3,8 @@ compatibility_date = "2026-10-01"
 main = "index.mjs"
 workers_dev = false
 
-# The company website forwards /patch* through a service binding.
+# Its own address. The company website still forwards containedevolution.com/patch* here, which moves to it.
+routes = [{ pattern = "patch.containedevolution.com", custom_domain = true }]
 
 [assets]
 directory = "../world/dist"

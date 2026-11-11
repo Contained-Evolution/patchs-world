@@ -61,7 +61,7 @@ test('a visitor is read from the Contained Evolution session through the account
     assert.equal(new URL(request.url).pathname, '/api/me');
     return request.headers.get('cookie') === `ce_session=${token}` ? Response.json({ user: { id: 7, gamertag: 'kiwi_fan', email: 'containedevolution@gmail.com' } }) : Response.json({}, { status: 401 });
   } } };
-  const request = cookie => new Request('https://containedevolution.com/patch/api/me', { headers: { cookie } });
+  const request = cookie => new Request('https://patch.containedevolution.com/api/me', { headers: { cookie } });
   assert.deepEqual(await visitor(request(`ce_session=${token}`), env), { id: '7', name: 'kiwi_fan', admin: true });
   assert.equal(await visitor(request(`ce_session=${'x'.repeat(43)}`), env), null);
   assert.equal(await visitor(request(''), env), null);

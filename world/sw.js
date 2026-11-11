@@ -1,7 +1,7 @@
 // Keeps Patch's island on the device and shows his notifications. build.mjs fills in VERSION and FILES.
 const VERSION = '__VERSION__';
 const FILES = __FILES__;
-const BASE = '/patch/';
+const BASE = '/';
 const CACHE = `patch-${VERSION}`;
 
 // Fetch every island file once per version. Files whose hash didn't change come from the last version's cache.

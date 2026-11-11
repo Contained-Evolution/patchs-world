@@ -7,7 +7,7 @@ export function setupCommunity(dialog) {
   let justSent = null, user = null, signIn = DEFAULT_SIGN_IN, boardNext = null, boardPosts = [], letters = [], boardLoaded = false, current = null;
 
   async function api(path, options = {}) {
-    const response = await fetch(`/patch/api${path}`, { credentials: 'same-origin', cache: 'no-store', ...options });
+    const response = await fetch(`/api${path}`, { credentials: 'same-origin', cache: 'no-store', ...options });
     let data; try { data = await response.json(); } catch { data = {}; }
     if (!response.ok) { const error = new Error(data.error || 'Something went wrong. Please try again.'); error.status=response.status; error.signIn=data.signIn; throw error; }
     return data;

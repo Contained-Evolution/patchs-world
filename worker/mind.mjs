@@ -34,7 +34,7 @@ export async function think(env, messages, tier, maxTokens, extra = {}) {
     headers: {
       authorization: `Bearer ${env.OPENROUTER_API_KEY}`,
       'content-type': 'application/json',
-      'http-referer': 'https://tenari.world/patch/',
+      'http-referer': 'https://patch.containedevolution.com/',
       'x-title': "Patch's World",
     },
     body: JSON.stringify({

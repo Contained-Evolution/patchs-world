@@ -146,7 +146,7 @@ let signature = '', loading = false;
 async function refresh() {
   if (loading) return; loading = true;
   try {
-    const response = await fetch('/patch/api/memory', { cache: 'no-store', signal: AbortSignal.timeout(15000) });
+    const response = await fetch('/api/memory', { cache: 'no-store', signal: AbortSignal.timeout(15000) });
     if (!response.ok) throw new Error('Unavailable'); const next = await response.json();
     if (!Array.isArray(next.memories)) throw new Error('Invalid memories');
     const changed = JSON.stringify([next.memories, next.categories]), first = !data; data = next;

@@ -365,7 +365,7 @@ const HOLDING = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Patch's World</title>
 <style>
-@font-face{font-family:Pangolin;src:url(/patch/assets/Pangolin-Regular.ttf)}
+@font-face{font-family:Pangolin;src:url(/assets/Pangolin-Regular.ttf)}
 body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0f2a24;color:#f6f2e8;font:18px/1.5 Pangolin,system-ui,sans-serif;text-align:center}
 main{max-width:520px;padding:24px}h1{font-weight:normal;font-size:34px;margin:0 0 8px}#now{font-size:22px;margin:18px 0}small{opacity:.7}
 </style></head><body><main>
@@ -376,12 +376,22 @@ main{max-width:520px;padding:24px}h1{font-weight:normal;font-size:34px;margin:0 
 </main><script>
 const words={eat:'eating',fish:'fishing',swim:'swimming',swing:'swinging through the trees',climb:'climbing',sit:'sitting',look:'looking out over the water',computer:'at his coconut computer',research:'looking something up',write:'writing in his journal',think:'thinking',sleep:'asleep',walk:'walking',run:'running',idle:'looking around',explore:'exploring','watch-sky':'watching the sky'};
 const places={hammock:'by his hammock',shelves:'by his rope shelves',computer:'at camp',pond:'at the pond','banana-grove':'in the banana grove','tall-trees':'in the tall trees',beach:'on the beach',lookout:'at the lookout','tide-pools':'at the tide pools',meadow:'in the meadow',cave:'at the cave'};
-async function tick(){try{const s=await (await fetch('/patch/api/state',{cache:'no-store'})).json();const p=s.patch;
+async function tick(){try{const s=await (await fetch('/api/state',{cache:'no-store'})).json();const p=s.patch;
 const targets={hammock:'to his hammock',shelves:'to his rope shelves',computer:'to his coconut computer',pond:'to the pond','banana-grove':'to the banana grove','tall-trees':'to the tall trees',beach:'to the beach',lookout:'to the lookout','tide-pools':'to the tide pools',meadow:'to the meadow',cave:'to the cave'};
 const where=p.target?'on his way '+targets[p.target]:p.place==='hammock'&&p.action==='sleep'?'in his hammock':places[p.place];
 document.getElementById('now').textContent='Patch is '+(words[p.action]||p.action)+' '+where+'.'+(p.says?' "'+p.says+'"':'');}catch{}}
 tick();setInterval(tick,10000);
 </script></body></html>`;
+
+const SITE = 'https://patch.containedevolution.com';
+
+// Replaces the service worker saved at containedevolution.com/patch/: drops its island copy and opens the new address.
+const RETIRE = `self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', event => event.waitUntil((async () => {
+  for (const name of await caches.keys()) if (name.startsWith('patch-')) await caches.delete(name);
+  await self.registration.unregister();
+  for (const client of await self.clients.matchAll({ type: 'window' })) client.navigate('${SITE}/');
+})()));`;
 
 const patchOf = env => env.PATCH_WORLD.get(env.PATCH_WORLD.idFromName('patch'));
 
@@ -389,7 +399,7 @@ const patchOf = env => env.PATCH_WORLD.get(env.PATCH_WORLD.idFromName('patch'));
 async function visitorApi(request, env, url, path) {
   const patch = patchOf(env);
   if (path === '/api/board' && request.method === 'GET') return json(await patch.board(url.searchParams.get('before')));
-  if (request.method === 'POST' && request.headers.get('origin') !== 'https://containedevolution.com') return json({ error: 'Invalid origin.' }, 403);
+  if (request.method === 'POST' && request.headers.get('origin') !== SITE) return json({ error: 'Invalid origin.' }, 403);
   let who;
   try { who = await visitor(request, env); } catch { return json({ error: 'Account check is unavailable. Try again soon.' }, 503); }
   if (path === '/api/me' && request.method === 'GET') return json({ user: who && { name: who.name, admin: who.admin }, signIn: SIGN_IN });
@@ -411,9 +421,12 @@ async function visitorApi(request, env, url, path) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (url.pathname === '/patch') return Response.redirect(new URL('/patch/', url).href, 301);
-    if (!url.pathname.startsWith('/patch/')) return json({ error: 'Not found.' }, 404);
-    const path = url.pathname.slice('/patch'.length);
+    // Patch's World used to be containedevolution.com/patch/. A copy saved there gets a service worker that clears it; everything else moves here.
+    if (url.pathname === '/patch' || url.pathname.startsWith('/patch/')) {
+      if (url.pathname === '/patch/sw.js') return new Response(RETIRE, { headers: { ...headers, 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-cache' } });
+      return Response.redirect(`${SITE}${url.pathname.slice('/patch'.length) || '/'}${url.search}`, 301);
+    }
+    const path = url.pathname;
 
     if (path === '/api/state' || path === '/api/journal' || path === '/api/memory') {
       if (request.method !== 'GET') return json({ error: 'Method not allowed.' }, 405);
@@ -430,7 +443,7 @@ export default {
     const out = new Headers(asset.headers);
     for (const [name, value] of Object.entries(headers)) out.set(name, value);
     // The service worker checks for a new island on every visit.
-    if (path === '/sw.js') { out.set('cache-control', 'no-cache'); out.set('service-worker-allowed', '/patch/'); }
+    if (path === '/sw.js') out.set('cache-control', 'no-cache');
     return new Response(asset.body, { status: asset.status, headers: out });
   },
 };

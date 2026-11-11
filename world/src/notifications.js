@@ -9,7 +9,7 @@ export function setupNotifications(dialog, community, app) {
 
   function notice(message) { $('#alerts-notice').textContent = message || ''; $('#alerts-notice').hidden = !message; }
   async function api(path, body) {
-    const response = await fetch(`/patch/api${path}`, body ? { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : { credentials: 'same-origin', cache: 'no-store' });
+    const response = await fetch(`/api${path}`, body ? { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : { credentials: 'same-origin', cache: 'no-store' });
     let data; try { data = await response.json(); } catch { data = {}; }
     if (!response.ok) throw Object.assign(new Error(data.error || 'Something went wrong. Please try again.'), { status: response.status });
     return data;

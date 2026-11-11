@@ -1,7 +1,7 @@
 // Patch's World as an installable app: registers the service worker and offers a reload when a new island is ready.
 export function registerApp(button = document.getElementById('app-update')) {
-  if (!('serviceWorker' in navigator) || !location.pathname.startsWith('/patch/')) return null;
-  return navigator.serviceWorker.register('/patch/sw.js', { scope: '/patch/' }).then(registration => {
+  if (!('serviceWorker' in navigator)) return null;
+  return navigator.serviceWorker.register('/sw.js').then(registration => {
     const offer = () => { if (button && registration.waiting && navigator.serviceWorker.controller) button.hidden = false; };
     offer();
     registration.addEventListener('updatefound', () => registration.installing?.addEventListener('statechange', offer));
