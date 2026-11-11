@@ -3,6 +3,18 @@
 // and end of the clip) and how far the clip itself carries him sideways, so the
 // island can put his hands exactly on a ledge, branch or rope.
 export const CLIPS = {
+ 'climb-top':{"label": "Climb to top", "group": "Trees", "duration": 4, "use": "Pulling onto the canopy after climbing the rope"},
+ 'yawn':{"label": "Yawn", "group": "Sleep", "duration": 8.333333333333334, "use": "Yawning before sleep and while tired"},
+ 'jump-down':{"label": "Jump down", "group": "Trees", "duration": 2.6666666666666665, "use": "Deliberately jumping down from a height"},
+ 'jump':{"label": "Jump", "group": "Ground", "duration": 1.6666666666666667, "use": "Jumping while exploring"},
+ 'open-lid':{"label": "Open a lid", "group": "Foraging", "duration": 8.933333333333334, "use": "Opening the banana store to unload his basket"},
+ 'fall':{"label": "Fall", "group": "Trees", "duration": 11.366666666666667, "use": "Falling when an elevated activity loses its support"},
+ 'pick-up':{"label": "Pick up", "group": "Foraging", "duration": 9.566666666666666, "use": "Picking up and setting down his banana basket"},
+ 'carry-walk':{"label": "Walk carrying basket", "group": "Foraging", "duration": 2.8666666666666667, "use": "Walking with his food basket"},
+ 'carry-run':{"label": "Run carrying basket", "group": "Foraging", "duration": 1.2666666666666666, "use": "Running with his food basket"},
+ 'carry-jog':{"label": "Jog carrying basket", "group": "Foraging", "duration": 0.7666666666666667, "use": "Jogging with his food basket"},
+ 'carry-stop':{"label": "Stop carrying basket", "group": "Foraging", "duration": 4.9, "use": "Stopping before setting down his basket"},
+
  idle:{label:'Breathing idle',group:'Ground',duration:239/24,use:'Standing around camp and thinking'},
  'look-around':{label:'Look around',group:'Ground',duration:103/24,use:'Looking out from the lookout and pausing while he explores'},
  walk:{label:'Walk',group:'Ground',duration:25/24,use:'Walking between places'},
