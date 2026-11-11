@@ -7,6 +7,8 @@ export const obstacles = [...trees.map(([x,z])=>[x,z,.57])];
 for(let row=0;row<4;row++) for(let col=0;col<5;col++) obstacles.push([-16+col*2+(row%2)*.5,5+row*2.6,.45]);
 for(let z=-10;z<=20;z+=5) obstacles.push([32-Math.abs(z)*.13,z,.45]);
 for(let i=0;i<15;i++){const a=i*2.4,r=2+(i%4)*1.1;obstacles.push([22+Math.cos(a)*r,-20+Math.sin(a)*r,.55]);}
+// The cave arch is open in the middle, with solid side rocks and back wall.
+obstacles.push([-8.5,-33,1.6],[-3.5,-33,1.6],[-6,-35,1.1]);
 export function walkable(x,z,fromX=x,fromZ=z) {
   if (shoreFraction(x,z) > walkShoreLimit) return false;
   const d=Math.hypot(x-fromX,z-fromZ);

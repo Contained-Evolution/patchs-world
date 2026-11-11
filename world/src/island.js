@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { places, paths, trees, anchorFor, groundHeight } from './world-state.js';
 import { coastRadius } from './terrain.js';
+import { addWorldDressing } from './world-dressing.js';
 
 export function createIsland(scene) {
   const material=(color,extra={})=>new THREE.MeshStandardMaterial({color,roughness:1,...extra});
@@ -44,10 +45,16 @@ export function createIsland(scene) {
   strip([[21,3],[20,5],[19,7],[18,9]],1.1,water,.07);oval(rock,21,1.7,3,2.3,1.1,1.3);let fall=mesh(new THREE.PlaneGeometry(1.15,1.55),white,21,1.85,4.15);fall.material.side=THREE.DoubleSide;
   // Tide pools and cave are recognizable even from the orbit camera.
   for(let i=0;i<15;i++){let a=i*2.4,r=2+(i%4)*1.1,x=22+Math.cos(a)*r,z=-20+Math.sin(a)*r;oval(rock,x,1,z,.7+(i%3)*.25,.35,.6);}for(const [x,z] of [[21,-21],[24,-19],[20,-18]])oval(water,x,.96,z,1.1,.08,.7);
-  oval(rock,-6,2.35,-34,4.2,2.2,3);let entrance=oval(dark,-6,1.85,-30.98,1.4,1.25,.13);
+  // An open arch and recessed back replace the solid rock in the cave approach.
+  const caveY=groundHeight(-6,-32);
+  oval(rock,-8.5,caveY+1.2,-33,1.5,1.8,2.1);oval(rock,-3.5,caveY+1.2,-33,1.5,1.8,2.1);
+  oval(rock,-6,caveY+3.1,-33,3.1,.85,2.0);oval(rock,-6,caveY+1.4,-35,3.15,1.8,.65);
+  oval(dark,-6,caveY+1.2,-34.3,1.75,1.3,.12);oval(dark,-6,caveY+.02,-32.9,1.35,.035,1.25);
+  oval(material(0xe9c776),-7.55,caveY+.75,-32.2,.12,.17,.12);
   // Meadow flowers are sparse, retaining open sky; lookout hill is the highest ground.
   for(let i=0;i<45;i++){let a=i*2.4,r=1+(i%8)*.8,x=-20+Math.cos(a)*r,z=2+Math.sin(a)*r;oval(flower,x,groundHeight(x,z)+.08,z,.09,.11,.09);}
   const ly=groundHeight(-16,-22);for(let x of [-17,-15])for(let z of [-23,-21])beam(bark,[x,ly,z],[x,ly+1.1,z],.08);beam(bark,[-17,ly+1,-23],[-15,ly+1,-23],.07);beam(bark,[-17,ly+1,-21],[-15,ly+1,-21],.07);
+  addWorldDressing(scene);
   const ray = new THREE.Raycaster(), direction = new THREE.Vector3();
   return { update(camera, target) {
     for (const item of occluders) item.visible=true;
