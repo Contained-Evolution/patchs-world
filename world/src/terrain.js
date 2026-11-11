@@ -25,7 +25,8 @@ const smooth=(a,b,x)=>{const t=Math.max(0,Math.min(1,(x-a)/(b-a)));return t*t*(3
 const gaussian=(x,z,cx,cz,rx,rz)=>Math.exp(-(((x-cx)/rx)**2+((z-cz)/rz)**2));
 export function pondFraction(x,z) {return Math.hypot((x-ISLAND.pondX)/ISLAND.pondRX,(z-ISLAND.pondZ)/ISLAND.pondRZ);}
 export const STREAM = [[128,68,3.02],[135,72,3.25],[145,78,3.7],[155,88,4.1],[165,98,4.6]];
-export function streamInfo(x,z){let best={distance:Infinity,level:3};for(let i=1;i<STREAM.length;i++){const a=STREAM[i-1],b=STREAM[i],dx=b[0]-a[0],dz=b[1]-a[1],t=Math.max(0,Math.min(1,((x-a[0])*dx+(z-a[1])*dz)/(dx*dx+dz*dz))),d=Math.hypot(x-a[0]-t*dx,z-a[1]-t*dz);if(d<best.distance)best={distance:d,level:a[2]+(b[2]-a[2])*t};}return best;}
+export function streamInfo(x,z){let best={distance:Infinity,level:3,segment:0,t:0};for(let i=1;i<STREAM.length;i++){const a=STREAM[i-1],b=STREAM[i],dx=b[0]-a[0],dz=b[1]-a[1],t=Math.max(0,Math.min(1,((x-a[0])*dx+(z-a[1])*dz)/(dx*dx+dz*dz))),d=Math.hypot(x-a[0]-t*dx,z-a[1]-t*dz);if(d<best.distance)best={distance:d,level:a[2]+(b[2]-a[2])*t,segment:i,t};}return best;}
+export const streamHalfWidth = (segment,t) => 2+.25*Math.sin(segment*4+t*5);
 function baseGroundHeight(x,z) {
  const shore=shoreFraction(x,z);
  const base=4 + 1.8*Math.sin(x*.013)*Math.cos(z*.014)+.7*Math.sin((x+z)*.029);
@@ -43,13 +44,17 @@ export const TIDE_POOLS=[[227,-190,6.8,5.0],[212,-204,5.8,4.3],[243,-177,6.0,4.2
 export function tideWaterHeight(pool){return baseGroundHeight(pool[0],pool[1])-.24;}
 export function terrainElevation(x,z){let h=baseGroundHeight(x,z);for(const pool of TIDE_POOLS){const d=Math.hypot((x-pool[0])/pool[2],(z-pool[1])/pool[3]),mask=1-smooth(.65,1.25,d);h-=2.5*mask;}return h;}
 export function terrainVertex(ring,slice){const a=slice/TERRAIN_SLICES*Math.PI*2,q=ring/TERRAIN_RINGS,r=coastRadius(a)*q,x=Math.cos(a)*ISLAND.radiusX*r,z=Math.sin(a)*ISLAND.radiusZ*r;return [x,terrainElevation(x,z),z];}
+const heightVertices = Array.from({length:TERRAIN_RINGS+1},()=>[]);
+function heightVertex(ring,slice){
+ return heightVertices[ring][slice] ??= terrainVertex(ring,slice);
+}
 function triangleHeight(x,z,a,b,c){const det=(b[2]-c[2])*(a[0]-c[0])+(c[0]-b[0])*(a[2]-c[2]);if(Math.abs(det)<1e-10)return null;const u=((b[2]-c[2])*(x-c[0])+(c[0]-b[0])*(z-c[2]))/det,v=((c[2]-a[2])*(x-c[0])+(a[0]-c[0])*(z-c[2]))/det,w=1-u-v;return u>=-1e-7&&v>=-1e-7&&w>=-1e-7?u*a[1]+v*b[1]+w*c[1]:null;}
 // This samples the exact triangles sent to WebGL, so feet, water and camera meet the visible surface.
 export function groundHeight(x,z){
  const q=shoreFraction(x,z);if(q>=1||q<1e-8)return terrainElevation(x,z);
  let angle=Math.atan2(z/ISLAND.radiusZ,x/ISLAND.radiusX);if(angle<0)angle+=Math.PI*2;
  const i=Math.min(TERRAIN_SLICES-1,Math.floor(angle/(Math.PI*2)*TERRAIN_SLICES)),guess=Math.floor(q*TERRAIN_RINGS);
- for(const delta of [0,-1,1,-2,2]){const j=guess+delta;if(j<0||j>=TERRAIN_RINGS)continue;const a=terrainVertex(j,i),b=terrainVertex(j,i+1),c=terrainVertex(j+1,i),d=terrainVertex(j+1,i+1);let h=triangleHeight(x,z,a,b,c);if(h!==null)return h;h=triangleHeight(x,z,b,d,c);if(h!==null)return h;}
+ for(const delta of [0,-1,1,-2,2]){const j=guess+delta;if(j<0||j>=TERRAIN_RINGS)continue;const a=heightVertex(j,i),b=heightVertex(j,i+1),c=heightVertex(j+1,i),d=heightVertex(j+1,i+1);let h=triangleHeight(x,z,a,b,c);if(h!==null)return h;h=triangleHeight(x,z,b,d,c);if(h!==null)return h;}
  return terrainElevation(x,z);
 }
 export const walkShoreLimit=.985;

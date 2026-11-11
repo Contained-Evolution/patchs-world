@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createWalkSolids} from '../src/walk-solids.js';
+import {createWalkSolids} from '../src/island-collision.js';
 import {walkable,walkStep} from '../src/visitor-controls.js';
 import {places,ISLAND,coastRadius,walkShoreLimit} from '../src/terrain.js';
 test('the coast stops a visitor',()=>{

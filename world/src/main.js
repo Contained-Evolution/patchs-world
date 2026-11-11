@@ -19,8 +19,9 @@ import { travelFraction } from './travel-progress.js';
 import { adaptiveQuality } from './render-quality.js';
 import { places, groundHeight, walkRoute, swingLoop, traversalLoop, holdFor, trees, statusText, isLocalPreview, safePatch } from './world-state.js';
 import { patchRoute, roamPlan, ROAM, seedFrom, rng } from './patch-motion.js';
+import { clearGroundLine, inPond, nearestWalkable, pondAccess } from './island-collision.js';
 import { CLIPS } from './patch-clips.js';
-import { CLIMB_WALLS, wallHold, holdLine, climbPlan, ropeExitPlan, placement, approachVia } from './climbing.js';
+import { CLIMB_WALLS, wallHold, holdLine, climbPlan, ropeExitPlan, placement } from './climbing.js';
 import { setupAnimationViewer } from './animation-viewer.js';
 import { makeTransfer } from './traversal.js';
 import { seatFor, usesTablet, deskClip } from './furniture.js';
@@ -48,10 +49,10 @@ $('#world').append(renderer.domElement);
 const scene = new THREE.Scene();
 scene.fog = new THREE.Fog(0xadd9d4, 750, 1650);
 const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, .1, 12000);
-const scenery=createIsland(scene);
+const scenery=createIsland(scene),solids=scenery.walkSolids;
 const sound=createIslandAudio($('#island-sound'));
 const cameraFeeds = setupIslandCameras(renderer, () => controls.pause());
-const controls = createVisitorControls(camera, renderer.domElement, () => dialog.open || cameraFeeds.open || animations.isOpen(), scene, scenery.walkSolids);
+const controls = createVisitorControls(camera, renderer.domElement, () => dialog.open || cameraFeeds.open || animations.isOpen(), scene, solids);
 // A notification opens the island at its panel: ?view=letters.
 const view=new URLSearchParams(location.search).get('view');
 if(view==='letters'||view==='board'){history.replaceState(null,'',location.pathname);controls.pause();dialog.showModal();community.openPanel(view);}
@@ -109,6 +110,25 @@ function playClip(name, once = false) {
 // Clips that follow a shared plan are posed at the plan's time, so every visitor sees the same frame.
 function poseClip(name,time){playClip(name);if(currentName!==name||!currentAction)return;currentAction.timeScale=0;currentAction.time=Math.max(0,Math.min(time,clips[name].duration-1e-3));}
 let state = null, hasLiveState = false, demo = false, journey = null, serverOffset = 0, descent = null, wasAirborne = false, climbTime = 0, climb = null, ropeExit = null;
+let groundApproach = null, groundActivity = null, inFurniture = false, swimAccess = null, enteringPond = false;
+function approachGround(goal, dt) {
+  const here = [patch.position.x, patch.position.z];
+  const repath = !groundApproach || Math.hypot(goal[0]-groundApproach.goal[0],goal[1]-groundApproach.goal[1])>1.5;
+  if(repath){
+    const route=patchRoute(here,goal,0,[],solids);
+    groundApproach={goal,points:route};
+  }
+  const points=groundApproach.points;
+  while(points.length&&Math.hypot(points[0][0]-here[0],points[0][1]-here[1])<.04)points.shift();
+  const next=points.length<=1&&clearGroundLine(here,goal,solids)?goal:points[0];
+  if(!next)return false;
+  const dx=next[0]-here[0],dz=next[1]-here[1],distance=Math.hypot(dx,dz);
+  if(distance<.001)return false;
+  const step=Math.min(distance,dt*1.7)/distance,point=[here[0]+dx*step,here[1]+dz*step];
+  if(!clearGroundLine(here,point,solids))return false;
+  patch.position.x=point[0];patch.position.z=point[1];face(Math.atan2(dx,dz),dt);
+  return true;
+}
 // He swims slow laps of the pond, stopping now and then to tread water.
 function swimAt(seconds){const lap=Math.max(0,seconds)||0,swum=Math.floor(lap/60)*40+Math.min(lap%60,40),a=swum*.034;return {x:ISLAND.pondX+Math.cos(a)*8,z:ISLAND.pondZ+Math.sin(a)*5.6,heading:Math.atan2(-8*Math.sin(a),5.6*Math.cos(a)),stroke:lap%60<40};}
 // Climbs follow a seeded plan. At the lookout he braces on the rock's flat face;
@@ -129,11 +149,18 @@ function followClimb(elapsed,dt){
     // He joins the shared climb from the ground, walking round the rock if it is in his way.
     const ground=seg.mode==='ground'||seg.mode==='walk',spot=ground?[p.x,p.z]:climb.line.stand(seg.s),here=[patch.position.x,patch.position.z];
     if(ground&&Math.hypot(spot[0]-here[0],spot[1]-here[1])<.3)climb.joined=true;
-    else{const next=approachVia(here,spot),dx=next[0]-here[0],dz=next[1]-here[1],dist=Math.hypot(dx,dz);if(dist>.05){const step=Math.min(dist,dt*1.7);patch.position.x+=dx/dist*step;patch.position.z+=dz/dist*step;face(Math.atan2(dx,dz),dt);}else face(climb.line.heading,dt);patch.position.y=groundHeight(patch.position.x,patch.position.z);patch.rotation.z=0;playClip(dist>.05?'walk':'idle');return true;}
+    else{const moving=approachGround(spot,dt);if(!moving)face(climb.line.heading,dt);patch.position.y=groundHeight(patch.position.x,patch.position.z);patch.rotation.z=0;playClip(moving?'walk':'idle');return true;}
   }
   // Blend his feet across a clip change, matching the animation crossfade.
   if(p.clip!==climb.clip){climb.from=patch.position.clone();climb.blend=0;climb.clip=p.clip;}
-  climb.blend=Math.min(1,climb.blend+dt/.2);patch.position.lerpVectors(climb.from,new THREE.Vector3(p.x,p.y,p.z),climb.blend);
+  climb.blend=Math.min(1,climb.blend+dt/.2);
+  if (wall && ['walk','ground'].includes(seg.mode) && patch.position.y<=groundHeight(patch.position.x,patch.position.z)+.3) {
+    const here=[patch.position.x,patch.position.z];
+    if(!clearGroundLine(here,[p.x,p.z],solids)){
+      approachGround([p.x,p.z],dt);patch.position.y=groundHeight(patch.position.x,patch.position.z);return true;
+    }
+  }
+  patch.position.lerpVectors(climb.from,new THREE.Vector3(p.x,p.y,p.z),climb.blend);
   face(p.heading,dt);patch.rotation.z=0;
   if(p.moving)playClip(p.clip);else poseClip(p.clip,p.time);
   wasAirborne=!wall&&seg.mode!=='rope-ground';return true;
@@ -164,7 +191,7 @@ async function poll() {
     // A poll can arrive after an activity ended while this tab was paused. Place
     // Patch at the server's destination instead of replaying an obsolete journey.
     const [px,pz]=places[next.patch.place];
-    if (!state || (previous && previous.since!==next.patch.since && !next.patch.target && Math.hypot(patch.position.x-px,patch.position.z-pz)>60)) patch.position.set(px,groundHeight(px,pz),pz);
+    if (!state || (previous && previous.since!==next.patch.since && !next.patch.target && Math.hypot(patch.position.x-px,patch.position.z-pz)>60)) {const spawn=nearestWalkable(px,pz,solids);if(spawn)patch.position.set(spawn[0],groundHeight(...spawn),spawn[1]);}
     state = next; hasLiveState = true; demo = false;
     renderCare(next.patch);
     $('#connection').hidden = true;
@@ -184,7 +211,7 @@ const sun=mesh(new THREE.SphereGeometry(18,16,12),new THREE.MeshBasicMaterial({c
 function cloudTexture(){const c=document.createElement('canvas');c.width=512;c.height=256;const g=c.getContext('2d');for(let i=0;i<16;i++){const x=70+(i*71)%380,y=95+Math.sin(i*2.3)*32,r=35+(i%5)*12,grad=g.createRadialGradient(x,y,0,x,y,r);grad.addColorStop(0,'rgba(255,255,255,.15)');grad.addColorStop(1,'rgba(255,255,255,0)');g.fillStyle=grad;g.fillRect(x-r,y-r,r*2,r*2);}return new THREE.CanvasTexture(c);}
 const cloudMap=cloudTexture(),clouds=[];for(let i=0;i<10;i++){const m=new THREE.Sprite(new THREE.SpriteMaterial({map:cloudMap,transparent:true,opacity:.75,depthWrite:false}));m.scale.set(190+i%3*35,90,1);m.position.set(Math.cos(i*2.4)*510,650+i%3*45,Math.sin(i*2.4)*510);scene.add(m);clouds.push(m);}
 const rainGeo=new THREE.BufferGeometry(),drops=[];for(let i=0;i<500;i++)drops.push((Math.random()-.5)*50,Math.random()*35,(Math.random()-.5)*50);rainGeo.setAttribute('position',new THREE.Float32BufferAttribute(drops,3));const rain=new THREE.Points(rainGeo,new THREE.PointsMaterial({color:0xd6edf2,size:.12,transparent:true,opacity:.7}));scene.add(rain);
-let last=performance.now();patch.position.set(0,groundHeight(0,0),0);
+let last=performance.now();const spawn=nearestWalkable(0,0,solids);patch.position.set(spawn[0],groundHeight(...spawn),spawn[1]);
 const findPatch = $('#find-patch'), followPatch = $('#follow-patch');
 findPatch.onclick = () => { if (state) controls.findPatch(patch.position); };
 followPatch.onchange = () => {
@@ -222,7 +249,21 @@ const seat=target?null:seatFor(action,place),dest=seat?[seat.x,seat.z]:climb?cli
 const travel = !!(target && places[target] && ['walk','run','swing'].includes(action));
 const swinging = action === 'swing';
 const key = `${action}|${place}|${target||''}|${since||''}`;
-if(ropeExit){
+if(groundActivity!==key){groundActivity=key;groundApproach=null;inFurniture=false;swimAccess=null;enteringPond=false;}
+const leavingPond=!lap&&inPond(patch.position.x,patch.position.z);
+if(leavingPond){
+ const here=[patch.position.x,patch.position.z];
+ swimAccess ??= pondAccess(here,solids);
+ if(swimAccess){
+  const {bank}=swimAccess,dx=bank[0]-here[0],dz=bank[1]-here[1],distance=Math.hypot(dx,dz);
+  const step=Math.min(1,dt*1.7/distance),next=[here[0]+dx*step,here[1]+dz*step];
+  if(clearGroundLine(here,next,solids,true)){
+   patch.position.set(next[0],inPond(...next)?ISLAND.pondY-.35:groundHeight(...next),next[1]);
+   face(Math.atan2(dx,dz),dt);
+  }
+ }
+ playClip('swim');
+} else if(ropeExit){
  ropeExit.elapsed+=dt;const seg=ropeExit.plan.at(ropeExit.elapsed),p=placement(ropeExit.line,seg);
  patch.position.set(p.x,p.y,p.z);patch.rotation.z=0;face(p.heading,dt);poseClip(p.clip,p.time);
  if(seg.mode==='rope-ground'){ropeExit=null;wasAirborne=false;climbTime=0;journey=null;}
@@ -230,16 +271,33 @@ if(ropeExit){
   if (!journey || journey.key !== key) {
     // Leave from where he is standing when that is near the place he is leaving.
     const here=[patch.position.x,patch.position.z],origin=Math.hypot(here[0]-places[place][0],here[1]-places[place][1])<60?here:places[place],seed=seedFrom(key);
-    const ground=groundHeight(...origin),fromAir=wasAirborne&&patch.position.y>ground+.5;
-    const points=[{p:new THREE.Vector3(origin[0],fromAir?patch.position.y:ground,origin[1]),mode:'ground'}];
-    if(fromAir)points.push({p:new THREE.Vector3(origin[0],ground,origin[1]),mode:'descent'});
+    const start=nearestWalkable(...origin,solids)||origin;
+    const ground=groundHeight(...start),fromAir=wasAirborne&&patch.position.y>ground+.5;
+    const points=[{p:new THREE.Vector3(start[0],fromAir?patch.position.y:ground,start[1]),mode:'ground'}];
+    if(fromAir)points.push({p:new THREE.Vector3(start[0],ground,start[1]),mode:'descent'});
     const groundPoints=route=>route.forEach(([x,z])=>points.push({p:new THREE.Vector3(x,groundHeight(x,z),z),mode:'ground'}));
-    const wayTo=(from,to,remembered)=>patchRoute(from,to,seed+points.length,remembered).slice(1);
+    const wayTo=(from,to,remembered)=>patchRoute(from,to,seed+points.length,remembered,solids).slice(1);
     const branchPoints=holds=>holds.forEach((hold,i)=>{const [x,y,z]=hold.grip;points.push({p:new THREE.Vector3(x,y-1.8,z),hold,mode:travel&&i===0?'climb':'branch'});});
     if(swinging){
-      if(travel){const [ax,,az]=swingLoop()[0];groundPoints(wayTo(origin,[ax,az],[origin,...walkRoute(place,'tall-trees'),[ax,az]]));branchPoints(traversalLoop());if(target!=='tall-trees'){const last=points.at(-1).p;points.push({p:new THREE.Vector3(last.x,groundHeight(last.x,last.z),last.z),mode:'descent'});groundPoints(wayTo([last.x,last.z],places[target],[[last.x,last.z],...walkRoute('tall-trees',target)]));}}
+      if(travel){
+        const [ax,,az]=swingLoop()[0],mount=nearestWalkable(ax,az,solids);
+        if(mount){
+          groundPoints(wayTo(start,mount,[start,...walkRoute(place,'tall-trees'),mount]));
+          const last=points.at(-1).p;
+          if(Math.hypot(last.x-mount[0],last.z-mount[1])<.01){
+            branchPoints(traversalLoop());
+            if(target!=='tall-trees'){
+              const tip=points.at(-1).p,landing=nearestWalkable(tip.x,tip.z,solids);
+              if(landing){
+                points.push({p:new THREE.Vector3(landing[0],groundHeight(...landing),landing[1]),mode:'descent'});
+                groundPoints(wayTo(landing,places[target],[landing,...walkRoute('tall-trees',target)]));
+              }
+            }
+          }
+        }
+      }
       else {points.length=0;branchPoints(traversalLoop());}
-    } else groundPoints(wayTo(origin,places[target],[origin,...walkRoute(place,target)]));
+    } else groundPoints(wayTo(start,places[target],[start,...walkRoute(place,target)]));
     const lengths=[];let total=0;for(let i=1;i<points.length;i++){const length=points[i-1].p.distanceTo(points[i].p);lengths.push(length);total+=length;}
     const transfers=points.slice(1).map((point,i)=>point.mode==='branch'&&points[i].hold?makeTransfer(points[i].hold,point.hold):null);
     journey={key,points,lengths,total,transfers};
@@ -266,7 +324,8 @@ if(ropeExit){
     }
   }
   if(mounting){const hold=holdFor(0),f=THREE.MathUtils.smoothstep(elapsed/4,0,1),[x,y,z]=hold.grip;patch.position.set(x,THREE.MathUtils.lerp(groundHeight(x,z),y-1.8,f),z);patch.rotation.z=0;playClip('swing-start',true);if(f>.98)heldGrip=hold.grip;}
-  wasAirborne=swinging;descent=null;
+  if(!to){patch.position.copy(from.p);playClip('idle');}
+  wasAirborne=swinging&&!!to;descent=null;
 } else {
   if(wasAirborne&&action!=='climb'){const ground=groundHeight(patch.position.x,patch.position.z);if(patch.position.y>ground+.5)descent={start:patch.position.y,ground,elapsed:0};wasAirborne=false;}
   if(action!=='climb')climbTime=0;
@@ -274,24 +333,39 @@ if(ropeExit){
   const names={idle:'idle',think:'idle',computer:'typing',research:'tablet-stand',write:'tablet-stand',look:'look-around',wave:'look-around',walk:'walk',run:'run',climb:'hang',swim:'swim',fish:'sit-ground',sit:'sit-ground',sleep:'sleep',eat:'idle',explore:'look-around','watch-sky':'sit-ground'};
   // Exploring and similar activities are a shared roam: he picks spots, walks there, stops and looks around.
   const foraging=action==='eat'&&place==='banana-grove',roams=foraging||!!ROAM[action]?.radius[place],roamKey=`${action}|${place}|${since||''}`;
-  if(roams&&roam?.key!==roamKey)roam={key:roamKey,plan:foraging?foragePlan(seedFrom(roamKey)):roamPlan(action,place,seedFrom(roamKey))};
+  if(roams&&roam?.key!==roamKey)roam={key:roamKey,plan:foraging?foragePlan(seedFrom(roamKey),solids):roamPlan(action,place,seedFrom(roamKey),solids)};
   if(!roams)roam=null;
   const elapsed=(Date.now()+serverOffset-Date.parse(since))/1000,pose=roam?.plan.at(Number.isFinite(elapsed)?Math.max(0,elapsed):t%9);
   if(!(climb&&!descent&&followClimb(Number.isFinite(elapsed)?elapsed:t,dt))){
-  const goal=pose?[pose.x,pose.z]:dest,dx=goal[0]-patch.position.x,dz=goal[1]-patch.position.z,dist=Math.hypot(dx,dz);
-  // Catch up gently when he is out of place, and follow the roam exactly once he is on it.
-  if(pose&&dist<1.5){patch.position.x=pose.x;patch.position.z=pose.z;if(pose.heading!==null)face(pose.heading,dt);}
-  else if(lap&&dist<.6){patch.position.x=lap.x;patch.position.z=lap.z;face(lap.heading,dt);}
-  else if(dist>.15&&!descent){let step=Math.min(dist,dt*1.7);patch.position.x+=dx/dist*step;patch.position.z+=dz/dist*step;face(Math.atan2(dx,dz),dt);}
-  const arriving=pose?dist>=1.5:lap?dist>=.6:dist>.5;
+  const here=[patch.position.x,patch.position.z];
+  const inWater=inPond(...here);
+  if(lap&&!inWater){
+    swimAccess ??= pondAccess(places.pond,solids);
+    if(swimAccess&&Math.hypot(here[0]-swimAccess.bank[0],here[1]-swimAccess.bank[1])<.15)enteringPond=true;
+  }
+  if(enteringPond&&Math.hypot(here[0]-swimAccess.water[0],here[1]-swimAccess.water[1])<.25)enteringPond=false;
+  const swimming=!!lap&&(inWater||enteringPond);
+  const goal=pose?[pose.x,pose.z]:lap?(enteringPond?swimAccess.water:swimming?dest:swimAccess?.bank||here):nearestWalkable(...dest,solids)||here;
+  const dx=goal[0]-here[0],dz=goal[1]-here[1],dist=Math.hypot(dx,dz);
+  let arriving=!inFurniture&&dist>(lap?.6:.15),moving=false;
+  if(!descent&&pose&&dist<1.5&&clearGroundLine(here,goal,solids)){
+    patch.position.x=pose.x;patch.position.z=pose.z;arriving=false;
+    if(pose.heading!==null)face(pose.heading,dt);
+  }else if(!descent&&swimming){
+    const fraction=dist<.6?1:Math.min(1,dt*1.7/dist);
+    const next=[here[0]+dx*fraction,here[1]+dz*fraction];
+    if(clearGroundLine(here,next,solids,true)){
+      patch.position.x=next[0];patch.position.z=next[1];face(dist<.6?lap.heading:Math.atan2(dx,dz),dt);
+    }
+  }else if(!descent&&arriving)moving=approachGround(goal,dt);
   if(pose?.basket&&!arriving&&!descent)foodPose=pose;
   if(climb&&!arriving)climbTime=Math.min(4,climbTime+dt);
-  patch.position.y=action==='swim'?ISLAND.pondY-.35:climb&&!arriving?THREE.MathUtils.lerp(groundHeight(patch.position.x,patch.position.z),climb.line.point(0)[1]-1.8,THREE.MathUtils.smoothstep(climbTime/4,0,1)):groundHeight(patch.position.x,patch.position.z);
+  patch.position.y=swimming&&inPond(patch.position.x,patch.position.z)?ISLAND.pondY-.35:climb&&!arriving?THREE.MathUtils.lerp(groundHeight(patch.position.x,patch.position.z),climb.line.point(0)[1]-1.8,THREE.MathUtils.smoothstep(climbTime/4,0,1)):groundHeight(patch.position.x,patch.position.z);
   patch.rotation.z=0;
   if(action==='fish'&&!arriving)face(Math.atan2(ISLAND.pondX-patch.position.x,ISLAND.pondZ-patch.position.z),dt);
-  let clip=arriving&&action!=='swim'?'walk':pose?pose.clip:names[action]||'idle';
+  let clip=arriving&&!swimming?(moving?'walk':'idle'):pose?pose.clip:names[action]||'idle';
   if(climb&&!arriving){wasAirborne=true;clip=climb.line.kind==='rope'?'rope-climb':'swing-start';}
-  if(lap&&!arriving&&!lap.stroke)clip='tread';
+  if(swimming&&!arriving&&!lap.stroke)clip='tread';
   if(descent){descent.elapsed+=dt;const f=Math.min(1,descent.elapsed/2);patch.position.y=THREE.MathUtils.lerp(descent.start,descent.ground,f);clip='fall';heldGrip=null;if(f===1)descent=null;}
   // In the hammock he sleeps either on his back or on his side, rolling over now and then.
   if(action==='sleep'&&place==='hammock'&&!arriving&&!descent){
@@ -299,6 +373,7 @@ if(ropeExit){
     patch.rotation.y=back?Math.PI/2:0;
     if(at<CLIPS.yawn.duration) poseClip('yawn',at);
     else {
+      inFurniture=true;
       patch.position.set(hammock.x,groundHeight(hammock.x,hammock.z)+(back?hammock.backPose:hammock.sidePose),hammock.z);
       if(back) poseClip('sleep-lay',at%CLIPS['sleep-lay'].duration);
       else {
@@ -309,6 +384,8 @@ if(ropeExit){
     }
   } else if(seat&&!arriving&&!descent){
     // On a seat he settles onto it facing its way; at the coconut computer he reaches for the keys, types, and sits back near the end.
+    inFurniture=true;
+    // The approach ends on clear ground. Sitting aligns the pose to the furniture.
     patch.position.x+=(seat.x-patch.position.x)*Math.min(1,dt*6);patch.position.z+=(seat.z-patch.position.z)*Math.min(1,dt*6);face(seat.heading,dt);
     if(place==='computer'){const at=Number.isFinite(elapsed)?Math.max(0,elapsed):t%30,left=Number.isFinite(Date.parse(until))?(Date.parse(until)-Date.now()-serverOffset)/1000:60,desk=deskClip(action,at,left,{'sit-to-type':CLIPS['sit-to-type'].duration,'type-to-sit':CLIPS['type-to-sit'].duration,typing:CLIPS.typing.duration});poseClip(desk.clip,desk.time);}
     else playClip('sit',true);

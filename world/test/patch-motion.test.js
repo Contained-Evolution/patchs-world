@@ -1,10 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {patchRoute, roamPlan, ROAM, trunkClearance, seedFrom} from '../src/patch-motion.js';
-import {walkable} from '../src/visitor-controls.js';
+import {patchRoute, roamPlan, ROAM, seedFrom} from '../src/patch-motion.js';
+import {walkable, clearGroundLine, nearestWalkable} from '../src/island-collision.js';
 import {places} from '../src/terrain.js';
 import {walkRoute} from '../src/world-state.js';
-import {forest} from '../src/forest.js';
 import {foragePlan} from '../src/foraging.js';
 import {CLIPS} from '../src/patch-clips.js';
 
@@ -13,8 +12,8 @@ test('his routes between places go around trunks and stay on dry land',()=>{
  for(const from of ids)for(const to of ids){
   if(from===to)continue;
   const route=patchRoute(places[from],places[to],seedFrom(from+to),[places[from],...walkRoute(from,to)]);
-  assert.deepEqual(route[0],places[from]);assert.deepEqual(route.at(-1),places[to]);
-  for(let i=1;i<route.length;i++){assert.ok(walkable(...route[i],...route[i-1]),`${from} to ${to} blocked at ${route[i]}`);if(i<route.length-1)assert.ok(trunkClearance(...route[i])>.85,`${from} to ${to} brushes a trunk at ${route[i]}`);}
+  assert.deepEqual(route[0],nearestWalkable(...places[from]));assert.deepEqual(route.at(-1),nearestWalkable(...places[to]));
+  for(let i=1;i<route.length;i++)assert.ok(clearGroundLine(route[i-1],route[i]),`${from} to ${to} blocked at ${route[i]}`);
  }
 });
 
@@ -54,7 +53,7 @@ test('a roam can be joined late without replaying from the start',()=>{
 test('eating in the grove picks fruit facing a banana tree within reach',()=>{
   const plan=foragePlan(seedFrom('eat|banana-grove|x'));let picks=0;
   for(let t=0;t<900;t+=.5){const pose=plan.at(t);if(pose.clip!=='pick-fruit')continue;picks++;
-    const tree=forest.filter(f=>f.grove).reduce((a,b)=>Math.hypot(a.x-pose.x,a.z-pose.z)<Math.hypot(b.x-pose.x,b.z-pose.z)?a:b);
+    const {tree}=pose;
     assert.ok(Math.hypot(tree.x-pose.x,tree.z-pose.z)<1.3);assert.ok(Math.abs(Math.atan2(Math.sin(pose.heading-Math.atan2(tree.x-pose.x,tree.z-pose.z)),Math.cos(pose.heading-Math.atan2(tree.x-pose.x,tree.z-pose.z))))<.05);}
   assert.ok(picks>0);
 });

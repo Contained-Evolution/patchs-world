@@ -17,25 +17,6 @@ function climbingRock(x,z,angle,width,depth){
 }
 export const CLIMB_WALLS=[climbingRock(-142.6,-211.6,332*Math.PI/180,6,2.6)];
 
-// Visitors and Patch's feet can't pass through the rock.
-export function insideRock(x,z){
- return CLIMB_WALLS.some(w=>{const dx=x-w.x,dz=z-w.z,ahead=dx*w.normal[0]+dz*w.normal[1],side=dx*w.tangent[0]+dz*w.tangent[1];return ahead<.05&&ahead>-w.depth&&Math.abs(side)<w.width/2;});
-}
-
-// The next point to walk to on the way to `to`: straight there, or round a corner of the rock.
-export function approachVia(from,to){
- const clear=(a,b)=>{for(let i=0;i<=24;i++){const t=i/24;if(insideRock(mix(a[0],b[0],t),mix(a[1],b[1],t)))return false;}return true;};
- if(clear(from,to))return to;
- let best=null;
- for(const w of CLIMB_WALLS)for(const side of [-1,1])for(const ahead of [1,-w.depth-1]){
-  const c=[w.x+w.tangent[0]*side*(w.width/2+1)+w.normal[0]*ahead,w.z+w.tangent[1]*side*(w.width/2+1)+w.normal[1]*ahead];
-  if(!clear(from,c))continue;
-  const cost=Math.hypot(c[0]-from[0],c[1]-from[1])+(clear(c,to)?0:50)+Math.hypot(to[0]-c[0],to[1]-c[1]);
-  if(!best||cost<best.cost)best={c,cost};
- }
- return best?best.c:to;
-}
-
 // Cast a level ray and return the flat face it meets, if any.
 export function faceHit(x,y,z,dx,dz){
  let best=null;

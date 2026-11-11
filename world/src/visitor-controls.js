@@ -1,29 +1,9 @@
 import * as THREE from 'three';
 import { groundHeight } from './world-state.js';
-import { VISITOR_RADIUS } from './walk-solids.js';
-import { forestCollision } from './forest.js';
-import { insideRock } from './climbing.js';
-import { shoreFraction, walkShoreLimit, places, pondFraction, TIDE_POOLS } from './terrain.js';
+import { nearestWalkable, walkStep } from './island-collision.js';
+import { shoreFraction, walkShoreLimit } from './terrain.js';
 
-const [caveX,caveZ]=places.cave;
-function caveSolid(x,z){const dx=Math.abs(x-caveX),depth=caveZ-z;return depth>3&&depth<20&&((dx>5&&dx<7.3)||(depth>14.9&&dx<8));}
-export function walkable(x,z,fromX=x,fromZ=z,solids) {
-  if ((caveSolid(x,z)&&!caveSolid(fromX,fromZ))||(insideRock(x,z)&&!insideRock(fromX,fromZ))) return false;
-  if (shoreFraction(x,z) > walkShoreLimit || pondFraction(x,z)<.94 || TIDE_POOLS.some(([px,pz,rx,rz])=>Math.hypot((x-px)/rx,(z-pz)/rz)<.72) || forestCollision(x,z,fromX,fromZ,solids ? VISITOR_RADIUS : 0)) return false;
-  const d=Math.hypot(x-fromX,z-fromZ);
-  if (d && Math.abs(groundHeight(x,z)-groundHeight(fromX,fromZ))/d > 1.1) return false;
-  return !solids?.blocks(x, z, fromX, fromZ);
-}
-export function walkStep(x, z, dx, dz, solids) {
-  const steps = Math.max(1, Math.ceil(Math.hypot(dx, dz) / (VISITOR_RADIUS / 2)));
-  dx /= steps;
-  dz /= steps;
-  for (let i = 0; i < steps; i++) {
-    if (dx && walkable(x + dx, z, x, z, solids)) x += dx;
-    if (dz && walkable(x, z + dz, x, z, solids)) z += dz;
-  }
-  return [x, z];
-}
+export { walkable, walkStep } from './island-collision.js';
 
 export function createVisitorControls(camera, canvas, isModalOpen, scene, walkSolids) {
   const walk = document.querySelector('#walk');
@@ -104,13 +84,7 @@ export function createVisitorControls(camera, canvas, isModalOpen, scene, walkSo
   function safeLanding(x, z) {
     const scale = shoreFraction(x, z) / walkShoreLimit;
     if (scale > 1) { x /= scale; z /= scale; }
-    for (let radius = 0; radius <= 60; radius += 1.5) {
-      for (let i = 0; i < (radius ? 24 : 1); i++) {
-        const a = i * Math.PI / 12, px = x + Math.cos(a) * radius, pz = z + Math.sin(a) * radius;
-        if (walkable(px, pz, px + 10000, pz + 10000, walkSolids)) return [px, pz];
-      }
-    }
-    return [0, 12];
+    return nearestWalkable(x, z, walkSolids, 60) || [9, 14];
   }
 
   function visibility(from) {

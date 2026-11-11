@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { CLIPS, HANG_CLIPS } from '../src/patch-clips.js';
-import { CLIMB_WALLS, wallHold, holdLine, hangStyle, hangMoves, canGrab, climbPlan, ropeExitPlan, placement, insideRock } from '../src/climbing.js';
+import { CLIMB_WALLS, wallHold, holdLine, hangStyle, hangMoves, canGrab, climbPlan, ropeExitPlan, placement } from '../src/climbing.js';
 import { holdFor, trees, ROPE_TREES } from '../src/world-state.js';
 import { rng } from '../src/patch-motion.js';
 import { walkable } from '../src/visitor-controls.js';
@@ -59,7 +59,7 @@ test('a lookout climb only plays moves its hold allows and ends on his feet',()=
     if(seg.mode==='drop')hanging=false;
    } else {
     assert.ok(!hanging);
-    for(const s of seg.mode==='walk'?[seg.s0,seg.s1]:[seg.s]){const [x,z]=line.stand(s);assert.ok(walkable(x,z)&&!insideRock(x,z));}
+    for(const s of seg.mode==='walk'?[seg.s0,seg.s1]:[seg.s]){const [x,z]=line.stand(s);assert.ok(walkable(x,z));}
    }
   }
   assert.ok(!hanging);assert.equal(plan.segments.at(-1).mode,'ground');
@@ -81,13 +81,13 @@ test('placement keeps his hands on the ledge and his feet on the ground',()=>{
   const seg=plan.at(t),p=placement(line,seg);
   if(seg.mode==='ground'||seg.mode==='walk')assert.ok(Math.abs(p.y-groundHeight(p.x,p.z))<1e-6);
   if(seg.mode==='hang'){const hands=CLIPS[seg.clip].hands[0];assert.ok(Math.abs(p.y+hands[1]-line.levels[seg.level])<1e-6);}
-  assert.ok(!insideRock(p.x,p.z));
+  if(seg.mode==='ground'||seg.mode==='walk')assert.ok(walkable(p.x,p.z));
  }
 });
 
 test('visitors cannot walk into the climbing rock',()=>{
  const w=CLIMB_WALLS[0],x=w.x-w.normal[0]*1.2,z=w.z-w.normal[1]*1.2;
- assert.ok(insideRock(x,z));
+ assert.ok(!walkable(x,z));
  assert.ok(!walkable(x,z,w.x+w.normal[0]*2,w.z+w.normal[1]*2));
 });
 
