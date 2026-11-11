@@ -14,7 +14,7 @@ import { adaptiveQuality } from './render-quality.js';
 import { places, groundHeight, walkRoute, swingLoop, traversalLoop, holdFor, trees, statusText, isLocalPreview, safePatch } from './world-state.js';
 import { patchRoute, roamPlan, ROAM, seedFrom, rng } from './patch-motion.js';
 import { CLIPS } from './patch-clips.js';
-import { CLIMB_WALLS, wallHold, holdLine, climbPlan, placement, approachVia } from './climbing.js';
+import { CLIMB_WALLS, wallHold, holdLine, climbPlan, ropeExitPlan, placement, approachVia } from './climbing.js';
 import { setupAnimationViewer } from './animation-viewer.js';
 import { makeTransfer } from './traversal.js';
 import { seatFor, usesTablet, deskClip } from './furniture.js';
@@ -94,7 +94,7 @@ function playClip(name, once = false) {
 }
 // Clips that follow a shared plan are posed at the plan's time, so every visitor sees the same frame.
 function poseClip(name,time){playClip(name);if(currentName!==name||!currentAction)return;currentAction.timeScale=0;currentAction.time=Math.min(time,clips[name].duration-1e-3);}
-let state = null, hasLiveState = false, demo = false, journey = null, serverOffset = 0, descent = null, wasAirborne = false, climbTime = 0, climb = null;
+let state = null, hasLiveState = false, demo = false, journey = null, serverOffset = 0, descent = null, wasAirborne = false, climbTime = 0, climb = null, ropeExit = null;
 // He swims slow laps of the pond, stopping now and then to tread water.
 function swimAt(seconds){const lap=Math.max(0,seconds)||0,swum=Math.floor(lap/60)*40+Math.min(lap%60,40),a=swum*.034;return {x:ISLAND.pondX+Math.cos(a)*8,z:ISLAND.pondZ+Math.sin(a)*5.6,heading:Math.atan2(-8*Math.sin(a),5.6*Math.cos(a)),stroke:lap%60<40};}
 // Climbs follow a seeded plan. At the lookout he braces on the rock's flat face;
@@ -122,7 +122,7 @@ function followClimb(elapsed,dt){
   climb.blend=Math.min(1,climb.blend+dt/.2);patch.position.lerpVectors(climb.from,new THREE.Vector3(p.x,p.y,p.z),climb.blend);
   face(p.heading,dt);patch.rotation.z=0;
   if(p.moving)playClip(p.clip);else poseClip(p.clip,p.time);
-  wasAirborne=!wall;return true;
+  wasAirborne=!wall&&seg.mode!=='rope-ground';return true;
 }
 function renderCare(p) {
   const panel=$('#care'), list=$('#care-needs');
@@ -183,13 +183,22 @@ const {action,place,target,says,since,until,speechUntil}=state.patch,mail=Number
 $('#status').textContent = statusText(state.patch)+(mail&&!(place==='computer'&&!target)?` ✉ ${mail} letter${mail===1?'':'s'} waiting at his coconut computer.`:'');
 foodPose=null;scenery.resetRopes();let heldRope=null, heldGrip=null;fishingRod.visible=action==='fish'&&!target;
 const climbKey=`${action}|${place}|${since||''}`;
-if(action==='climb'&&!target&&(place==='lookout'||place==='tall-trees')){if(climb?.key!==climbKey){climb=startClimb(place,climbKey,since,until);climbTime=0;}}else climb=null;
+if(climb?.line.kind==='rope'&&(climb.key!==climbKey||target)&&wasAirborne&&!ropeExit){
+ const line=climb.line;ropeExit={line,plan:ropeExitPlan(line,{x:patch.position.x,y:patch.position.y,z:patch.position.z},currentName==='sleep-lay'),elapsed:0};
+ descent=null;journey=null;climb=null;
+}
+
+if(!ropeExit&&action==='climb'&&!target&&(place==='lookout'||place==='tall-trees')){if(climb?.key!==climbKey){climb=startClimb(place,climbKey,since,until);climbTime=0;}}else climb=null;
 const activityTime=(Date.now()+serverOffset-Date.parse(since))/1000,lap=action==='swim'&&place==='pond'&&!target?swimAt(activityTime):null;
 const seat=target?null:seatFor(action,place),dest=seat?[seat.x,seat.z]:climb?climb.start:lap?[lap.x,lap.z]:action==='sleep'&&place==='hammock'&&!target?[0,1]:places[target]||places[place];
 const travel = !!(target && places[target] && ['walk','run','swing'].includes(action));
 const swinging = action === 'swing';
 const key = `${action}|${place}|${target||''}|${since||''}`;
-if (travel || swinging) {
+if(ropeExit){
+ ropeExit.elapsed+=dt;const seg=ropeExit.plan.at(ropeExit.elapsed),p=placement(ropeExit.line,seg);
+ patch.position.set(p.x,p.y,p.z);patch.rotation.z=0;face(p.heading,dt);poseClip(p.clip,p.time);
+ if(seg.mode==='rope-ground'){ropeExit=null;wasAirborne=false;climbTime=0;journey=null;}
+} else if (travel || swinging) {
   if (!journey || journey.key !== key) {
     // Leave from where he is standing when that is near the place he is leaving.
     const here=[patch.position.x,patch.position.z],origin=Math.hypot(here[0]-places[place][0],here[1]-places[place][1])<60?here:places[place],seed=seedFrom(key);

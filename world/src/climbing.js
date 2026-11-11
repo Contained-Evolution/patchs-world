@@ -141,16 +141,35 @@ export function climbPlan(line,random,{duration,fromGround}){
  }};
 }
 
-// Rope climbs reach a supported canopy branch, land once, then rest there.
+// Reserve time to return to the rope and climb all the way to the ground.
+const canopyClip=()=>CLIPS['climb-top']?'climb-top':'swing-land';
+function timedPlan(line,segments){
+ return {line,segments,at(seconds){let index=segments.findIndex(s=>seconds<s.t1);if(index<0)index=segments.length-1;const seg=segments[index],time=Math.max(0,seconds-seg.t0);return {...seg,index,time,progress:Math.min(1,time/(seg.t1-seg.t0))};}};
+}
 export function ropeClimbPlan(line,duration){
- const landing=CLIPS['climb-top'].duration;
- const rise=line.anchor[1]-line.point(0)[1],ascent=Math.min(rise/.3*CLIPS['rope-climb'].duration,Math.max(2,duration-landing-15));
- const segments=[
+ const landing=CLIPS[canopyClip()].duration,hand=CLIPS['rope-climb'].hands[0];
+ const rise=line.anchor[1]-line.point(0)[1],up=rise/.3*CLIPS['rope-climb'].duration;
+ const down=(line.anchor[1]-hand[1]-line.ground(0))/.55;
+ const scale=Math.min(1,Math.max(2,duration-4-landing*2-10)/(up+down));
+ const ascent=up*scale,descent=down*scale,leave=Math.max(ascent+landing+1,duration-4-landing-descent);
+ return timedPlan(line,[
   {mode:'rope-climb',clip:'rope-climb',t0:0,t1:ascent},
-  {mode:'canopy-land',clip:'climb-top',t0:ascent,t1:ascent+landing},
-  {mode:'canopy-rest',clip:'sleep-lay',t0:ascent+landing,t1:Math.max(duration,ascent+landing)+3600},
- ];
- return {line,segments,at(seconds){const index=seconds<ascent?0:seconds<ascent+landing?1:2,seg=segments[index],time=Math.max(0,seconds-seg.t0);return {...seg,index,time,progress:Math.min(1,time/(seg.t1-seg.t0))};}};
+  {mode:'canopy-land',clip:canopyClip(),t0:ascent,t1:ascent+landing},
+  {mode:'canopy-rest',clip:'sleep-lay',t0:ascent+landing,t1:leave},
+  {mode:'canopy-leave',clip:canopyClip(),t0:leave,t1:leave+landing},
+  {mode:'rope-down',clip:'rope-climb',t0:leave+landing,t1:leave+landing+descent},
+  {mode:'rope-ground',clip:'idle',t0:leave+landing+descent,t1:Infinity},
+ ]);
+}
+// An early activity change also takes the rope down, starting at his current pose.
+export function ropeExitPlan(line,from,resting){
+ const hand=CLIPS['rope-climb'].hands[0],landing=resting?CLIPS[canopyClip()].duration:0;
+ const startY=resting?line.anchor[1]-hand[1]:from.y;
+ const descent=Math.max(.5,(startY-line.ground(0))/.55),segments=[];
+ if(resting)segments.push({mode:'canopy-leave',clip:canopyClip(),t0:0,t1:landing,from});
+ segments.push({mode:'rope-down',clip:'rope-climb',t0:landing,t1:landing+descent,startY,...(!resting?{from}:{})},
+  {mode:'rope-ground',clip:'idle',t0:landing+descent,t1:Infinity});
+ return timedPlan(line,segments);
 }
 
 const handsOf=(clip,end=false)=>{const h=CLIPS[clip].hands;return h&&(h[end?h.length-1:0]||null);};
@@ -159,6 +178,16 @@ export function placement(line,seg){
  const {mode,clip,progress,time}=seg,f=forwardOf(line.heading);
  const at=(s,back,y)=>{const [x,,z]=line.point(s,seg.level);return {x:x-f[0]*back,y,z:z-f[1]*back};};
  const loopTime=CLIPS[clip].duration?time%CLIPS[clip].duration:0;
+ if(['canopy-leave','rope-down','rope-ground'].includes(mode)){
+  const [x,top,z]=line.anchor,hand=CLIPS['rope-climb'].hands[0],ground=line.ground(0);
+  const back=hand[0],start=seg.from||{x:x-(mode==='rope-down'?f[0]*back:0),y:top-.5,z:z-(mode==='rope-down'?f[1]*back:0)};
+  const hanging={x:x-f[0]*back,z:z-f[1]*back};
+  const y=mode==='canopy-leave'?mix(start.y,top-hand[1],smooth(0,1,progress)):mode==='rope-down'?mix(seg.startY??top-hand[1],ground,progress):ground;
+  const join=mode==='rope-ground'?1:mode==='canopy-leave'?smooth(0,1,progress):smooth(0,.1,progress);
+  return {x:mix(start.x,hanging.x,join),y,z:mix(start.z,hanging.z,join),heading:line.heading,clip,
+   time:mode==='canopy-leave'?Math.max(0,CLIPS[clip].duration-time):mode==='rope-down'?CLIPS[clip].duration-loopTime:loopTime};
+ }
+
  if(mode==='rope-climb'||mode==='canopy-land'||mode==='canopy-rest'){
   const [x,top,z]=line.anchor,hand=CLIPS['rope-climb'].hands[0];
   const back=mode==='rope-climb'?hand[0]:mix(hand[0],0,mode==='canopy-rest'?1:smooth(.15,.85,progress));

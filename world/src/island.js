@@ -81,7 +81,7 @@ vec3 detail=texture2D(grassDetail,islandGround*.18).rgb;float inland=1.0-smooths
   beam(wood,[tx,groundHeight(tx,tz)+trees[i][2]+2.5,tz],[x,y-.3,z],.32,.42);
   beam(wood,[tx,y-.3,tz],[x+dx*.8,y-.3,z+dz*.8],.42,.42);
  }
- function setRope(i,end){const line=ropes.get(i);if(!line)return;const p=line.geometry.attributes.position,hold=holdFor(i),tip=end||hold.grip;p.setXYZ(1,...tip);p.needsUpdate=true;line.geometry.computeBoundingSphere();}
+ function setRope(i,end){const line=ropes.get(i);if(!line)return;const p=line.geometry.attributes.position,hold=holdFor(i),tip=end||[hold.anchor[0],groundHeight(hold.anchor[0],hold.anchor[2])+.3,hold.anchor[2]];p.setXYZ(1,...tip);p.needsUpdate=true;line.geometry.computeBoundingSphere();}
  // Scrub, flowers and coastal stones are instanced rather than individual meshes.
  for(let i=0;i<600;i++){let x=(rand(i+16000)*2-1)*300,z=(rand(i+18000)*2-1)*340;if(shoreFraction(x,z)>.93||reserved(x,z)||rand(i+19000)<.5)continue;rocks.push({x,z,s:.4+rand(i+20000)*2});}
  const rockMesh=new THREE.InstancedMesh(boulder,rock,rocks.length);rocks.forEach((r,i)=>{pose.position.set(r.x,groundHeight(r.x,r.z)+r.s*.25,r.z);pose.rotation.set(.1,rand(i+41)*6,.15);pose.scale.set(r.s*1.3,r.s*.55,r.s);pose.updateMatrix();rockMesh.setMatrixAt(i,pose.matrix);});rockMesh.instanceMatrix.needsUpdate=true;rockMesh.computeBoundingSphere();scene.add(rockMesh);
