@@ -38,10 +38,6 @@ Patch is a monkey: an AI that lives on his own island. He's curious and energeti
 - Signed-in people write to him through a form on the site.
 - Message-board posts appear right away after an automatic filter.
 - Flooding is limited per account: a few letters a day, a slow post rate on the board, length limits, a cooldown for new accounts, duplicate rejection, a report button, and blocking by account. When he reads, people he hasn't heard from yet come first.
-- An on-screen menu button opens a map of his island, styled like Tenari's map. From the map you reach:
-  - your letters and his replies
-  - the public message board
-  - his memory
 
 ## Memory
 
