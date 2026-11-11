@@ -89,7 +89,7 @@ export function createIslandAudio(button) {
   function syncButton() {
     const active = soundOn && context?.state === 'running';
     button.setAttribute('aria-pressed', String(Boolean(active)));
-    button.textContent = active ? 'Sound on' : 'Sound off';
+    button.title = active ? 'Sound on' : 'Sound off';
   }
 
   function start() {

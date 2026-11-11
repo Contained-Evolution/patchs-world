@@ -6,8 +6,7 @@ import { shoreFraction, walkShoreLimit } from './terrain.js';
 export { walkable, walkStep } from './island-collision.js';
 
 export function createVisitorControls(camera, canvas, isModalOpen, scene, walkSolids) {
-  const walk = document.querySelector('#walk');
-  const sound = document.querySelector('#island-sound');
+  const moveToggle = document.querySelector('#move-toggle');
   const follow = document.querySelector('#follow-patch');
   const mouseLock = document.querySelector('#mouse-lock');
   const hint = document.querySelector('#explore-hint');
@@ -22,32 +21,43 @@ export function createVisitorControls(camera, canvas, isModalOpen, scene, walkSo
   const viewOffsets = [[7, 2], [7, -.6], [4.5, .7], [4.5, -1.7]];
   let viewOffset = viewOffsets[0];
   const euler = new THREE.Euler(0, 0, 0, 'YXZ');
-  const keys = new Set(), touch = new Set();
+  const keys = new Set();
+  let walkingForward = false;
   let mode = 'walk', yaw = 0, pitch = 0, touchLook = null, lastTouch = 0;
+  const touchScreen = matchMedia('(any-pointer: coarse)');
   let viewAngle = 0, nextSightCheck = 0, lockedLook = false;
   try { lockedLook = localStorage.getItem('patch-mouse-look') === 'locked'; } catch {}
   canvas.tabIndex = 0;
   canvas.setAttribute('aria-label', 'Explore Patch’s island');
 
+  function setWalkingForward(value) {
+    walkingForward = value;
+    moveToggle.setAttribute('aria-pressed', String(value));
+  }
+
   function pause() {
     keys.clear();
-    touch.clear();
+    setWalkingForward(false);
     touchLook = null;
     if (document.pointerLockElement === canvas) document.exitPointerLock();
   }
 
   function updateLook() {
     const walking = mode === 'walk';
-    walk.setAttribute('aria-pressed', String(walking));
     document.body.classList.toggle('walking', walking);
+    moveToggle.setAttribute('aria-label', walking ? 'Walk forward' : 'Return to walking');
+    moveToggle.title = walking ? 'Walk forward' : 'Return to walking';
     mouseLock.hidden = !walking;
     mouseLock.setAttribute('aria-pressed', String(lockedLook));
     const label = lockedLook ? 'Mouse look on: click the island to look; Escape releases the mouse' : 'Mouse look off: drag to look';
     mouseLock.setAttribute('aria-label', label);
     mouseLock.title = label;
-    hint.textContent = walking
-      ? (lockedLook ? 'Click the island to look · Esc releases mouse' : 'Drag the island to look') + ' · WASD or arrows to move · Shift faster'
-      : mode === 'follow' ? 'Following Patch' : 'Viewing Patch';
+    if (!walking) hint.textContent = mode === 'follow' ? 'Following Patch' : 'Viewing Patch';
+    else if (touchScreen.matches) hint.textContent = 'Drag above to look';
+    else {
+      const lookHint = lockedLook ? 'Click the island to look · Esc releases mouse' : 'Drag the island to look';
+      hint.textContent = lookHint + ' · WASD or arrows to move · Shift faster';
+    }
   }
 
   function setMode(value) {
@@ -57,10 +67,12 @@ export function createVisitorControls(camera, canvas, isModalOpen, scene, walkSo
     updateLook();
   }
 
-  walk.onclick = () => {
-    setMode('walk');
-    canvas.focus({ preventScroll: true });
+  moveToggle.onclick = event => {
+    if (mode !== 'walk') setMode('walk');
+    else if (canWalk()) setWalkingForward(!walkingForward);
+    if (event.detail || !touchScreen.matches) canvas.focus({ preventScroll: true });
   };
+  touchScreen.addEventListener('change', updateLook);
   mouseLock.onclick = () => {
     lockedLook = !lockedLook;
     try { localStorage.setItem('patch-mouse-look', lockedLook ? 'locked' : 'drag'); } catch {}
@@ -146,9 +158,6 @@ export function createVisitorControls(camera, canvas, isModalOpen, scene, walkSo
   }
 
   const canWalk = () => mode === 'walk' && !isModalOpen();
-  sound.addEventListener('click', event => {
-    if (event.detail && canWalk()) canvas.focus({ preventScroll: true });
-  });
   canvas.addEventListener('click', () => {
     if (!canWalk() || !lockedLook || Date.now() - lastTouch < 800 || matchMedia('(pointer: coarse)').matches) return;
     canvas.requestPointerLock?.();
@@ -167,9 +176,14 @@ export function createVisitorControls(camera, canvas, isModalOpen, scene, walkSo
   addEventListener('keyup', e => keys.delete(e.code));
   document.addEventListener('pointerlockchange', () => { if (document.pointerLockElement !== canvas) keys.clear(); });
   addEventListener('blur', pause);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
   canvas.addEventListener('pointerdown', e => {
     if (!canWalk() || !(e.pointerType === 'touch' || (e.pointerType === 'mouse' && !lockedLook && e.button === 0))) return;
-    if (e.pointerType === 'touch') lastTouch = Date.now();
+    if (e.pointerType === 'touch') {
+      lastTouch = Date.now();
+      if (e.clientY > canvas.getBoundingClientRect().top + canvas.clientHeight * .72) return;
+    }
+    if (touchLook) return;
     touchLook = { id: e.pointerId, x: e.clientX, y: e.clientY };
     canvas.setPointerCapture(e.pointerId);
   });
@@ -182,19 +196,6 @@ export function createVisitorControls(camera, canvas, isModalOpen, scene, walkSo
   for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) {
     canvas.addEventListener(event, e => { if (touchLook?.id === e.pointerId) touchLook = null; });
   }
-  document.querySelectorAll('[data-move]').forEach(button => {
-    const name = button.dataset.move;
-    button.addEventListener('contextmenu', e => e.preventDefault());
-    button.addEventListener('pointerdown', e => {
-      e.preventDefault();
-      window.getSelection()?.removeAllRanges();
-      button.setPointerCapture(e.pointerId);
-      touch.add(name);
-    });
-    for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) {
-      button.addEventListener(event, () => touch.delete(name));
-    }
-  });
   camera.position.set(9, groundHeight(9, 14) + 1.6, 14);
   pointAt(0, 5, 0);
   updateLook();
@@ -231,8 +232,8 @@ export function createVisitorControls(camera, canvas, isModalOpen, scene, walkSo
     update(dt) {
       if (!canWalk()) return;
       const has = (...codes) => codes.some(code => keys.has(code));
-      const forward = Number(has('KeyW', 'ArrowUp') || touch.has('forward')) - Number(has('KeyS', 'ArrowDown') || touch.has('back'));
-      const side = Number(has('KeyD', 'ArrowRight') || touch.has('right')) - Number(has('KeyA', 'ArrowLeft') || touch.has('left'));
+      const forward = Number(has('KeyW', 'ArrowUp') || walkingForward) - Number(has('KeyS', 'ArrowDown'));
+      const side = Number(has('KeyD', 'ArrowRight')) - Number(has('KeyA', 'ArrowLeft'));
       const length = Math.hypot(forward, side);
       if (!length) return;
       const speed = 3.5 * (has('ShiftLeft', 'ShiftRight') ? 2 : 1) * dt / length;

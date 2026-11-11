@@ -1,4 +1,57 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#173c38"><title>Patch's World</title><link rel="manifest" href="./manifest.webmanifest"><link rel="apple-touch-icon" href="./icons/apple-touch-icon.png"><meta name="apple-mobile-web-app-title" content="Patch"><link rel="stylesheet" href="./style.css"></head><body><main id="world" aria-label="Patch's island"></main><header><div><span class="eyebrow">CONTAINED EVOLUTION PRESENTS</span><h1>Patch's World</h1><p id="status" aria-live="polite">Checking on Patch…</p><p id="connection" role="status" hidden>Can’t reach Patch right now</p></div><div class="header-actions"><button id="install-app" type="button" aria-haspopup="dialog" hidden>Get the Patch app ⬇</button><button id="open-map" aria-haspopup="dialog">Island map ☰</button></div></header><section id="care" class="care" aria-label="How Patch is doing" hidden><strong>How Patch is doing</strong><div id="care-mood" class="care-mood"></div><div id="care-needs"></div></section><div id="bubble" hidden></div><div class="explore-controls" aria-label="Explore the island"><div class="explore-buttons"><button id="walk" type="button" aria-pressed="true">Walk</button><button id="open-cameras" type="button" aria-haspopup="dialog">Island cameras</button><div class="patch-controls"><button id="find-patch" type="button" disabled>Find Patch</button><label><input id="follow-patch" type="checkbox" aria-label="Follow Patch" disabled> Follow</label></div><button id="island-sound" type="button" aria-pressed="false">Sound</button><button id="mouse-lock" type="button" aria-pressed="false" aria-label="Mouse look off: drag to look" title="Mouse look off: drag to look"><svg aria-hidden="true" viewBox="0 0 32 32" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="25" rx="8"/><path d="M12 3v8"/><rect x="17" y="18" width="12" height="10" rx="2"/><path class="lock-shackle" d="M20 18v-3a3 3 0 0 1 6 0v3"/></svg></button></div><p id="explore-hint">Drag the island to look · WASD or arrows to move · Shift to go faster</p></div><div class="touch-controls" aria-label="Touch movement controls"><div class="touch-pad"><button data-move="forward" aria-label="Move forward">▲</button><div><button data-move="left" aria-label="Move left">◀</button><button data-move="back" aria-label="Move backward">▼</button><button data-move="right" aria-label="Move right">▶</button></div></div><span>Drag the island to look</span></div><dialog id="island-cameras" aria-labelledby="camera-title">
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#173c38"><title>Patch's World</title><link rel="manifest" href="./manifest.webmanifest"><link rel="apple-touch-icon" href="./icons/apple-touch-icon.png"><meta name="apple-mobile-web-app-title" content="Patch"><link rel="stylesheet" href="./style.css"></head><body><main id="world" aria-label="Patch's island"></main>
+<header class="island-hud">
+  <div class="island-title">
+    <span class="eyebrow">Contained Evolution presents</span>
+    <h1>Patch's World</h1>
+    <p id="status" aria-live="polite">Checking on Patch…</p>
+    <p id="connection" role="status" hidden>Can’t reach Patch right now</p>
+  </div>
+  <div class="island-menu">
+    <button id="open-map" type="button" aria-haspopup="dialog">Island map ☰</button>
+    <details class="island-tools">
+      <summary>Controls</summary>
+      <div class="island-tool-panel">
+        <div class="patch-controls">
+          <button id="find-patch" type="button" disabled>Find Patch</button>
+          <label><input id="follow-patch" type="checkbox" aria-label="Follow Patch" disabled> Follow</label>
+        </div>
+        <button id="open-cameras" type="button" aria-haspopup="dialog" aria-label="Island cameras" title="Island cameras">
+          <svg aria-hidden="true" viewBox="0 0 40 32" width="38" height="30" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 16v8h11m0-5v10" fill="none"/>
+            <path d="M4 6h30l-4 13H7Z" fill="#f0c47e"/>
+            <path d="M4 6h7v13H7Z" fill="#23443b"/>
+            <circle cx="8" cy="13" r="2" fill="#d6ede4" stroke="none"/>
+          </svg>
+        </button>
+        <button id="island-sound" type="button" aria-label="Island sound" aria-pressed="false" title="Sound off">
+          <svg aria-hidden="true" viewBox="0 0 32 32" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 12h5l7-6v20l-7-6H4z" fill="currentColor"/>
+            <path class="sound-waves" d="M21 11a7 7 0 0 1 0 10m4-14a13 13 0 0 1 0 18"/>
+            <path class="sound-muted" d="m22 13 6 6m0-6-6 6"/>
+          </svg>
+        </button>
+        <button id="mouse-lock" type="button" aria-pressed="false" aria-label="Mouse look off: drag to look" title="Mouse look off: drag to look"><svg aria-hidden="true" viewBox="0 0 32 32" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="25" rx="8"/><path d="M12 3v8"/><rect x="17" y="18" width="12" height="10" rx="2"/><path class="lock-shackle" d="M20 18v-3a3 3 0 0 1 6 0v3"/></svg></button>
+        <button id="install-app" type="button" aria-haspopup="dialog" hidden>Get the Patch app ⬇</button>
+      </div>
+    </details>
+  </div>
+  <details id="care" class="care" hidden>
+    <summary>How Patch is doing</summary>
+    <div id="care-mood" class="care-mood"></div>
+    <div id="care-needs"></div>
+  </details>
+</header>
+<div id="bubble" hidden></div>
+<div class="island-movement">
+  <p id="explore-hint">Drag the island to look · WASD or arrows to move · Shift to go faster</p>
+  <button id="move-toggle" type="button" aria-label="Walk forward" aria-pressed="false" title="Walk forward">
+    <svg aria-hidden="true" viewBox="0 0 32 32" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="18" cy="5" r="2" fill="currentColor"/>
+      <path d="m9 16 4-5 5-1 3 5 4 2m-7-7-3 9 5 4 2 6m-7-10-3 5-5 4"/>
+    </svg>
+  </button>
+</div>
+<dialog id="island-cameras" aria-labelledby="camera-title">
   <div class="camera-toolbar">
     <button id="camera-back" type="button" hidden>All cameras</button>
     <h2 id="camera-title">Island cameras</h2>
