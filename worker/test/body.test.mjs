@@ -62,3 +62,11 @@ test('a long gap catches up without hanging and gives the same result each time'
 test('the clock uses New York time', () => {
   assert.equal(localMinutes(MORNING), 10 * 60);
 });
+
+test('the public activity exposes its shared start and end times', () => {
+  const now=Date.parse('2026-11-11T12:00:00Z');
+  const body=newBody(now, 1);
+  const patch=view(body,now).patch;
+  assert.equal(Date.parse(patch.since),body.activity.start);
+  assert.equal(Date.parse(patch.until),body.activity.end);
+});

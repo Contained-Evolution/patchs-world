@@ -19,6 +19,7 @@ export const sampleState = {
     needs: { hunger: 0.4, energy: 0.8, fun: 0.6, comfort: 0.7, social: 0.3 },
     mood: 'curious',
     says: null, // a short line he says out loud, or null
+    until: '2026-01-01T12:10:00Z', // when the current action ends
     since: '2026-01-01T12:00:00Z', // when the current action started
   },
   clock: {

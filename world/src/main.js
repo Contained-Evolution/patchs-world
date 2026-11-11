@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { createVisitorControls } from './visitor-controls.js';
+import { travelFraction } from './travel-progress.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { sampleState } from '../../shared/state.js';
 import { createIsland } from './island.js';
@@ -54,7 +55,18 @@ function playClip(name, once = false) {
   if (currentAction) currentAction.fadeOut(.2);
   next.fadeIn(.2).play(); currentAction = next; currentName = name;
 }
-let state = null, hasLiveState = false, demo = false, journey = null;
+let state = null, hasLiveState = false, demo = false, journey = null, serverOffset = 0;
+function renderCare(p) {
+  const panel=$('#care'), list=$('#care-needs');
+  if (!p.needs) { panel.hidden=true; return; }
+  panel.hidden=false; $('#care-mood').textContent=`Mood: ${p.mood || 'unknown'}`;
+  list.replaceChildren();
+  for (const [key,label] of [['hunger','Fullness'],['energy','Energy'],['fun','Fun'],['comfort','Comfort'],['social','Social']]) {
+    const value=p.needs[key]; if (!Number.isFinite(value)) continue;
+    const percent=Math.round(Math.max(0,Math.min(1,value))*100), row=document.createElement('div'), name=document.createElement('span'), meter=document.createElement('progress'), text=document.createElement('span');
+    row.className='care-row'; name.textContent=label; meter.max=100; meter.value=percent; meter.setAttribute('aria-label',label); text.textContent=`${percent}%`; row.append(name,meter,text); list.append(row);
+  }
+}
 const localPreview = isLocalPreview(location.hostname), start = performance.now();
 const mockActions=['idle','walk','run','climb','swing','swim','fish','eat','sit','sleep','think','write','phone','wave','look','explore','watch-sky'], ids=Object.keys(places);
 async function poll() {
@@ -64,8 +76,11 @@ async function poll() {
     const next = await response.json();
     if (!next.patch || !next.clock) throw new Error('Invalid state');
     next.patch = safePatch(next.patch);
+    const serverTime=Date.parse(next.clock.now); if (Number.isFinite(serverTime)) serverOffset=serverTime-Date.now();
     if (!state) { const [x,z]=places[next.patch.place]; patch.position.set(x,groundHeight(x,z),z); }
+    if (state && state.patch.since !== next.patch.since && !next.patch.target) { const [x,z]=places[next.patch.place]; patch.position.set(x,groundHeight(x,z),z); }
     state = next; hasLiveState = true; demo = false;
+    renderCare(next.patch);
     $('#connection').hidden = true;
   } catch {
     demo = localPreview && !hasLiveState;
@@ -83,11 +98,12 @@ let last=performance.now();patch.position.set(1,.9,2);
 $('#find-patch').onclick=()=>{ if (state) controls.findPatch(patch.position); };
 function frame(now){requestAnimationFrame(frame);const dt=Math.min((now-last)/1000,.05);last=now;let t=(now-start)/1000;
 if (demo) { let n=Math.floor(t/9); state={patch:{...sampleState.patch,action:mockActions[n%mockActions.length],place:ids[Math.floor(n/2)%ids.length],target:['walk','run','swing'].includes(mockActions[n%mockActions.length]) ? ids[(Math.floor(n/2)+1)%ids.length] : null,since:String(n),says:null},clock:{dayFraction:(.38+t/240)%1,weather:['clear','cloudy','rain','storm'][Math.floor(t/60)%4]}}; }
+if (demo) renderCare(state.patch);
 controls.update(dt);
 $('#find-patch').disabled=!state;
 if (!state) { patch.visible=false; scene.background=skyDay; renderer.render(scene,camera); return; }
 patch.visible=true;
-const {action,place,target,says,since}=state.patch;
+const {action,place,target,says,since,until}=state.patch;
 $('#status').textContent = statusText(state.patch);
 const dest=action==='sleep'&&place==='hammock'&&!target?[1.5,2]:action==='swim'&&place==='pond'&&!target?[18,10]:places[target]||places[place];
 const travel = !!(target && places[target] && ['walk','run','swing'].includes(action));
@@ -95,7 +111,8 @@ const swinging = action === 'swing';
 const key = `${action}|${place}|${target||''}|${since||''}`;
 if (travel || swinging) {
   if (!journey || journey.key !== key) {
-    const points=[{p:patch.position.clone(), mode:'ground'}];
+    const [startX,startZ]=places[place];
+    const points=[{p:new THREE.Vector3(startX,groundHeight(startX,startZ),startZ), mode:'ground'}];
     const groundPoints = route => route.forEach(([x,z])=>points.push({p:new THREE.Vector3(x,groundHeight(x,z),z),mode:'ground'}));
     const branchPoints = anchors => anchors.forEach(([x,y,z])=>points.push({p:new THREE.Vector3(x,y-1.8,z),mode:'branch'}));
     if (swinging) {
@@ -108,17 +125,27 @@ if (travel || swinging) {
     } else groundPoints(walkRoute(place,target));
     journey={key,points,index:0,progress:0,loop:swinging&&!travel};
   }
-  const j=journey, from=j.points[j.index], to=j.points[j.index+1];
-  if (to) {
-    const branch=to.mode==='branch', length=Math.max(.1,from.p.distanceTo(to.p));
-    j.progress=Math.min(1,j.progress+dt*(branch?3:action==='run'?4:1.7)/length);
-    patch.position.lerpVectors(from.p,to.p,j.progress);
-    if(branch) patch.position.y-=Math.sin(Math.PI*j.progress)*Math.min(.8,length*.15);
-    else patch.position.y=groundHeight(patch.position.x,patch.position.z);
-    patch.rotation.y=Math.atan2(to.p.x-from.p.x,to.p.z-from.p.z);patch.rotation.z=branch?Math.sin(Math.PI*j.progress)*.2:0;
-    playClip(branch?'swing':action==='run'?'run':'walk');
-    if(j.progress>=1){j.index++;j.progress=0;if(j.loop&&j.index===j.points.length-1){j.index=1;}}
-  } else { patch.rotation.z=0; playClip('idle'); }
+  const j=journey;
+  if (travel) {
+    const fraction=travelFraction(since,until,Date.now()+serverOffset);
+    const lengths=j.points.slice(1).map((point,i)=>point.p.distanceTo(j.points[i].p));
+    let distance=lengths.reduce((sum,length)=>sum+length,0)*fraction, index=0;
+    while(index<lengths.length-1 && distance>lengths[index]) distance-=lengths[index++];
+    const from=j.points[index],to=j.points[index+1], progress=lengths[index]?distance/lengths[index]:0;
+    if(to){const branch=to.mode==='branch';patch.position.lerpVectors(from.p,to.p,progress);if(branch)patch.position.y-=Math.sin(Math.PI*progress)*Math.min(.8,lengths[index]*.15);else patch.position.y=groundHeight(patch.position.x,patch.position.z);patch.rotation.y=Math.atan2(to.p.x-from.p.x,to.p.z-from.p.z);patch.rotation.z=branch?Math.sin(Math.PI*progress)*.2:0;playClip(branch?'swing':action==='run'?'run':'walk');}
+  } else {
+    const from=j.points[j.index], to=j.points[j.index+1];
+    if (to) {
+      const branch=to.mode==='branch', length=Math.max(.1,from.p.distanceTo(to.p));
+      j.progress=Math.min(1,j.progress+dt*(branch?3:1.7)/length);
+      patch.position.lerpVectors(from.p,to.p,j.progress);
+      if(branch) patch.position.y-=Math.sin(Math.PI*j.progress)*Math.min(.8,length*.15);
+      else patch.position.y=groundHeight(patch.position.x,patch.position.z);
+      patch.rotation.y=Math.atan2(to.p.x-from.p.x,to.p.z-from.p.z);patch.rotation.z=branch?Math.sin(Math.PI*j.progress)*.2:0;
+      playClip(branch?'swing':'walk');
+      if(j.progress>=1){j.index++;j.progress=0;if(j.loop&&j.index===j.points.length-1)j.index=1;}
+    }
+  }
 } else {
   journey=null;
   const exploring=action==='explore';

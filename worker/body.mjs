@@ -216,6 +216,7 @@ export function view(state, now) {
       mood: activity.action === 'sleep' ? 'asleep' : mood(needs),
       says: activity.says || null,
       since: new Date(activity.start).toISOString(),
+      until: new Date(activity.end).toISOString(),
     },
     clock: {
       now: new Date(now).toISOString(),
