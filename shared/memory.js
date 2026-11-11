@@ -7,10 +7,10 @@ export const CORE = 'core';
 
 export const STARTING_CATEGORIES = {
   core: { title: 'Who I am', subcategories: ['me', 'home'] },
-  family: { title: 'My family', subcategories: ['dad', 'mom', 'sam', 'all of us'] },
+  family: { title: 'My family', subcategories: ['dad', 'mom', 'little sister', 'all of us'] },
   firsts: { title: 'My firsts', subcategories: ['baby me', 'big firsts'] },
   food: { title: 'Food', subcategories: ['family recipes', 'snacks'] },
-  play: { title: 'Games and play', subcategories: ['games with Sam', 'exploring'] },
+  play: { title: 'Games and play', subcategories: ['games with my sister', 'exploring'] },
   sky: { title: 'Clouds and stars', subcategories: ['clouds', 'stars'] },
   learning: { title: 'Things I learned', subcategories: ['survival', 'how things work', 'big questions'] },
   feelings: { title: 'Feelings', subcategories: ['happy', 'scared', 'missing'] },
@@ -28,7 +28,7 @@ export const sampleMemory = {
   title: 'My first word',
   text: 'My first word was "nana." Mom says I was pointing at a banana. Dad says I was pointing at him.',
   age: 1,
-  people: ['Sally', 'George'],
+  people: ['Mom', 'Dad'],
   feeling: 'proud',
   source: 'childhood',
 };

@@ -6,6 +6,7 @@ import { ponder, writeDiary, answerLetters, moderate, spend, overBudget, localDa
 import { visitor, SIGN_IN } from './accounts.mjs';
 import { LIMITS, cleanText, freshLimits, checkLetter, checkPost, countLetter, countPost, pickLetters, postKey } from './letters.mjs';
 import { STARTING_CATEGORIES } from '../shared/memory.js';
+import { concepts } from './memory-graph.mjs';
 
 const headers = {
   'x-content-type-options': 'nosniff',
@@ -99,8 +100,12 @@ export class PatchWorld extends DurableObject {
   }
 
   async memory() {
-    const stored = await this.ctx.storage.get(['memories', 'categories']);
-    return { categories: { ...STARTING_CATEGORIES, ...(stored.get('categories') || {}) }, memories: allMemories(stored.get('memories') || []) };
+    const stored = await this.ctx.storage.get(['memories', 'categories', 'mind']);
+    const memories = allMemories(stored.get('memories') || []), lit = stored.get('mind')?.lit;
+    return {
+      categories: { ...STARTING_CATEGORIES, ...(stored.get('categories') || {}) }, memories, concepts: concepts(memories),
+      lit: lit ? { ...lit, at: new Date(lit.at).toISOString() } : null,
+    };
   }
 
   // The automatic filter. Records its cost; returns null when allowed, otherwise the reason.

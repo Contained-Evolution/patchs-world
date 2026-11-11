@@ -22,3 +22,11 @@ test('every starting cluster has at least one memory', () => {
     for (const sub of subcategories)
       assert.ok(memories.some(m => m.category === category && m.subcategory === sub), `${category}/${sub} is empty`);
 });
+
+test('every childhood memory has a strength, tags, and no names but Patch', () => {
+  for (const memory of memories) {
+    assert.ok(Number.isInteger(memory.strength) && memory.strength >= 1 && memory.strength <= 5, memory.id);
+    assert.ok(Array.isArray(memory.tags) && memory.tags.length >= 2, memory.id);
+    assert.ok(!/George|Sally|\bSam\b|Tiko/.test(JSON.stringify(memory)), `${memory.id} still names someone`);
+  }
+});
