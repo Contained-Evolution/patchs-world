@@ -201,7 +201,7 @@ export class PatchWorld extends DurableObject {
     return {
       diary: diary.map(({ date, title, text, at, kind }) => ({ date, title, text, at: at ? new Date(at).toISOString() : null, kind: kind || 'evening' })),
       searches: (mind.searches || []).slice(-20).reverse().map(({ at, query, where, learned, sources, note }) => ({ at: new Date(at).toISOString(), query, where, learned, sources, note })),
-      internet: { status: internetStatus(await this.ctx.storage.get('searchSpend'), Date.now()), closedSites: mind.closedSites || [] },
+      internet: { status: internetStatus(await this.ctx.storage.get('searchSpend'), Date.now()) },
       words: (mind.words || []).map(({ word, meaning, from, at }) => ({ word, meaning, from, at: new Date(at).toISOString() })),
     };
   }

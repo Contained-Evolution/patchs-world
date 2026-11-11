@@ -158,8 +158,6 @@ function devicesLine(mind, now, mail) {
   if (mail) lines.push(`Ping! Your tablet says ${mail === 1 ? 'a letter is' : `${mail} letters are`} waiting for you at the coconut computer.`);
   const last = (mind.searches || []).slice(-3).filter(entry => entry.learned).map(entry => `- "${entry.query}": ${entry.learned}`);
   if (last.length) lines.push(`Things you looked up lately:\n${last.join('\n')}`);
-  const closed = (mind.closedSites || []).slice(-10);
-  if (closed.length) lines.push(`Websites you closed because they weren't okay, and won't go back to: ${closed.join(', ')}.`);
   return lines.join('\n');
 }
 
@@ -306,24 +304,19 @@ ${DIARY_ASK}` }], 'quality', 3000);
   return { date: today, title, text, model, at: now, kind: 'evening' };
 }
 
-// He can look up anything. Adult and gore sites are never searched, nor any site he closed before;
-// each page is checked as he reads it, and an inappropriate one is closed and its site avoided from then on.
+// He can look up anything. Adult and gore sites are never searched. Each page is checked as he reads it;
+// an inappropriate page is closed and he switches to his other tabs, the rest of what the search found.
 const ADULT_SITES = ['pornhub.com', 'xvideos.com', 'xnxx.com', 'xhamster.com', 'onlyfans.com', 'redtube.com', 'youporn.com', 'chaturbate.com', 'rule34.xxx', 'e-hentai.org', 'nhentai.net', 'bestgore.com', 'liveleak.com'];
 const FORGET_WANT = 3 * 60 * MINUTE;
-export function siteOf(url) { try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return null; } }
-// Adds the sites of these pages to the ones he won't go back to. Returns the sites.
-function closeSites(mind, urls) {
-  const sites = urls.map(siteOf).filter(Boolean);
-  mind.closedSites = [...new Set([...(mind.closedSites || []), ...sites])].slice(-100);
-  return sites;
-}
+// The same page, however its address is written.
+export function pageOf(url) { try { const page = new URL(url); return `${page.hostname.replace(/^www\./, '')}${page.pathname.replace(/\/$/, '')}${page.search}`; } catch { return null; } }
 
 const RESEARCH_ASK = query => `You are on the internet, looking up: "${query}". You can look up anything in the real world: sports, news, politics, science, history, faraway places, how things work.
-Read what the search found and tell what you learned, as Patch. Serious or sad news is okay to read about. If a page is inappropriate (naked or sexy stuff, gory pictures, hateful words), close it, put its web address in "closed", and don't use it.
+Read what the search found and tell what you learned, as Patch. Serious or sad news is okay to read about. If a page is inappropriate (naked or sexy stuff, gory pictures, hateful words), close that tab, put its web address in "closed", and use your other tabs instead.
 Reply with only a JSON object:
 {
   "learned": "what you learned, 1-3 short sentences under 350 characters, plain text in your own voice without inline citations, or null if nothing was okay to read",
-  "closed": [web addresses of pages you closed],
+  "closed": [web addresses of tabs you closed],
   "remember": null or { "category": "a memory category", "subcategory": "a smaller group", "title": "a few words", "text": "the memory in your words", "feeling": "one word", "strength": 1 to 5, "tags": ["2-8 short words"] },
   "newWords": []
 }`;
@@ -353,19 +346,19 @@ export async function research(env, { body, mind, memories, categories, saveSear
 
 async function runSearch(env, { body, mind, memories, categories }, now, want, where) {
   const { reply, cost, model, sources } = await think(env, [systemMessage(), { role: 'user', content: RESEARCH_ASK(want.query) }], 'everyday', 1200,
-    { provider: searchProvider, plugins: [{ id: 'web', engine: 'exa', max_results: 5, exclude_domains: [...ADULT_SITES, ...(mind.closedSites || [])] }] });
+    { provider: searchProvider, plugins: [{ id: 'web', engine: 'exa', max_results: 5, exclude_domains: ADULT_SITES }] });
   const summary = typeof reply.learned === 'string' ? reply.learned.replace(/\[([^\]]+)\]\(https?:\/\/[^)]+\)/g, '$1') : null;
   let learned = clean(summary, 1000);
-  let shown = sources.filter(source => !(mind.closedSites || []).includes(siteOf(source.url))).slice(0, 5);
-  // Pages he closed himself, then the page check over everything he read and learned.
-  const named = new Set((Array.isArray(reply.closed) ? reply.closed : []).map(url => siteOf(String(url))).filter(Boolean));
-  const closed = new Set(closeSites(mind, shown.filter(source => named.has(siteOf(source.url))).map(source => source.url)));
+  let shown = sources.slice(0, 5);
+  // Tabs he closed himself, then the page check over everything he read and learned. Only those pages close.
+  const closed = new Set((Array.isArray(reply.closed) ? reply.closed : []).map(url => pageOf(String(url))).filter(Boolean));
   const check = learned || shown.length ? await checkPages(env, want.query, learned, shown) : { close: [], learnedOk: false, cost: 0 };
   if (cost + check.cost > SEARCH_RESERVE) throw Error("Search exceeded its reserved cost.");
-  for (const site of closeSites(mind, check.close.map(index => shown[index - 1]?.url).filter(Boolean))) closed.add(site);
-  shown = shown.filter(source => !closed.has(siteOf(source.url))).map(({ title, url }) => ({ title, url }));
+  for (const index of check.close) if (shown[index - 1]) closed.add(pageOf(shown[index - 1].url));
+  const kept = shown.filter(source => !closed.has(pageOf(source.url))), shut = shown.length - kept.length;
+  shown = kept.map(({ title, url }) => ({ title, url }));
   if (!check.learnedOk || !shown.length) learned = null;
-  const note = closed.size ? `Closed ${[...closed].join(', ')}, and won't go back.` : shown.length ? null : 'No usable sources turned up.';
+  const note = shut ? `Closed ${shut === 1 ? 'a tab that wasn’t okay' : `${shut} tabs that weren’t okay`} and switched tabs.` : shown.length ? null : 'No usable sources turned up.';
   const entry = { at: now, query: want.query, where, learned, sources: shown, note, model, cost: cost + check.cost };
   mind.searches = [...(mind.searches || []), entry].slice(-30);
   if (learned) {

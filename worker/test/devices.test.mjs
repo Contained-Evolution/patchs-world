@@ -79,30 +79,32 @@ test('a search waits until he is on his tablet, can be about anything, and recor
   assert.equal(w.mind.wantSearch, null);
 });
 
-test('inappropriate pages are closed, kept out of what he learned, and their sites are never searched again', async () => {
+test('he closes only the tabs that are not okay, switches to his others, and nothing is blocked later', async () => {
   const pages = [
     { type: 'url_citation', url_citation: { url: 'https://news.example.com/election', title: 'Election results' } },
-    { type: 'url_citation', url_citation: { url: 'https://www.bad.example.net/x', title: 'Something explicit' } },
+    { type: 'url_citation', url_citation: { url: 'https://www.mixed.example.net/x', title: 'Something explicit' } },
+    { type: 'url_citation', url_citation: { url: 'https://mixed.example.net/votes', title: 'How voting works' } },
     { type: 'url_citation', url_citation: { url: 'https://gory.example.org/y', title: 'Gore' } },
   ];
-  // He closes one page himself; the page check closes another.
-  let calls = fakeOpenRouter({ learned: 'People voted for a new leader.', closed: ['https://www.bad.example.net/x', 'https://not-in-results.example.com'], annotations: pages }, { close: [3], learnedOk: true });
+  // He closes one tab himself (written a little differently); the page check closes another.
+  let calls = fakeOpenRouter({ learned: 'People voted for a new leader.', closed: ['https://mixed.example.net/x/', 'https://not-in-results.example.com'], annotations: pages }, { close: [4], learnedOk: true });
   const w = world(at(10));
   hereAt(w, 'computer', 'computer', at(10));
   w.mind.wantSearch = { query: 'election results', at: at(10) };
   const entry = await research(env, w, at(10, 5));
   assert.equal(entry.where, 'computer');
   assert.equal(entry.learned, 'People voted for a new leader.');
-  assert.deepEqual(entry.sources.map(source => source.title), ['Election results']);
-  assert.deepEqual(w.mind.closedSites, ['bad.example.net', 'gory.example.org']);
-  assert.match(entry.note, /Closed bad\.example\.net, gory\.example\.org, and won't go back/);
-  // Next time: those sites are excluded from the search, and he's reminded of them.
+  assert.deepEqual(entry.sources.map(source => source.title), ['Election results', 'How voting works']);
+  assert.equal(entry.note, 'Closed 2 tabs that weren’t okay and switched tabs.');
+  assert.equal(w.mind.closedSites, undefined);
+  // Next time only adult and gore sites are left out, and nothing reminds him of blocked sites.
   calls = fakeOpenRouter({ thought: 'More news.' }, { learned: 'x', closed: [], annotations: [] }, { close: [], learnedOk: true });
   await ponder(env, w, at(10, 10));
-  assert.match(calls[0].messages[1].content, /won't go back to: bad\.example\.net, gory\.example\.org/);
+  assert.doesNotMatch(calls[0].messages[1].content, /mixed\.example|gory\.example/);
   w.mind.wantSearch = { query: 'more news', at: at(10, 10) };
   await research(env, w, at(10, 15));
-  assert.ok(calls[1].plugins[0].exclude_domains.includes('gory.example.org'));
+  assert.equal(calls[1].plugins[0].exclude_domains.includes('gory.example.org'), false);
+  assert.ok(calls[1].plugins[0].exclude_domains.includes('pornhub.com'));
 });
 
 test('what he learned is dropped when it is itself inappropriate, and an empty allowance stops searching', async () => {
