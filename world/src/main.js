@@ -28,7 +28,8 @@ function mesh(geo,material,x=0,y=0,z=0,parent=scene){const m=new THREE.Mesh(geo,
 function ellipsoid(material,x,y,z,sx,sy,sz,parent=scene){const m=mesh(new THREE.SphereGeometry(1,12,8),material,x,y,z,parent);m.scale.set(sx,sy,sz);return m;}
 const scenery = createIsland(scene);
 const patch = new THREE.Group(); scene.add(patch);
-let mixer, headBone, clips = {}, currentAction, currentName;
+let mixer, headBone, clips = {}, currentAction, currentName, headRest = null;
+const lookUp = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -0.6);
 new GLTFLoader().load(new URL('./assets/patch.glb', document.baseURI).href, gltf => {
   patch.add(gltf.scene);
   gltf.scene.traverse(node => { if (node.isBone && /mixamorig[:_]?head$/i.test(node.name)) headBone=node; });
@@ -127,7 +128,11 @@ if (travel || swinging) {
   playClip(names[action]||'idle',action==='sit'||action==='fish'||action==='watch-sky');
 }
 if(mixer) mixer.update(dt);
-if(action==='watch-sky' && headBone && currentName==='sit' && currentAction.time >= clips.sit.duration*.8) headBone.rotateX(-1.3);
+// Tip his head back from the held sitting pose. Set it absolutely each frame so the tilt never accumulates.
+if(action==='watch-sky' && headBone && currentName==='sit' && currentAction.time >= clips.sit.duration*.8){
+  if(!headRest) headRest=headBone.quaternion.clone();
+  headBone.quaternion.copy(headRest).multiply(lookUp);
+} else headRest=null;
 $('#bubble').hidden=!says;$('#bubble').textContent=says||'';
 let day=Number.isFinite(state.clock.dayFraction)?state.clock.dayFraction:.5;let daylight=THREE.MathUtils.smoothstep(Math.sin((day-.25)*Math.PI*2),-.12,.2);let weather=state.clock.weather;let overcast=weather==='cloudy'||weather==='rain'||weather==='storm';sky.copy(skyNight).lerp(skyDay,daylight*(overcast?.65:1));scene.background=sky;scene.fog.color.copy(sky);hemi.intensity=.3+daylight*(overcast?1:1.8);sunLight.intensity=daylight*(overcast?.6:2.4);let angle=(day-.25)*Math.PI*2;sun.position.set(Math.cos(angle)*90,Math.sin(angle)*90,0);moon.position.copy(sun.position).multiplyScalar(-1);sunLight.position.copy(sun.position);stars.material.opacity=1-daylight;stars.visible=daylight<.98;clouds.forEach((c,i)=>{c.visible=overcast||i<5;c.position.x+=dt*.14;if(c.position.x>55)c.position.x=-55;});rain.visible=weather==='rain'||weather==='storm';if(rain.visible)rain.position.y=-(t*12%30);
 follow.set(patch.position.x,patch.position.y+1,patch.position.z);let delta=follow.clone().sub(controls.target).multiplyScalar(Math.min(1,dt*8));controls.target.add(delta);camera.position.add(delta);controls.update();scenery.update(camera,follow);renderer.render(scene,camera);}
