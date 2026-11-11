@@ -30,6 +30,7 @@ test('a thought is recorded and can ask the body for an activity, a memory and a
   assert.equal(calls[0].provider.data_collection, 'deny');
   assert.equal(w.mind.thoughts[0].thought, 'The pond looks sparkly today.');
   assert.equal(w.body.activity.says, 'Splash time!');
+  assert.equal(w.body.activity.saysAt, at(10));
   assert.equal(w.body.want, 'swim');
   assert.equal(w.memories[0].category, 'pond-life');
   assert.deepEqual(w.categories['pond-life'].subcategories, ['fish']);
