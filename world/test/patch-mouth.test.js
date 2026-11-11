@@ -18,6 +18,7 @@ test('spaces and punctuation pause the mouth',()=>{
   assert.ok(speechMouth('aaa',until,2900)>0);
   assert.equal(speechMouth('a a',until,2900),0);
   assert.equal(speechMouth('a,a',until,2900),0);
+  assert.equal(speechMouth('a\u2014a',until,2900),0);
 });
 test('a late visitor samples the same speech phase without restarting',()=>{
   assert.equal(speechMouth('A nice day',until,3200),speechMouth('A nice day',new Date(108000).toISOString(),103200));

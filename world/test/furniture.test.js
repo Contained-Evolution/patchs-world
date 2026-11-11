@@ -67,3 +67,10 @@ test('status tells computer, tablet and journal work apart', () => {
   assert.equal(statusText({ action: 'write', place: 'meadow' }), 'Patch is writing in his journal on his tablet in the meadow.');
   assert.equal(statusText({ action: 'walk', place: 'hammock', target: 'computer' }), 'Patch is on his way to his coconut computer.');
 });
+
+test('with his tablet he never stands inside a seat', () => {
+  for (const place of ['beach', 'pond']) {
+    const plan = roamPlan('write', place, seedFrom(`write|${place}|x`)), seat = SEATS[place];
+    for (let s = 0; s < 600; s += 2) { const pose = plan.at(s); if (!pose.moving) assert.ok(Math.hypot(pose.x - seat.x, pose.z - seat.z) > .9, `${place} at ${s}s`); }
+  }
+});

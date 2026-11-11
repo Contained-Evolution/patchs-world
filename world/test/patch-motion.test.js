@@ -5,6 +5,7 @@ import {walkable} from '../src/visitor-controls.js';
 import {places} from '../src/terrain.js';
 import {walkRoute} from '../src/world-state.js';
 import {forest} from '../src/forest.js';
+import {foragePlan} from '../src/foraging.js';
 
 test('his routes between places go around trunks and stay on dry land',()=>{
  const ids=Object.keys(places);
@@ -36,7 +37,7 @@ test('a roam can be joined late without replaying from the start',()=>{
 });
 
 test('eating in the grove picks fruit facing a banana tree within reach',()=>{
-  const plan=roamPlan('eat','banana-grove',seedFrom('eat|banana-grove|x'));let picks=0;
+  const plan=foragePlan(seedFrom('eat|banana-grove|x'));let picks=0;
   for(let t=0;t<900;t+=.5){const pose=plan.at(t);if(pose.clip!=='pick-fruit')continue;picks++;
     const tree=forest.filter(f=>f.grove).reduce((a,b)=>Math.hypot(a.x-pose.x,a.z-pose.z)<Math.hypot(b.x-pose.x,b.z-pose.z)?a:b);
     assert.ok(Math.hypot(tree.x-pose.x,tree.z-pose.z)<1.3);assert.ok(Math.abs(Math.atan2(Math.sin(pose.heading-Math.atan2(tree.x-pose.x,tree.z-pose.z)),Math.cos(pose.heading-Math.atan2(tree.x-pose.x,tree.z-pose.z))))<.05);}
