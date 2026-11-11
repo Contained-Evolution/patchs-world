@@ -42,8 +42,24 @@ export class PatchWorld extends DurableObject {
     this.started = true;
   }
 
+  // Once: only Patch has a name, so older thoughts, memories and diary entries lose the family's old names.
+  async forgetNames() {
+    if (this.renamed || await this.ctx.storage.get('namesForgotten')) { this.renamed = true; return; }
+    const rename = text => typeof text === 'string' ? text.replace(/Sam's/g, "my sister's").replace(/Sam/g, 'my sister').replace(/George/g, 'Dad').replace(/Sally/g, 'Mom').replace(/Tiko/g, 'my friend') : text;
+    const fix = (item, keys) => { for (const key of keys) item[key] = rename(item[key]); return item; };
+    const stored = await this.ctx.storage.get(['mind', 'memories']), mind = stored.get('mind') || {};
+    for (const entry of mind.thoughts || []) fix(entry, ['thought', 'says']);
+    for (const entry of mind.decisions || []) fix(entry, ['why']);
+    const memories = (stored.get('memories') || []).map(memory => fix({ ...memory, people: (memory.people || []).map(rename) }, ['title', 'text']));
+    const diary = await this.ctx.storage.list({ prefix: 'diary:' });
+    for (const entry of diary.values()) fix(entry, ['title', 'text']);
+    await this.ctx.storage.put({ mind, memories, namesForgotten: true, ...Object.fromEntries(diary) });
+    this.renamed = true;
+  }
+
   async body(now) {
     await this.freshStart(now);
+    await this.forgetNames();
     let body = await this.ctx.storage.get('body');
     let changed = false;
     if (!body) { body = newBody(now, now & 0xffffffff); changed = true; }
