@@ -48,7 +48,7 @@ export function setupAnimationViewer() {
     if(info.group==='Braced hang'){
       const top=(hands.at(-1)||hands[0])[1],wall=new THREE.Mesh(new THREE.BoxGeometry(1.8,top,.3),material);wall.position.set(0,top/2,fwd+.15);props.add(wall);
       if(clip==='braced-hop-up'){const lip=new THREE.Mesh(new THREE.BoxGeometry(1.6,.06,.12),material);lip.position.set(0,hands[0][1]-.03,fwd-.06);props.add(lip);}
-    } else if(clip==='rope-hang'){const rope=new THREE.Mesh(new THREE.CylinderGeometry(.025,.025,2.4,8),new THREE.MeshStandardMaterial({color:0xd8c79a}));rope.position.set(0,up+.6,fwd);props.add(rope);}
+    } else if(clip==='rope-hang'||clip==='rope-climb'){const rope=new THREE.Mesh(new THREE.CylinderGeometry(.025,.025,2.4,8),new THREE.MeshStandardMaterial({color:0xd8c79a}));rope.position.set(0,up+.6,fwd);props.add(rope);}
     else {const branch=new THREE.Mesh(new THREE.CylinderGeometry(.06,.08,1.8,10),new THREE.MeshStandardMaterial({color:0x8a6a4a,roughness:1}));branch.rotation.z=Math.PI/2;branch.position.set(0,up+.04,fwd);props.add(branch);}
   }
   function select(clip){

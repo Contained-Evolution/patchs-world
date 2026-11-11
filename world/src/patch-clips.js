@@ -23,6 +23,8 @@ export const CLIPS = {
  'swing-start':{label:'Start swinging',group:'Trees',duration:49/24,use:'Pulling himself up into the tall trees'},
  swing:{label:'Swing',group:'Trees',duration:48/24,use:'Between holds while he swings through the trees'},
  'rope-swing':{label:'Rope swing',group:'Trees',duration:107/24,use:'Swinging on a rope in the tall trees'},
+ 'rope-climb':{label:'Climbing a rope',group:'Trees',duration:2.6,hands:[[.072,1.605]],use:'Climbing a rope to its canopy branch'},
+ 'swing-land':{label:'Swing to land',group:'Trees',duration:1.9,use:'Landing on the canopy branch before lying down'},
  'rope-to-ground':{label:'Rope to ground',group:'Trees',duration:104/24,use:'Coming down from the trees'},
  hang:{label:'Free hang',group:'Free hang',duration:113/24,hands:[[.065,1.585]],use:'Hanging from a branch in the tall trees'},
  'hang-shimmy-left':{label:'Free hang shimmy left',group:'Free hang',duration:33/24,hands:[[.01,1.62]],shift:.21,use:'Along a branch, toward the trunk'},

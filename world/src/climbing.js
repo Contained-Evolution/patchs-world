@@ -78,7 +78,7 @@ export function branchHold(hold){
 }
 export function ropeHold(hold,heading=0){
  const [gx,gy,gz]=hold.grip;
- return {kind:'rope',index:hold.index,heading,point:()=>[gx,gy,gz],range:[0,0],levels:[gy],ground:()=>groundHeight(gx,gz)};
+ return {kind:'rope',index:hold.index,heading,anchor:hold.anchor,point:()=>[gx,gy,gz],range:[0,0],levels:[gy],ground:()=>groundHeight(gx,gz)};
 }
 export const holdLine=(hold,heading)=>hold.type==='rope'?ropeHold(hold,heading):branchHold(hold);
 
@@ -106,6 +106,7 @@ export function canGrab(line,s){const reach=line.levels[0]-line.ground(s);return
 // From the ground he walks along the face, jumps up, hangs, shimmies, hops up
 // and drops; on a branch or rope he only uses the moves that hold allows.
 export function climbPlan(line,random,{duration,fromGround}){
+ if(line.kind==='rope')return ropeClimbPlan(line,duration);
  const segments=[];let t=0,s=fromGround?mix(line.range[0],line.range[1],random()):0,level=0,hanging=!fromGround,lean=random()<.5?'left':'right',moves=0;
  const add=(mode,clip,length,extra={})=>{segments.push({mode,clip,t0:t,t1:t+length,s,level,...extra});t+=length;};
  const loops=clip=>CLIPS[clip].duration*(1+Math.floor(random()*2));
@@ -140,12 +141,30 @@ export function climbPlan(line,random,{duration,fromGround}){
  }};
 }
 
+// Rope climbs reach a supported canopy branch, land once, then rest there.
+export function ropeClimbPlan(line,duration){
+ const landing=CLIPS['swing-land'].duration;
+ const rise=line.anchor[1]-line.point(0)[1],ascent=Math.min(rise/.3*CLIPS['rope-climb'].duration,Math.max(2,duration-landing-15));
+ const segments=[
+  {mode:'rope-climb',clip:'rope-climb',t0:0,t1:ascent},
+  {mode:'canopy-land',clip:'swing-land',t0:ascent,t1:ascent+landing},
+  {mode:'canopy-rest',clip:'sleep-lay',t0:ascent+landing,t1:Math.max(duration,ascent+landing)+3600},
+ ];
+ return {line,segments,at(seconds){const index=seconds<ascent?0:seconds<ascent+landing?1:2,seg=segments[index],time=Math.max(0,seconds-seg.t0);return {...seg,index,time,progress:Math.min(1,time/(seg.t1-seg.t0))};}};
+}
+
 const handsOf=(clip,end=false)=>{const h=CLIPS[clip].hands;return h&&(h[end?h.length-1:0]||null);};
 // Where his feet go for a segment, which way he faces and what plays.
 export function placement(line,seg){
  const {mode,clip,progress,time}=seg,f=forwardOf(line.heading);
  const at=(s,back,y)=>{const [x,,z]=line.point(s,seg.level);return {x:x-f[0]*back,y,z:z-f[1]*back};};
  const loopTime=CLIPS[clip].duration?time%CLIPS[clip].duration:0;
+ if(mode==='rope-climb'||mode==='canopy-land'||mode==='canopy-rest'){
+  const [x,top,z]=line.anchor,hand=CLIPS['rope-climb'].hands[0];
+  const back=mode==='rope-climb'?hand[0]:mix(hand[0],0,mode==='canopy-rest'?1:smooth(.15,.85,progress));
+  const y=mode==='rope-climb'?mix(line.point(0)[1],top,progress)-hand[1]:mode==='canopy-land'?mix(top-hand[1],top,smooth(.15,.85,progress)):top-.5;
+  return {x:x-f[0]*back,y,z:z-f[1]*back,heading:line.heading,clip,time:mode==='canopy-land'?time:loopTime};
+ }
  if(mode==='walk'){const s=mix(seg.s0,seg.s1,progress),[x,z]=line.stand(s),side=leftOf(line.heading),dir=Math.sign(seg.s1-seg.s0)||1;return {x,z,y:groundHeight(x,z),heading:Math.atan2(side[0]*dir,side[1]*dir),clip,time:loopTime,moving:true};}
  if(mode==='ground'){const [x,z]=line.stand(seg.s);return {x,z,y:groundHeight(x,z),heading:line.heading,clip,time:loopTime};}
  const hand=handsOf(clip),end=handsOf(clip,true),ledge=line.point(seg.s,seg.level)[1];

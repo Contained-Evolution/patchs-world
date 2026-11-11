@@ -9,12 +9,12 @@ for(let row=0;row<6;row++) for(let col=0;col<8;col++) {
 }
 // Four outward-facing branch shapes share the same reachable height.
 export const ROPE_TREES = new Set([1, 9, 8]);
-export const ROPE_LENGTH = 2.4;
+export const ROPE_LENGTH = 6.9;
 export function anchorFor([x,z,h]) {
  const variant=Math.abs(Math.round(x*10+z*7))%4, angle=[-.6,-.2,.2,.6][variant], length=[1.4,1.55,1.7,1.85][variant];
  return [x+Math.cos(angle)*length,groundHeight(x,z)+h-1+[0,.2,-.15,.1][variant],z+Math.sin(angle)*length];
 }
-export function holdFor(index) { const anchor=anchorFor(trees[index]); return {index, type:ROPE_TREES.has(index)?'rope':'branch', anchor, grip:[anchor[0],anchor[1]-(ROPE_TREES.has(index)?ROPE_LENGTH:0),anchor[2]]}; }
+export function holdFor(index) { const anchor=anchorFor(trees[index]),rope=ROPE_TREES.has(index); if(rope)anchor[1]=Math.max(...trees.map(([x,z,h])=>groundHeight(x,z)+h+3.5))+.5; return {index, type:rope?'rope':'branch', anchor, grip:[anchor[0],anchor[1]-(rope?ROPE_LENGTH:0),anchor[2]]}; }
 export const traversalLoop = () => [0,1,9,8,0].map(holdFor);
 const distance = (a,b) => Math.hypot(a[0]-b[0],a[1]-b[1]);
 export function walkRoute(from,to) {
