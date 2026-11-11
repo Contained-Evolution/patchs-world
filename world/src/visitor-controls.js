@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { groundHeight, trees } from './world-state.js';
+import { shoreFraction, walkShoreLimit } from './terrain.js';
 
 // Match the current island's tree and palm trunks. Keep the routes between them open.
 export const obstacles = [...trees.map(([x,z])=>[x,z,.57])];
@@ -7,7 +8,7 @@ for(let row=0;row<4;row++) for(let col=0;col<5;col++) obstacles.push([-16+col*2+
 for(let z=-10;z<=20;z+=5) obstacles.push([32-Math.abs(z)*.13,z,.45]);
 for(let i=0;i<15;i++){const a=i*2.4,r=2+(i%4)*1.1;obstacles.push([22+Math.cos(a)*r,-20+Math.sin(a)*r,.55]);}
 export function walkable(x,z,fromX=x,fromZ=z) {
-  if ((x/43)**2+(z/34)**2 > 1) return false;
+  if (shoreFraction(x,z) > walkShoreLimit) return false;
   const d=Math.hypot(x-fromX,z-fromZ);
   if (d && Math.abs(groundHeight(x,z)-groundHeight(fromX,fromZ))/d > 1.1) return false;
   return !obstacles.some(([ox,oz,r]) => Math.hypot(x-ox,z-oz)<r && Math.hypot(x-ox,z-oz)<Math.hypot(fromX-ox,fromZ-oz));
@@ -19,7 +20,7 @@ export function createVisitorControls(camera, canvas, dialog) {
   const orientation=()=>{euler.set(pitch,yaw,0);camera.quaternion.setFromEuler(euler);};
   const look=(dx,dy)=>{yaw-=dx*.0025;pitch=THREE.MathUtils.clamp(pitch-dy*.0025,-1.45,1.45);orientation();};
   const pointAt=(x,y,z)=>{camera.lookAt(x,y,z);euler.setFromQuaternion(camera.quaternion,'YXZ');yaw=euler.y;pitch=euler.x;};
-  const setMode=value=>{mode=value;walk.setAttribute('aria-pressed',String(mode==='walk'));fly.setAttribute('aria-pressed',String(mode==='fly'));document.body.classList.toggle('flying',mode==='fly');hint.textContent=mode==='fly'?'Click the island to look · WASD or arrows to move · Space up · Ctrl or C down · Shift faster · Esc releases mouse':'Click the island to look · WASD or arrows to move · Shift to go faster · Esc releases mouse';if(mode==='walk'){let x=camera.position.x,z=camera.position.z;const scale=Math.sqrt((x/43)**2+(z/34)**2);if(scale>1){camera.position.x/=scale;camera.position.z/=scale;}camera.position.y=groundHeight(camera.position.x,camera.position.z)+1.6;}else camera.position.y=Math.max(camera.position.y,groundHeight(camera.position.x,camera.position.z)+1.6);};
+  const setMode=value=>{mode=value;walk.setAttribute('aria-pressed',String(mode==='walk'));fly.setAttribute('aria-pressed',String(mode==='fly'));document.body.classList.toggle('flying',mode==='fly');hint.textContent=mode==='fly'?'Click the island to look · WASD or arrows to move · Space up · Ctrl or C down · Shift faster · Esc releases mouse':'Click the island to look · WASD or arrows to move · Shift to go faster · Esc releases mouse';if(mode==='walk'){let x=camera.position.x,z=camera.position.z;const scale=shoreFraction(x,z)/walkShoreLimit;if(scale>1){camera.position.x/=scale;camera.position.z/=scale;}camera.position.y=groundHeight(camera.position.x,camera.position.z)+1.6;}else camera.position.y=Math.max(camera.position.y,groundHeight(camera.position.x,camera.position.z)+1.6);};
   const pause=()=>{keys.clear();touch.clear();touchLook=null;if(document.pointerLockElement===canvas) document.exitPointerLock();};
   walk.onclick=()=>setMode('walk');fly.onclick=()=>setMode('fly');
   document.querySelector('#overview').onclick=()=>{setMode('fly');camera.position.set(48,48,58);pointAt(0,1,0);};
