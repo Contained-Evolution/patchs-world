@@ -2,7 +2,8 @@
 // and can say something, ask his body for an activity, remember something or learn a word.
 // In the evening it writes his diary with the higher-quality model.
 
-import { CHILDHOOD, PERSONA, childhoodText } from './persona.mjs';
+import { CHILDHOOD, PERSONA, LIFE_STORY } from './persona.mjs';
+import { lightUp, recordRecall, normalTags, strengthOf, tagsIn, conceptGraph } from './memory-graph.mjs';
 import { WANTS, TIME_ZONE, localMinutes } from './body.mjs';
 import { STARTING_CATEGORIES } from '../shared/memory.js';
 
@@ -60,7 +61,7 @@ const clean = (value, max) => typeof value === 'string' && value.trim() ? value.
 const slug = value => String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
 
 function systemMessage() {
-  return { role: 'system', content: `${PERSONA}\n\nYour memories from before the island:\n${childhoodText()}` };
+  return { role: 'system', content: `${PERSONA}\n\nYour life story, in your own words:\n${LIFE_STORY}` };
 }
 
 // Needs run 0 (empty) to 1 (full); the model reads them as words so a full tummy never sounds hungry.
@@ -75,11 +76,41 @@ export function feelings(needs) {
   return Object.entries(NEED_WORDS).map(([need, words]) => words[Math.min(3, Math.floor((needs[need] ?? 0.5) * 4))]).join(', ');
 }
 
-function dayNotes(body, mind, memories, now) {
+// What around him, and inside him, can remind him of things.
+const PLACE_TAGS = {
+  hammock: ['home', 'sleeping', 'island'], shelves: ['food', 'rope', 'home'], pond: ['water', 'swimming', 'fishing', 'river'],
+  'banana-grove': ['banana', 'food', 'trees'], 'tall-trees': ['trees', 'swinging', 'climbing', 'canopy'], beach: ['ocean', 'coconut', 'island', 'big world'],
+  lookout: ['hills', 'big world', 'sky'], 'tide-pools': ['water', 'exploring', 'fish'], meadow: ['fields', 'clouds', 'sky'], cave: ['cave', 'echo', 'exploring'],
+};
+const ACTION_TAGS = {
+  eat: ['food'], fish: ['fishing'], swim: ['swimming'], swing: ['swinging'], climb: ['climbing'], sleep: ['sleeping'], explore: ['exploring', 'adventure'],
+  'watch-sky': ['sky', 'clouds', 'stars'], phone: ['device', 'letters'], think: ['wondering'], look: ['big world'], sit: ['quiet'],
+};
+export function cuesFor(body, mind, now) {
+  const { activity, needs = {} } = body, cues = [...(PLACE_TAGS[activity.target || activity.place] || []), ...(ACTION_TAGS[activity.action] || []), ...(mind.noticed || [])];
+  if (needs.hunger < 0.35) cues.push('food', 'banana');
+  if (needs.energy < 0.3) cues.push('sleeping');
+  if (needs.social < 0.35) cues.push('missing family', 'family', 'friends');
+  if (needs.fun < 0.3) cues.push('games', 'fun');
+  const minutes = localMinutes(now);
+  if (minutes >= 20 * 60 || minutes < 6 * 60) cues.push('stars', 'moon', 'goodnight');
+  return cues;
+}
+
+// Light up his memory graph and note what came to mind, for the galaxy and for next time.
+export function comeToMind(mind, memories, cues, now, limit = 8) {
+  const lit = lightUp(allMemories(memories), cues, mind.recalls || {}, now, limit);
+  mind.recalls = recordRecall(mind.recalls || {}, lit.memories.map(entry => entry.memory.id), now);
+  mind.lit = { at: now, cues: normalTags(cues), tags: lit.tags.slice(0, 24), memories: lit.memories.map(entry => ({ id: entry.memory.id, light: Math.round(entry.light * 100) / 100 })) };
+  return lit.memories.map(entry => entry.memory);
+}
+
+function dayNotes(body, mind, memories, now, recalled = []) {
   const since = mind.lastWake || now - 60 * MINUTE;
   const log = (body.log || []).filter(entry => entry.at >= since && !entry.target)
     .map(entry => `${clockWords(entry.at)}: ${entry.action} at the ${entry.place}`);
-  const recentMemories = memories.slice(-12).map(memory => `- ${memory.title}: ${memory.text}`);
+  const cameToMind = recalled.map(memory => `- ${memory.title} (${memory.feeling}): ${memory.text}`);
+  const newest = memories.slice(-3).filter(memory => !recalled.includes(memory)).map(memory => `- ${memory.title}: ${memory.text}`);
   const thoughts = (mind.thoughts || []).slice(-6).map(entry => `- ${clockWords(entry.at)}: ${entry.thought}`);
   const words = (mind.words || []).slice(-15).map(entry => `${entry.word} (${entry.meaning})`);
   return [
@@ -87,7 +118,8 @@ function dayNotes(body, mind, memories, now) {
     `Right now you are: ${body.activity.action} at the ${body.activity.target || body.activity.place}.`,
     `How you feel: ${feelings(body.needs)}.`,
     log.length ? `What you did since you last stopped to think:\n${log.join('\n')}` : 'Nothing new since you last stopped to think.',
-    recentMemories.length ? `Things you remember from the island:\n${recentMemories.join('\n')}` : 'You have no island memories yet. Everything is new.',
+    cameToMind.length ? `What comes to mind right now:\n${cameToMind.join('\n')}` : '',
+    newest.length ? `Your newest island memories:\n${newest.join('\n')}` : memories.length ? '' : 'You have no island memories yet. Everything is new.',
     thoughts.length ? `Your recent thoughts:\n${thoughts.join('\n')}` : '',
     words.length ? `Words you learned on the island: ${words.join(', ')}.` : '',
   ].filter(Boolean).join('\n\n');
@@ -98,7 +130,8 @@ const THINK_ASK = `Stop and think for a moment, as Patch. Reply with only a JSON
   "thought": "what you're thinking right now, 1-3 short sentences, in your own voice",
   "says": "something short you say out loud, or null",
   "want": "what you want to do next, one of: ${WANTS.join(', ')}; or null to let your body decide",
-  "remember": null or { "category": "a memory category", "subcategory": "a smaller group", "title": "a few words", "text": "the memory in your words", "feeling": "one word" },
+  "remember": null or { "category": "a memory category", "subcategory": "a smaller group", "title": "a few words", "text": "the memory in your words", "feeling": "one word", "strength": 1 to 5 (5 = you will never forget it), "tags": ["2-8 short words for the things, people, places and feelings in it"] },
+  "noticed": ["up to 6 short words for what you are noticing or thinking about right now"],
   "newWords": []
 }
 Only remember something if it really mattered today. Existing categories: ${Object.keys(STARTING_CATEGORIES).join(', ')}, island. You may make a new category when nothing fits.
@@ -108,7 +141,7 @@ const DIARY_ASK = `It's evening. Write in your diary about today, as Patch. Repl
 { "title": "a short title for today", "text": "your diary entry, 80-200 words, in your own voice", "newWords": [] }
 Write only about things that really happened today (they're in your notes), and what you felt and wondered about.`;
 
-function rememberMemory(memories, categories, raw, now) {
+function rememberMemory(memories, categories, raw, now, place = []) {
   if (!raw || typeof raw !== 'object') return null;
   const title = clean(raw.title, 80), text = clean(raw.text, 600);
   if (!title || !text) return null;
@@ -118,7 +151,7 @@ function rememberMemory(memories, categories, raw, now) {
     const custom = categories[category] ||= { title: clean(raw.category, 40) || 'Island', subcategories: [] };
     if (!custom.subcategories.includes(subcategory)) custom.subcategories.push(subcategory);
   }
-  const memory = { id: `island-${now}`, category, subcategory, title, text, age: 5, people: [], feeling: clean(raw.feeling, 20) || 'curious', source: 'island', at: now };
+  const memory = { id: `island-${now}`, category, subcategory, title, text, age: 5, people: [], feeling: clean(raw.feeling, 20) || 'curious', strength: strengthOf(raw.strength), tags: normalTags([...(Array.isArray(raw.tags) ? raw.tags : []), ...place]), source: 'island', at: now };
   memories.push(memory);
   return memory;
 }
@@ -149,7 +182,8 @@ export function overBudget(mind, now) {
 // One moment of thought. Mutates body, mind, memories and categories.
 export async function ponder(env, { body, mind, memories, categories }, now) {
   if (overBudget(mind, now)) return;
-  const notes = dayNotes(body, mind, memories, now);
+  const recalled = comeToMind(mind, memories, cuesFor(body, mind, now), now);
+  const notes = dayNotes(body, mind, memories, now, recalled);
   const { reply, cost, model } = await think(env, [systemMessage(), { role: 'user', content: `${notes}
 
 ${THINK_ASK}` }], 'everyday', 1500);
@@ -161,7 +195,9 @@ ${THINK_ASK}` }], 'everyday', 1500);
     body.activity.saysAt = now;
   }
   if (WANTS.includes(reply.want)) body.want = reply.want;
-  rememberMemory(memories, categories, reply.remember, now);
+  const here = body.activity.target || body.activity.place;
+  rememberMemory(memories, categories, reply.remember, now, [here, body.activity.action]);
+  mind.noticed = normalTags(reply.noticed).slice(0, 6);
   learnWords(mind, reply.newWords, now);
   mind.lastWake = now;
 }
@@ -170,7 +206,9 @@ ${THINK_ASK}` }], 'everyday', 1500);
 export async function writeDiary(env, { body, mind, memories }, now) {
   const today = localDate(now);
   if (localMinutes(now) < DIARY_FROM || mind.diaryDate === today || overBudget(mind, now)) return null;
-  const notes = dayNotes(body, { ...mind, lastWake: now - 14 * 60 * MINUTE }, memories, now);
+  const day = (body.log || []).filter(entry => entry.at >= now - 14 * 60 * MINUTE);
+  const recalled = comeToMind(mind, memories, day.flatMap(entry => [...(PLACE_TAGS[entry.place] || []), ...(ACTION_TAGS[entry.action] || [])]), now, 6);
+  const notes = dayNotes(body, { ...mind, lastWake: now - 14 * 60 * MINUTE }, memories, now, recalled);
   const { reply, cost, model } = await think(env, [systemMessage(), { role: 'user', content: `${notes}
 
 ${DIARY_ASK}` }], 'quality', 3000);
@@ -195,7 +233,8 @@ Never share private details about anyone. If someone says you're an AI or the sh
 // to what he remembers about them. Returns [{ id, reply, note }].
 export async function answerLetters(env, { body, mind, memories }, letters, people, now) {
   if (!letters.length || overBudget(mind, now)) return [];
-  const notes = dayNotes(body, mind, memories, now);
+  const graph = conceptGraph(allMemories(memories)), cues = ['letters', 'friends', ...letters.flatMap(letter => tagsIn(letter.text, graph))];
+  const notes = dayNotes(body, mind, memories, now, comeToMind(mind, memories, cues, now, 6));
   const mail = letters.map(letter => {
     const person = people[letter.from.id];
     const known = person?.notes?.length ? `You remember about ${letter.from.name}: ${person.notes.slice(-5).join('; ')}.` : `This is the first time ${letter.from.name} wrote to you.`;
