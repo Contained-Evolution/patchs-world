@@ -62,3 +62,19 @@ test('a long gap catches up without hanging and gives the same result each time'
 test('the clock uses New York time', () => {
   assert.equal(localMinutes(MORNING), 10 * 60);
 });
+
+
+test('body never invents speech, and AI speech only lasts eight seconds', () => {
+  const body = newBody(MORNING, 7);
+  assert.equal(view(body, MORNING).patch.says, null);
+  body.activity.says = 'A thought I chose to say.';
+  body.activity.saysAt = MORNING;
+  assert.equal(view(body, MORNING + 5000).patch.says, 'A thought I chose to say.');
+  assert.equal(view(body, MORNING + 8000).patch.says, null);
+  delete body.activity.saysAt;
+  assert.equal(view(body, MORNING + 1000).patch.says, null);
+  for (let t = MORNING; t < MORNING + 24 * HOUR; t += 10 * 60000) {
+    advance(body, t);
+    assert.equal(view(body, t).patch.says, null);
+  }
+});
