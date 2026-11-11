@@ -52,7 +52,7 @@ const EFFECTS = {
 };
 export const CHOICES = Object.keys(EFFECTS);
 export const WHERE = {
-  eat: ['banana-grove', 'shelves', 'beach'], fish: ['pond'], swim: ['pond'], swing: ['tall-trees'], climb: ['tall-trees'],
+  eat: ['banana-grove', 'shelves', 'beach'], fish: ['pond'], swim: ['pond'], swing: ['tall-trees'], climb: ['tall-trees', 'lookout'],
   explore: ['tall-trees', 'cave', 'tide-pools', 'beach', 'meadow', 'lookout', 'banana-grove', 'pond'],
 };
 export const PLACES_KNOWN = Object.keys(SPOTS);
