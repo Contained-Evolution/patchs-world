@@ -25,7 +25,13 @@ dialog::backdrop { background:#08241dbb; }
   display:block; width:100%; padding:6px; border:1px solid #d3d7b4b3; border-radius:15px;
   background:#143e36ed; color:#fff6dd; text-align:left; box-shadow:0 3px 16px #14362d80;
 }
-.dock-controls { display:grid; gap:4px; margin-top:5px; }
+#island-controls { margin-top:5px; }
+#island-controls summary {
+  min-height:44px; padding:6px 9px; align-content:center; cursor:pointer;
+  border:1px solid #d3d7b4b3; border-radius:9px; background:#143e36f5; color:#fff6dd;
+}
+#island-controls summary:focus-visible { outline:3px solid #ffdc91; outline-offset:2px; }
+.dock-controls { display:grid; gap:4px; margin-top:4px; }
 .dock-icons { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:4px; }
 .dock-controls button, .dock-follow, #back-to-map, .map-view-controls button, #map-landmarks button {
   border:1px solid #d3d7b4b3; border-radius:9px; background:#143e36f5; color:#fff6dd;
@@ -104,6 +110,7 @@ dialog::backdrop { background:#08241dbb; }
 }
 @media (max-height:480px) {
   .map-dock { width:92px; }
+  #island-controls summary { padding-inline:5px; }
   .map-launch-title img { width:30px; height:30px; }
 }
 [hidden]{display:none!important}

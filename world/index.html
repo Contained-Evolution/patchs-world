@@ -4,25 +4,28 @@
     <span class="map-launch-title"><img src="./icons/icon-192.png" width="40" height="40" alt=""> <span>Patch’s<br>World</span></span>
     <span class="island-chart mini-chart" id="mini-chart" aria-hidden="true"><canvas width="360" height="380"></canvas></span>
   </button>
-  <div class="dock-controls" aria-label="Island controls">
-    <div class="dock-icons">
-      <button id="sound-shortcut" type="button" aria-label="Island sound" aria-pressed="true" title="Mute island sound">
-        <svg aria-hidden="true" viewBox="0 0 32 32" width="25" height="25" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M4 12h5l7-6v20l-7-6H4z" fill="currentColor"/>
-          <path class="sound-waves" d="M21 11a7 7 0 0 1 0 10m4-14a13 13 0 0 1 0 18"/>
-          <path class="sound-muted" d="m22 13 6 6m0-6-6 6"/>
-        </svg>
-      </button>
-      <button id="open-cameras" type="button" aria-label="Island cameras" aria-haspopup="dialog" title="Island cameras">
-        <svg aria-hidden="true" viewBox="0 0 40 32" width="30" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M4 6h32l-5 13H7Z M12 6l2 13 M20 19v6h12m0-5v10"/>
-          <circle cx="9" cy="13" r="2"/>
-        </svg>
-      </button>
+  <details id="island-controls">
+    <summary>Controls</summary>
+    <div class="dock-controls">
+      <div class="dock-icons">
+        <button id="sound-shortcut" type="button" aria-label="Island sound" aria-pressed="true" title="Mute island sound">
+          <svg aria-hidden="true" viewBox="0 0 32 32" width="25" height="25" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 12h5l7-6v20l-7-6H4z" fill="currentColor"/>
+            <path class="sound-waves" d="M21 11a7 7 0 0 1 0 10m4-14a13 13 0 0 1 0 18"/>
+            <path class="sound-muted" d="m22 13 6 6m0-6-6 6"/>
+          </svg>
+        </button>
+        <button id="open-cameras" type="button" aria-label="Island cameras" aria-haspopup="dialog" title="Island cameras">
+          <svg aria-hidden="true" viewBox="0 0 40 32" width="30" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 6h32l-5 13H7Z M12 6l2 13 M20 19v6h12m0-5v10"/>
+            <circle cx="9" cy="13" r="2"/>
+          </svg>
+        </button>
+      </div>
+      <button id="find-patch" type="button" disabled>Find Patch</button>
+      <label class="dock-follow"><input id="follow-patch" type="checkbox" aria-label="Follow Patch" disabled> Follow</label>
     </div>
-    <button id="find-patch" type="button" disabled>Find Patch</button>
-    <label class="dock-follow"><input id="follow-patch" type="checkbox" aria-label="Follow Patch" disabled> Follow</label>
-  </div>
+  </details>
 </div>
 <div class="island-movement">
   <div id="move-stick" role="group" aria-label="Movement joystick">

@@ -76,13 +76,26 @@ const cameraFeeds = setupIslandCameras(renderer);
 const controls = createVisitorControls(camera, renderer.domElement, () => dialog.open, scene, solids);
 const updateMap = setupIslandMap(renderer, $('#mini-chart canvas'), $('#full-chart canvas'), $('#map-landmarks'), renderAerial);
 
+const dockControls = $('#island-controls');
+const dockSummary = dockControls.querySelector('summary');
+document.addEventListener('pointerdown', event => {
+  if (dockControls.open && !dockControls.contains(event.target)) dockControls.open = false;
+});
+dockControls.addEventListener('keydown', event => {
+  if (event.key !== 'Escape' || !dockControls.open) return;
+  dockControls.open = false;
+  dockSummary.focus();
+});
+
 function openIslandMenu(panel) {
+  dockControls.open = false;
   controls.pause();
   dialog.showModal();
   community.showPanel(panel);
 }
 $('#open-map').onclick = () => openIslandMenu('map');
 $('#open-cameras').onclick = () => {
+  dockSummary.focus({ preventScroll: true });
   cameraFeeds.showGrid();
   openIslandMenu('cameras');
 };
