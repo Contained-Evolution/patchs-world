@@ -12,7 +12,11 @@ CLIPS = {'Breathing Idle': 'idle', 'Walking': 'walk', 'Running': 'run', 'Hanging
          'Braced Hang Shimmy left': 'braced-shimmy-left', 'Braced Hang Shimmy right': 'braced-shimmy-right',
          'Braced Hang Hop Up': 'braced-hop-up', 'Braced Hang Drop': 'braced-drop',
          'Sitting Idle': 'sit-ground', 'Typing': 'typing', 'Sit To Type': 'sit-to-type', 'Type To Sit': 'type-to-sit',
-         'Texting': 'texting', 'Walking While Texting': 'walk-texting'}
+         'Texting': 'texting', 'Walking While Texting': 'walk-texting',
+         'Climbing To Top': 'climb-top', 'Yawn': 'yawn', 'Jumping Down': 'jump-down', 'Jump': 'jump',
+         'Opening A Lid': 'open-lid', 'Falling': 'fall', 'Picking Up': 'pick-up',
+         'Walking carry box': 'carry-walk', 'running carry box': 'carry-run',
+         'jogging carry box': 'carry-jog', 'Walking carry box and stop': 'carry-stop'}
 MESHY = {'Idle_03': 'look-around', 'Swing_on_Rope_to_Ground': 'rope-to-ground'}
 bpy.ops.wm.read_factory_settings(use_empty=True)
 bpy.ops.import_scene.fbx(filepath=os.path.join(art, 'Patch.fbx'))

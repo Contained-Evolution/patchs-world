@@ -143,11 +143,11 @@ export function climbPlan(line,random,{duration,fromGround}){
 
 // Rope climbs reach a supported canopy branch, land once, then rest there.
 export function ropeClimbPlan(line,duration){
- const landing=CLIPS['swing-land'].duration;
+ const landing=CLIPS['climb-top'].duration;
  const rise=line.anchor[1]-line.point(0)[1],ascent=Math.min(rise/.3*CLIPS['rope-climb'].duration,Math.max(2,duration-landing-15));
  const segments=[
   {mode:'rope-climb',clip:'rope-climb',t0:0,t1:ascent},
-  {mode:'canopy-land',clip:'swing-land',t0:ascent,t1:ascent+landing},
+  {mode:'canopy-land',clip:'climb-top',t0:ascent,t1:ascent+landing},
   {mode:'canopy-rest',clip:'sleep-lay',t0:ascent+landing,t1:Math.max(duration,ascent+landing)+3600},
  ];
  return {line,segments,at(seconds){const index=seconds<ascent?0:seconds<ascent+landing?1:2,seg=segments[index],time=Math.max(0,seconds-seg.t0);return {...seg,index,time,progress:Math.min(1,time/(seg.t1-seg.t0))};}};

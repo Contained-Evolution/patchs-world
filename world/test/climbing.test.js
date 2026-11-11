@@ -95,7 +95,7 @@ test('visitors cannot walk into the climbing rock',()=>{
 test('every rope climbs to its anchor, lands once, and rests on the canopy',()=>{
  for(const index of ROPE_TREES){
   const line=holdLine(holdFor(index)),plan=climbPlan(line,rng(3),{duration:600,fromGround:false});
-  assert.deepEqual(plan.segments.map(s=>s.clip),['rope-climb','swing-land','sleep-lay']);
+  assert.deepEqual(plan.segments.map(s=>s.clip),['rope-climb','climb-top','sleep-lay']);
   const climb=plan.segments[0],end=placement(line,plan.at(climb.t1-1e-6));
   assert.ok(Math.abs(end.y+CLIPS['rope-climb'].hands[0][1]-line.anchor[1])<1e-5);
   let previous=-Infinity;
