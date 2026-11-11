@@ -7,7 +7,8 @@ import { setupCommunity } from './community.js';
 import { ISLAND } from './terrain.js';
 import { travelFraction, loopFraction } from './travel-progress.js';
 import { adaptiveQuality } from './render-quality.js';
-import { places, groundHeight, walkRoute, swingRoute, swingLoop, trees, statusText, isLocalPreview, safePatch } from './world-state.js';
+import { places, groundHeight, walkRoute, swingLoop, trees, statusText, isLocalPreview, safePatch } from './world-state.js';
+import { patchRoute, roamPlan, ROAM, seedFrom } from './patch-motion.js';
 
 const $ = s => document.querySelector(s);
 const dialog = $('#map');
@@ -38,7 +39,9 @@ const patch = new THREE.Group(); scene.add(patch);const patchVelocity=new THREE.
 const fishingRod=new THREE.Group(),rodDirection=new THREE.Vector3(.1,.65,2.2),rod=new THREE.Mesh(new THREE.CylinderGeometry(.025,.045,rodDirection.length(),6),new THREE.MeshStandardMaterial({color:0x6b4d31}));rod.position.copy(rodDirection).multiplyScalar(.5);rod.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),rodDirection.clone().normalize());fishingRod.add(rod);const lineGeo=new THREE.BufferGeometry().setFromPoints([rodDirection,new THREE.Vector3(.1,-.7,3.3)]);fishingRod.add(new THREE.Line(lineGeo,new THREE.LineBasicMaterial({color:0xd8d1b7})));patch.add(fishingRod);const handWorld=new THREE.Vector3();
 
 const vineGeometry=new THREE.BufferGeometry();vineGeometry.setAttribute('position',new THREE.BufferAttribute(new Float32Array(6),3));const swingVine=new THREE.Line(vineGeometry,new THREE.LineBasicMaterial({color:0x718452}));swingVine.visible=false;scene.add(swingVine);
-let mixer, headBone, rightHandBone, clips = {}, currentAction, currentName, headRest = null;
+let mixer, headBone, rightHandBone, clips = {}, strideSpeed = {}, currentAction, currentName, headRest = null, roam = null;
+// Turn smoothly toward a heading instead of snapping at each bend.
+function face(angle,dt){const turn=Math.atan2(Math.sin(angle-patch.rotation.y),Math.cos(angle-patch.rotation.y));patch.rotation.y+=turn*Math.min(1,dt*7);}
 const lookUp = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -0.6);
 new GLTFLoader().load(new URL('./assets/patch.glb', document.baseURI).href, gltf => {
   patch.add(gltf.scene);
@@ -46,10 +49,12 @@ new GLTFLoader().load(new URL('./assets/patch.glb', document.baseURI).href, gltf
   mixer = new THREE.AnimationMixer(gltf.scene);
   for (const clip of gltf.animations) {
     // Locomotion is controlled by the island, not the source animation's travel.
+    // Remove only the hips' steady drift, so the stride and bob stay and the loop never snaps back.
     const tracks = clip.tracks.map(track => {
       const copy = track.clone();
       if (/(?:mixamorig[:_]?Hips).*\.position$/i.test(copy.name) && ['walk','run','swing','swim'].includes(clip.name)) {
-        for (let i = 0; i < copy.values.length; i += 3) { copy.values[i] = copy.values[0]; copy.values[i + 2] = copy.values[2]; }
+        const n=copy.times.length, drift=[0,1,2].map(c=>copy.values[(n-1)*3+c]-copy.values[c]), span=copy.times[n-1]-copy.times[0];
+        if (span>0) { for (let i=0;i<n;i++) { const f=(copy.times[i]-copy.times[0])/span; for (let c=0;c<3;c++) copy.values[i*3+c]-=drift[c]*f; } strideSpeed[clip.name]=Math.hypot(...drift)/span; }
       }
       return copy;
     });
@@ -89,9 +94,8 @@ async function poll() {
     const previous=state?.patch;
     // A poll can arrive after an activity ended while this tab was paused. Place
     // Patch at the server's destination instead of replaying an obsolete journey.
-    if (!state || (previous && previous.since!==next.patch.since && !next.patch.target)) {
-      const [x,z]=places[next.patch.place]; patch.position.set(x,groundHeight(x,z),z);
-    }
+    const [px,pz]=places[next.patch.place];
+    if (!state || (previous && previous.since!==next.patch.since && !next.patch.target && Math.hypot(patch.position.x-px,patch.position.z-pz)>60)) patch.position.set(px,groundHeight(px,pz),pz);
     state = next; hasLiveState = true; demo = false;
     renderCare(next.patch);
     $('#connection').hidden = true;
@@ -129,33 +133,45 @@ const swinging = action === 'swing';
 const key = `${action}|${place}|${target||''}|${since||''}`;
 if (travel || swinging) {
   if (!journey || journey.key !== key) {
-    const points=[{p:new THREE.Vector3(places[place][0],groundHeight(...places[place]),places[place][1]),mode:'ground'}];
+    // Leave from where he is standing when that is near the place he is leaving.
+    const here=[patch.position.x,patch.position.z],origin=Math.hypot(here[0]-places[place][0],here[1]-places[place][1])<60?here:places[place],seed=seedFrom(key);
+    const points=[{p:new THREE.Vector3(origin[0],groundHeight(...origin),origin[1]),mode:'ground'}];
     const groundPoints=route=>route.forEach(([x,z])=>points.push({p:new THREE.Vector3(x,groundHeight(x,z),z),mode:'ground'}));
+    const wayTo=(from,to,remembered)=>patchRoute(from,to,seed+points.length,remembered).slice(1);
     const branchPoints=anchors=>anchors.forEach(([x,y,z],i)=>points.push({p:new THREE.Vector3(x,y-1.8,z),mode:travel&&i===0?'climb':'branch'}));
     if(swinging){
-      if(travel){if(place!=='tall-trees')groundPoints(walkRoute(place,'tall-trees'));const [ax,,az]=swingLoop()[0];groundPoints([[ax,az]]);branchPoints(swingLoop());if(target!=='tall-trees'){const last=points.at(-1).p;points.push({p:new THREE.Vector3(last.x,groundHeight(last.x,last.z),last.z),mode:'descent'});groundPoints([places['tall-trees']]);groundPoints(walkRoute('tall-trees',target));}}
+      if(travel){const [ax,,az]=swingLoop()[0];groundPoints(wayTo(origin,[ax,az],[origin,...walkRoute(place,'tall-trees'),[ax,az]]));branchPoints(swingLoop());if(target!=='tall-trees'){const last=points.at(-1).p;points.push({p:new THREE.Vector3(last.x,groundHeight(last.x,last.z),last.z),mode:'descent'});groundPoints(wayTo([last.x,last.z],places[target],[[last.x,last.z],...walkRoute('tall-trees',target)]));}}
       else {points.length=0;branchPoints(swingLoop());}
-    } else groundPoints(walkRoute(place,target));
+    } else groundPoints(wayTo(origin,places[target],[origin,...walkRoute(place,target)]));
     const lengths=[];let total=0;for(let i=1;i<points.length;i++){const length=points[i-1].p.distanceTo(points[i].p);lengths.push(length);total+=length;}
     journey={key,points,lengths,total};
   }
   const j=journey;
   const fraction=travel?travelFraction(since,until,Date.now()+serverOffset,j.total):loopFraction(since,Date.now()+serverOffset,j.total);
   let remaining=j.total*fraction,index=0;while(index<j.lengths.length-1&&remaining>j.lengths[index])remaining-=j.lengths[index++];
-  const from=j.points[index],to=j.points[index+1];if(to){const progress=j.lengths[index]?remaining/j.lengths[index]:0,branch=to.mode==='branch';patch.position.lerpVectors(from.p,to.p,progress);if(branch){const dx=to.p.x-from.p.x,dz=to.p.z-from.p.z,horizontal=Math.hypot(dx,dz);if(horizontal>.1){let nx=-dz/horizontal,nz=dx/horizontal;if(Math.abs(nx)>.1&&nx<0){nx=-nx;nz=-nz;}const arc=Math.sin(Math.PI*progress)*2;patch.position.x+=nx*arc;patch.position.z+=nz*arc;}patch.position.y-=Math.sin(Math.PI*progress)*Math.min(.8,j.lengths[index]*.15);const rope=vineGeometry.attributes.position;rope.setXYZ(0,patch.position.x,patch.position.y+1.8,patch.position.z);rope.setXYZ(1,to.p.x,to.p.y+1.8,to.p.z);rope.needsUpdate=true;swingVine.visible=true;}else if(to.mode!=='climb'&&to.mode!=='descent')patch.position.y=groundHeight(patch.position.x,patch.position.z);patch.rotation.y=Math.atan2(to.p.x-from.p.x,to.p.z-from.p.z);patch.rotation.z=branch?Math.sin(Math.PI*progress)*.2:0;playClip(branch?'swing':to.mode==='climb'||to.mode==='descent'?'hang':action==='run'?'run':'walk');}
+  const from=j.points[index],to=j.points[index+1];if(to){const progress=j.lengths[index]?remaining/j.lengths[index]:0,branch=to.mode==='branch';patch.position.lerpVectors(from.p,to.p,progress);if(branch){const dx=to.p.x-from.p.x,dz=to.p.z-from.p.z,horizontal=Math.hypot(dx,dz);if(horizontal>.1){let nx=-dz/horizontal,nz=dx/horizontal;if(Math.abs(nx)>.1&&nx<0){nx=-nx;nz=-nz;}const arc=Math.sin(Math.PI*progress)*2;patch.position.x+=nx*arc;patch.position.z+=nz*arc;}patch.position.y-=Math.sin(Math.PI*progress)*Math.min(.8,j.lengths[index]*.15);const rope=vineGeometry.attributes.position;rope.setXYZ(0,patch.position.x,patch.position.y+1.8,patch.position.z);rope.setXYZ(1,to.p.x,to.p.y+1.8,to.p.z);rope.needsUpdate=true;swingVine.visible=true;}else if(to.mode!=='climb'&&to.mode!=='descent')patch.position.y=groundHeight(patch.position.x,patch.position.z);face(Math.atan2(to.p.x-from.p.x,to.p.z-from.p.z),dt);patch.rotation.z=branch?Math.sin(Math.PI*progress)*.2:0;const pace=travel?j.total/Math.max(1,(Date.parse(until)-Date.parse(since))/1000):1;playClip(branch?'swing':to.mode==='climb'||to.mode==='descent'?'hang':pace>1.9?'run':'walk');}
 } else {
   journey=null;
-  const exploring=action==='explore';
-  const wander=exploring?[dest[0]+Math.sin(t*.25)*1.2,dest[1]+(place==='cave'?1.2+Math.cos(t*.25)*.6:Math.cos(t*.25)*1.2)]:dest;
-  const dx=wander[0]-patch.position.x,dz=wander[1]-patch.position.z,dist=Math.hypot(dx,dz);
-  if(dist>.15){let step=Math.min(dist,dt*(exploring?.65:1.7));patch.position.x+=dx/dist*step;patch.position.z+=dz/dist*step;patch.rotation.y=Math.atan2(dx,dz);}
-  patch.position.y=action==='swim'?ISLAND.pondY-.35:action==='climb'&&dist<=.5?groundHeight(patch.position.x,patch.position.z)+1.5:action==='sleep'&&place==='hammock'?groundHeight(0,0)+1.5:groundHeight(patch.position.x,patch.position.z);
+  const names={idle:'idle',think:'idle',phone:'idle',write:'idle',look:'look-around',wave:'look-around',walk:'walk',run:'run',climb:'hang',swim:'swim',fish:'sit',sit:'sit',sleep:'sleep',eat:'idle',explore:'look-around','watch-sky':'sit'};
+  // Exploring and similar activities are a shared roam: he picks spots, walks there, stops and looks around.
+  const roams=!!ROAM[action]?.radius[place],roamKey=`${action}|${place}|${since||''}`;
+  if(roams&&roam?.key!==roamKey)roam={key:roamKey,plan:roamPlan(action,place,seedFrom(roamKey))};
+  if(!roams)roam=null;
+  const elapsed=(Date.now()+serverOffset-Date.parse(since))/1000,pose=roam?.plan.at(Number.isFinite(elapsed)?Math.max(0,elapsed):t%9);
+  const goal=pose?[pose.x,pose.z]:dest,dx=goal[0]-patch.position.x,dz=goal[1]-patch.position.z,dist=Math.hypot(dx,dz);
+  // Catch up gently when he is out of place, and follow the roam exactly once he is on it.
+  if(pose&&dist<1.5){patch.position.x=pose.x;patch.position.z=pose.z;if(pose.heading!==null)face(pose.heading,dt);}
+  else if(dist>.15){let step=Math.min(dist,dt*1.7);patch.position.x+=dx/dist*step;patch.position.z+=dz/dist*step;face(Math.atan2(dx,dz),dt);}
+  const arriving=pose?dist>=1.5:dist>.5;
+  patch.position.y=action==='swim'?ISLAND.pondY-.35:action==='climb'&&!arriving?groundHeight(patch.position.x,patch.position.z)+1.5:action==='sleep'&&place==='hammock'&&!arriving?groundHeight(0,0)+1.5:groundHeight(patch.position.x,patch.position.z);
   patch.rotation.z=0;
-  const names={idle:'idle',think:'idle',phone:'idle',write:'idle',look:'look-around',wave:'look-around',walk:'walk',run:'run',climb:'hang',swim:'swim',fish:'sit',sit:'sit',sleep:'sleep',eat:'idle',explore:Math.sin(t*.45)>.55?'look-around':'walk','watch-sky':'sit'};
-  if(action==='fish')patch.rotation.y=Math.atan2(ISLAND.pondX-patch.position.x,ISLAND.pondZ-patch.position.z);
-  playClip(action==='climb'&&dist>.5?'walk':names[action]||'idle',action==='sit'||action==='fish'||action==='watch-sky');
+  if(action==='fish'&&!arriving)face(Math.atan2(ISLAND.pondX-patch.position.x,ISLAND.pondZ-patch.position.z),dt);
+  const clip=arriving&&action!=='swim'?'walk':pose?pose.clip:names[action]||'idle';
+  playClip(clip,clip==='sit');
 }
 if(dt>0)patchVelocity.subVectors(patch.position,previousPatchPosition).multiplyScalar(1/dt).clampLength(0,5);
+// Match the stride to his ground speed so his feet neither slide nor race.
+if(currentAction&&strideSpeed[currentName]&&dt>0){const speed=Math.hypot(patchVelocity.x,patchVelocity.z);currentAction.timeScale=speed>.05?THREE.MathUtils.clamp(speed/strideSpeed[currentName],.45,2.2):1;}
 if(mixer) mixer.update(dt);
 if(rightHandBone&&(fishingRod.visible||swingVine.visible)){rightHandBone.getWorldPosition(handWorld);if(swingVine.visible){const rope=vineGeometry.attributes.position;rope.setXYZ(0,handWorld.x,handWorld.y,handWorld.z);rope.needsUpdate=true;}if(fishingRod.visible)fishingRod.position.copy(patch.worldToLocal(handWorld.clone()));}
 // Tip his head back from the held sitting pose. Set it absolutely each frame so the tilt never accumulates.

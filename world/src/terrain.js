@@ -12,7 +12,8 @@ const routeControls = {
  meadow:[[0,0],[-45,15],[-110,35],[-176,48]],
  cave:[[0,0],[-12,-55],[-28,-130],[-45,-195],[-58,-244]],
 };
-// Subdivide and bend each trail gently, keeping the canonical endpoints unchanged.
+// Patch's remembered routes from camp. Nothing is drawn or cleared along them; the island has no trails.
+// Subdivide and bend each route gently, keeping the canonical endpoints unchanged.
 function naturalRoute(route,seed){const out=[route[0]];for(let k=1;k<route.length;k++){const a=route[k-1],b=route[k],dx=b[0]-a[0],dz=b[1]-a[1],len=Math.hypot(dx,dz),bend=(Math.sin(seed*13+k*8)*.5+.5)*7-3.5;for(let i=1;i<=5;i++){const t=i/5,offset=Math.sin(Math.PI*t)*bend;out.push([a[0]+dx*t-dz/len*offset,a[1]+dz*t+dx/len*offset]);}}return out;}
 export const paths=Object.fromEntries(Object.entries(routeControls).map(([key,route],i)=>[key,naturalRoute(route,i+1)]));
 export function coastRadius(a) {
@@ -52,6 +53,3 @@ export function groundHeight(x,z){
  return terrainElevation(x,z);
 }
 export const walkShoreLimit=.985;
-export function distanceToSegment(x,z,a,b){const dx=b[0]-a[0],dz=b[1]-a[1],denom=dx*dx+dz*dz;const t=denom?Math.max(0,Math.min(1,((x-a[0])*dx+(z-a[1])*dz)/denom)):0;return Math.hypot(x-a[0]-t*dx,z-a[1]-t*dz);}
-const segments=Object.values(paths).flatMap(route=>route.slice(1).map((p,i)=>[route[i],p]));
-export function pathDistance(x,z){let d=Infinity;for(const [a,b] of segments)d=Math.min(d,distanceToSegment(x,z,a,b));return d;}
