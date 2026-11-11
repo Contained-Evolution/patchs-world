@@ -119,8 +119,9 @@ export function dryGround(x, z, swimming = false) {
 
 export function walkable(x, z, fromX, fromZ, solids = terrainSolids, swimming = false) {
   if (!dryGround(x, z, swimming) || solids.blocks(x, z, fromX, fromZ)) return false;
+  if (fromX === undefined || swimming) return true;
   const distance = Math.hypot(x - fromX, z - fromZ);
-  return !distance || swimming || Math.abs(groundHeight(x, z) - groundHeight(fromX, fromZ)) <= 1.1 * distance;
+  return !distance || Math.abs(groundHeight(x, z) - groundHeight(fromX, fromZ)) <= 1.1 * distance;
 }
 
 export function clearGroundLine(from, to, solids, swimming = false) {

@@ -111,9 +111,12 @@ function playClip(name, once = false) {
 function poseClip(name,time){playClip(name);if(currentName!==name||!currentAction)return;currentAction.timeScale=0;currentAction.time=Math.max(0,Math.min(time,clips[name].duration-1e-3));}
 let state = null, hasLiveState = false, demo = false, journey = null, serverOffset = 0, descent = null, wasAirborne = false, climbTime = 0, climb = null, ropeExit = null;
 let groundApproach = null, groundActivity = null, inFurniture = false, swimAccess = null, enteringPond = false;
+const GROUND_ARRIVAL_DISTANCE = .15;
+const SWIM_ARRIVAL_DISTANCE = .6;
 function approachGround(goal, dt) {
   const here = [patch.position.x, patch.position.z];
-  const repath = !groundApproach || Math.hypot(goal[0]-groundApproach.goal[0],goal[1]-groundApproach.goal[1])>1.5;
+  const change = groundApproach ? Math.hypot(goal[0]-groundApproach.goal[0],goal[1]-groundApproach.goal[1]) : Infinity;
+  const repath = change > 1.5 || (!groundApproach?.points.length && change > GROUND_ARRIVAL_DISTANCE);
   if(repath){
     const route=patchRoute(here,goal,0,[],solids);
     groundApproach={goal,points:route};
@@ -154,13 +157,17 @@ function followClimb(elapsed,dt){
   // Blend his feet across a clip change, matching the animation crossfade.
   if(p.clip!==climb.clip){climb.from=patch.position.clone();climb.blend=0;climb.clip=p.clip;}
   climb.blend=Math.min(1,climb.blend+dt/.2);
+  const climbPosition=new THREE.Vector3(p.x,p.y,p.z).lerpVectors(climb.from,p,climb.blend);
   if (wall && ['walk','ground'].includes(seg.mode) && patch.position.y<=groundHeight(patch.position.x,patch.position.z)+.3) {
     const here=[patch.position.x,patch.position.z];
-    if(!clearGroundLine(here,[p.x,p.z],solids)){
-      approachGround([p.x,p.z],dt);patch.position.y=groundHeight(patch.position.x,patch.position.z);return true;
+    if(!clearGroundLine(here,[climbPosition.x,climbPosition.z],solids)){
+      const moving=approachGround([p.x,p.z],dt);
+      patch.position.y=groundHeight(patch.position.x,patch.position.z);
+      playClip(moving?'walk':'idle');
+      return true;
     }
   }
-  patch.position.lerpVectors(climb.from,new THREE.Vector3(p.x,p.y,p.z),climb.blend);
+  patch.position.copy(climbPosition);
   face(p.heading,dt);patch.rotation.z=0;
   if(p.moving)playClip(p.clip);else poseClip(p.clip,p.time);
   wasAirborne=!wall&&seg.mode!=='rope-ground';return true;
@@ -250,16 +257,17 @@ const travel = !!(target && places[target] && ['walk','run','swing'].includes(ac
 const swinging = action === 'swing';
 const key = `${action}|${place}|${target||''}|${since||''}`;
 if(groundActivity!==key){groundActivity=key;groundApproach=null;inFurniture=false;swimAccess=null;enteringPond=false;}
-const leavingPond=!lap&&inPond(patch.position.x,patch.position.z);
+const leavingPond=!lap&&(swimAccess||inPond(patch.position.x,patch.position.z));
 if(leavingPond){
  const here=[patch.position.x,patch.position.z];
  swimAccess ??= pondAccess(here,solids);
  if(swimAccess){
   const {bank}=swimAccess,dx=bank[0]-here[0],dz=bank[1]-here[1],distance=Math.hypot(dx,dz);
-  const step=Math.min(1,dt*1.7/distance),next=[here[0]+dx*step,here[1]+dz*step];
+  const step=distance>0?Math.min(1,dt*1.7/distance):1,next=[here[0]+dx*step,here[1]+dz*step];
   if(clearGroundLine(here,next,solids,true)){
    patch.position.set(next[0],inPond(...next)?ISLAND.pondY-.35:groundHeight(...next),next[1]);
    face(Math.atan2(dx,dz),dt);
+   if(step===1)swimAccess=null;
   }
  }
  playClip('swim');
@@ -341,21 +349,21 @@ if(leavingPond){
   const inWater=inPond(...here);
   if(lap&&!inWater){
     swimAccess ??= pondAccess(places.pond,solids);
-    if(swimAccess&&Math.hypot(here[0]-swimAccess.bank[0],here[1]-swimAccess.bank[1])<.15)enteringPond=true;
+    if(swimAccess&&Math.hypot(here[0]-swimAccess.bank[0],here[1]-swimAccess.bank[1])<=GROUND_ARRIVAL_DISTANCE)enteringPond=true;
   }
   if(enteringPond&&Math.hypot(here[0]-swimAccess.water[0],here[1]-swimAccess.water[1])<.25)enteringPond=false;
   const swimming=!!lap&&(inWater||enteringPond);
   const goal=pose?[pose.x,pose.z]:lap?(enteringPond?swimAccess.water:swimming?dest:swimAccess?.bank||here):nearestWalkable(...dest,solids)||here;
   const dx=goal[0]-here[0],dz=goal[1]-here[1],dist=Math.hypot(dx,dz);
-  let arriving=!inFurniture&&dist>(lap?.6:.15),moving=false;
+  let arriving=!inFurniture&&dist>(swimming?SWIM_ARRIVAL_DISTANCE:GROUND_ARRIVAL_DISTANCE),moving=false;
   if(!descent&&pose&&dist<1.5&&clearGroundLine(here,goal,solids)){
     patch.position.x=pose.x;patch.position.z=pose.z;arriving=false;
     if(pose.heading!==null)face(pose.heading,dt);
   }else if(!descent&&swimming){
-    const fraction=dist<.6?1:Math.min(1,dt*1.7/dist);
+    const fraction=dist<SWIM_ARRIVAL_DISTANCE?1:Math.min(1,dt*1.7/dist);
     const next=[here[0]+dx*fraction,here[1]+dz*fraction];
     if(clearGroundLine(here,next,solids,true)){
-      patch.position.x=next[0];patch.position.z=next[1];face(dist<.6?lap.heading:Math.atan2(dx,dz),dt);
+      patch.position.x=next[0];patch.position.z=next[1];face(dist<SWIM_ARRIVAL_DISTANCE?lap.heading:Math.atan2(dx,dz),dt);
     }
   }else if(!descent&&arriving)moving=approachGround(goal,dt);
   if(pose?.basket&&!arriving&&!descent)foodPose=pose;

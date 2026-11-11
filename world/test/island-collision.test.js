@@ -36,7 +36,14 @@ test('rendered island solids block both walkers and all fruit trees have a reach
   assert.ok(access);
   assert.ok(clearGroundLine(access.bank,access.water,solids,true));
   assert.ok(!clearGroundLine(access.bank,access.water,solids));
-  assert.ok(pondAccess(access.water,solids));
+  for(let i=0;i<32;i++){
+    const angle=i*Math.PI/16;
+    const lap=[ISLAND.pondX+Math.cos(angle)*8,ISLAND.pondZ+Math.sin(angle)*5.6];
+    const exit=pondAccess(lap,solids);
+    assert.ok(exit);
+    assert.ok(walkable(...exit.bank,undefined,undefined,solids));
+    assert.ok(clearGroundLine(lap,exit.bank,solids,true));
+  }
 
   for (const [from,start] of Object.entries(places)) {
     for (const [to,end] of Object.entries(places)) {
