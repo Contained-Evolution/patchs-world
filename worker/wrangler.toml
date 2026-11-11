@@ -17,3 +17,7 @@ class_name = "PatchWorld"
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["PatchWorld"]
+
+[[services]]
+binding = "AUTH_SERVICE"
+service = "ce-auth-candidate"

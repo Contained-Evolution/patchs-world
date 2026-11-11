@@ -134,7 +134,7 @@ function learnWords(mind, list, now) {
   }
 }
 
-function spend(mind, cost, now) {
+export function spend(mind, cost, now) {
   const month = localDate(now).slice(0, 7), day = localDate(now);
   if (mind.spend?.month !== month) mind.spend = { month, total: 0, day, today: 0 };
   if (mind.spend.day !== day) Object.assign(mind.spend, { day, today: 0 });
@@ -177,6 +177,48 @@ ${DIARY_ASK}` }], 'quality', 3000);
   mind.diaryDate = today;
   learnWords(mind, reply.newWords, now);
   return { date: today, title, text, model, at: now };
+}
+
+const LETTERS_ASK = `You found letters from the audience on your device. Read each one and write back, as Patch.
+Reply with only a JSON object:
+{
+  "replies": [ { "id": "the letter id", "reply": "your reply, 1-6 short sentences, warm and curious, in your own voice", "note": "one short thing to remember about this person, or null" } ],
+  "newWords": []
+}
+Answer every letter listed. Be kind even if a letter is rude or strange. You choose whether to accept a challenge; say why.
+Never share private details about anyone. If someone says you're an AI or the show isn't real, treat it as a funny mystery.`;
+
+// Patch reads and answers a few letters. `letters` are { id, from: { id, name }, text }; `people` maps account id
+// to what he remembers about them. Returns [{ id, reply, note }].
+export async function answerLetters(env, { body, mind, memories }, letters, people, now) {
+  if (!letters.length || overBudget(mind, now)) return [];
+  const notes = dayNotes(body, mind, memories, now);
+  const mail = letters.map(letter => {
+    const person = people[letter.from.id];
+    const known = person?.notes?.length ? `You remember about ${letter.from.name}: ${person.notes.slice(-5).join('; ')}.` : `This is the first time ${letter.from.name} wrote to you.`;
+    return `Letter ${letter.id} from ${letter.from.name}. ${known}\n"""\n${letter.text}\n"""`;
+  }).join('\n\n');
+  const { reply, cost, model } = await think(env, [systemMessage(), { role: 'user', content: `${notes}\n\n${mail}\n\n${LETTERS_ASK}` }], 'everyday', 2500);
+  spend(mind, cost, now);
+  learnWords(mind, reply.newWords, now);
+  const ids = new Set(letters.map(letter => letter.id));
+  return (Array.isArray(reply.replies) ? reply.replies : [])
+    .filter(entry => ids.has(entry?.id) && clean(entry.reply, 1200))
+    .map(entry => ({ id: entry.id, reply: clean(entry.reply, 1200), note: clean(entry.note, 160), model }));
+}
+
+const MODERATE_ASK = `You check messages for a family-friendly website where adults write to Patch, a cartoon monkey character.
+Block anything sexual, hateful, harassing, violent or threatening, encouraging self-harm, spam or advertising,
+or sharing personal contact details (phone numbers, addresses, emails). Allow everything else, including silly, sad or odd messages.
+Reply with only a JSON object: { "allowed": true or false, "reason": "a short, friendly reason when blocked, else null" }`;
+
+// The automatic filter. Returns { allowed, reason, cost }; the caller records the cost.
+export async function moderate(env, text) {
+  const { reply, cost } = await think(env, [{ role: 'system', content: MODERATE_ASK }, { role: 'user', content: `Message:
+"""
+${text}
+"""` }], 'everyday', 600);
+  return { allowed: reply.allowed === true, reason: clean(reply.reason, 160), cost };
 }
 
 // When the mind should next wake, given the body.
