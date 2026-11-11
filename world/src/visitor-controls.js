@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { MapControls } from 'three/addons/controls/MapControls.js';
 import { groundHeight, trees } from './world-state.js';
 import { forestCollision } from './forest.js';
+import { insideRock } from './climbing.js';
 import { shoreFraction, walkShoreLimit, places, ISLAND, pondFraction, TIDE_POOLS } from './terrain.js';
 
 // The swing trees and cave walls remain solid without blocking their routes.
@@ -10,7 +11,7 @@ const [caveX,caveZ]=places.cave;
 obstacles.push([caveX-7,caveZ-5,3],[caveX+7,caveZ-5,3],[caveX-8,caveZ-12,3],[caveX+8,caveZ-12,3],[caveX,caveZ-19,4]);
 function caveSolid(x,z){const dx=Math.abs(x-caveX),depth=caveZ-z;return depth>3&&depth<20&&((dx>5&&dx<8)||(depth>15&&dx<8));}
 export function walkable(x,z,fromX=x,fromZ=z) {
-  if (caveSolid(x,z)&&!caveSolid(fromX,fromZ)) return false;
+  if ((caveSolid(x,z)&&!caveSolid(fromX,fromZ))||(insideRock(x,z)&&!insideRock(fromX,fromZ))) return false;
   if (shoreFraction(x,z) > walkShoreLimit || pondFraction(x,z)<.94 || TIDE_POOLS.some(([px,pz,rx,rz])=>Math.hypot((x-px)/rx,(z-pz)/rz)<.72) || forestCollision(x,z,fromX,fromZ)) return false;
   const d=Math.hypot(x-fromX,z-fromZ);
   if (d && Math.abs(groundHeight(x,z)-groundHeight(fromX,fromZ))/d > 1.1) return false;

@@ -7,8 +7,11 @@ import { setupCommunity } from './community.js';
 import { ISLAND } from './terrain.js';
 import { travelFraction } from './travel-progress.js';
 import { adaptiveQuality } from './render-quality.js';
-import { places, groundHeight, walkRoute, swingLoop, traversalLoop, holdFor, statusText, isLocalPreview, safePatch } from './world-state.js';
-import { patchRoute, roamPlan, ROAM, seedFrom } from './patch-motion.js';
+import { places, groundHeight, walkRoute, swingLoop, traversalLoop, holdFor, trees, statusText, isLocalPreview, safePatch } from './world-state.js';
+import { patchRoute, roamPlan, ROAM, seedFrom, rng } from './patch-motion.js';
+import { CLIPS } from './patch-clips.js';
+import { CLIMB_WALLS, wallHold, holdLine, climbPlan, placement, approachVia } from './climbing.js';
+import { setupAnimationViewer } from './animation-viewer.js';
 import { makeTransfer } from './traversal.js';
 
 const $ = s => document.querySelector(s);
@@ -18,6 +21,10 @@ for(const [label,id] of Object.entries({grove:'banana-grove',trees:'tall-trees',
 $('#open-map').onclick = () => { controls.pause(); dialog.showModal(); };
 $('#close-map').onclick = () => dialog.close();
 setupCommunity(dialog);
+// Chris's account sees an Animations button in the menu that opens Patch's clip locker.
+const animations=setupAnimationViewer();
+$('#open-animations').onclick=()=>{dialog.close();controls.pause();animations.open();};
+fetch('/patch/api/me',{credentials:'same-origin',cache:'no-store'}).then(r=>r.ok?r.json():null).then(me=>{if(me?.user?.admin||isLocalPreview(location.hostname))$('#open-animations').hidden=false;}).catch(()=>{if(isLocalPreview(location.hostname))$('#open-animations').hidden=false;});
 let renderer;
 try { renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' }); } catch { $('#error').hidden = false; throw new Error('WebGL unavailable'); }
 const basePixelRatio=Math.min(devicePixelRatio,1.5);renderer.setPixelRatio(basePixelRatio);
@@ -65,12 +72,43 @@ new GLTFLoader().load(new URL('./assets/patch.glb', document.baseURI).href, gltf
 function playClip(name, once = false) {
   if (!mixer || !clips[name] || currentName === name) return;
   const next = mixer.clipAction(clips[name]);
-  next.reset(); next.enabled = true; next.setLoop(once ? THREE.LoopOnce : THREE.LoopRepeat, once ? 1 : Infinity);
+  next.reset(); next.enabled = true; next.timeScale = 1; next.setLoop(once ? THREE.LoopOnce : THREE.LoopRepeat, once ? 1 : Infinity);
   next.clampWhenFinished = once;
   if (currentAction) currentAction.fadeOut(.2);
   next.fadeIn(.2).play(); currentAction = next; currentName = name;
 }
-let state = null, hasLiveState = false, demo = false, journey = null, serverOffset = 0, descent = null, wasAirborne = false, climbTime = 0;
+// Clips that follow a shared plan are posed at the plan's time, so every visitor sees the same frame.
+function poseClip(name,time){playClip(name);if(currentName!==name||!currentAction)return;currentAction.timeScale=0;currentAction.time=Math.min(time,clips[name].duration-1e-3);}
+let state = null, hasLiveState = false, demo = false, journey = null, serverOffset = 0, descent = null, wasAirborne = false, climbTime = 0, climb = null;
+// He swims slow laps of the pond, stopping now and then to tread water.
+function swimAt(seconds){const lap=Math.max(0,seconds)||0,swum=Math.floor(lap/60)*40+Math.min(lap%60,40),a=swum*.034;return {x:ISLAND.pondX+Math.cos(a)*8,z:ISLAND.pondZ+Math.sin(a)*5.6,heading:Math.atan2(-8*Math.sin(a),5.6*Math.cos(a)),stroke:lap%60<40};}
+// Climbs follow a seeded plan. At the lookout he braces on the rock's flat face;
+// in the tall trees he free-hangs from a branch or holds a rope.
+function startClimb(place,key,since,until){
+  const seed=seedFrom(key),random=rng(seed),duration=Math.max(60,(Date.parse(until)-Date.parse(since))/1000||600);
+  if(place==='lookout'){const line=wallHold(CLIMB_WALLS[0]),plan=climbPlan(line,random,{duration,fromGround:true});return {key,line,plan,start:line.stand(plan.segments[0].s),joined:false};}
+  // A rope is held facing its tree.
+  const hold=holdFor(seed%3===0?1:0),[gx,,gz]=hold.grip,[tx,tz]=trees[hold.index];
+  const line=holdLine(hold,Math.atan2(tx-gx,tz-gz)),plan=climbPlan(line,random,{duration,fromGround:false});
+  return {key,line,plan,start:[gx,gz],joined:true};
+}
+// Returns false while the generic code still has him walking to the tree and pulling himself up.
+function followClimb(elapsed,dt){
+  const seg=climb.plan.at(Math.max(0,elapsed)),p=placement(climb.line,seg),wall=climb.line.kind==='wall';
+  if(!wall&&climbTime<4)return false;
+  if(!climb.joined){
+    // He joins the shared climb from the ground, walking round the rock if it is in his way.
+    const ground=seg.mode==='ground'||seg.mode==='walk',spot=ground?[p.x,p.z]:climb.line.stand(seg.s),here=[patch.position.x,patch.position.z];
+    if(ground&&Math.hypot(spot[0]-here[0],spot[1]-here[1])<.3)climb.joined=true;
+    else{const next=approachVia(here,spot),dx=next[0]-here[0],dz=next[1]-here[1],dist=Math.hypot(dx,dz);if(dist>.05){const step=Math.min(dist,dt*1.7);patch.position.x+=dx/dist*step;patch.position.z+=dz/dist*step;face(Math.atan2(dx,dz),dt);}else face(climb.line.heading,dt);patch.position.y=groundHeight(patch.position.x,patch.position.z);patch.rotation.z=0;playClip(dist>.05?'walk':'idle');return true;}
+  }
+  // Blend his feet across a clip change, matching the animation crossfade.
+  if(p.clip!==climb.clip){climb.from=patch.position.clone();climb.blend=0;climb.clip=p.clip;}
+  climb.blend=Math.min(1,climb.blend+dt/.2);patch.position.lerpVectors(climb.from,new THREE.Vector3(p.x,p.y,p.z),climb.blend);
+  face(p.heading,dt);patch.rotation.z=0;
+  if(p.moving)playClip(p.clip);else poseClip(p.clip,p.time);
+  wasAirborne=!wall;return true;
+}
 function renderCare(p) {
   const panel=$('#care'), list=$('#care-needs');
   if (!p.needs) { panel.hidden=true; return; }
@@ -119,7 +157,7 @@ const cloudMap=cloudTexture(),clouds=[];for(let i=0;i<10;i++){const m=new THREE.
 const rainGeo=new THREE.BufferGeometry(),drops=[];for(let i=0;i<500;i++)drops.push((Math.random()-.5)*50,Math.random()*35,(Math.random()-.5)*50);rainGeo.setAttribute('position',new THREE.Float32BufferAttribute(drops,3));const rain=new THREE.Points(rainGeo,new THREE.PointsMaterial({color:0xd6edf2,size:.12,transparent:true,opacity:.7}));scene.add(rain);
 let last=performance.now();patch.position.set(0,groundHeight(0,0),0);
 $('#find-patch').onclick=()=>{ if (state) controls.findPatch(patch.position,patchVelocity); };
-function frame(now){requestAnimationFrame(frame);updateQuality(now);const dt=Math.min((now-last)/1000,.05);last=now;let t=(now-start)/1000;
+function frame(now){requestAnimationFrame(frame);if(animations.isOpen()){last=now;return;}updateQuality(now);const dt=Math.min((now-last)/1000,.05);last=now;let t=(now-start)/1000;
 if (demo) { let n=Math.floor(t/9); state={patch:{...sampleState.patch,action:mockActions[n%mockActions.length],place:ids[Math.floor(n/2)%ids.length],target:['walk','run','swing'].includes(mockActions[n%mockActions.length]) ? ids[(Math.floor(n/2)+1)%ids.length] : null,since:String(n),says:null},clock:{dayFraction:(.38+t/240)%1,weather:['clear','cloudy','rain','storm'][Math.floor(t/60)%4]}}; }
 if (demo) renderCare(state.patch);
 controls.update(dt);
@@ -129,7 +167,10 @@ patch.visible=true;previousPatchPosition.copy(patch.position);
 const {action,place,target,says,since,until,speechUntil}=state.patch;
 $('#status').textContent = statusText(state.patch);
 scenery.resetRopes();let heldRope=null, heldGrip=null;fishingRod.visible=action==='fish'&&!target;
-const dest=action==='climb'&&place==='tall-trees'&&!target?[holdFor(0).grip[0],holdFor(0).grip[2]]:action==='sleep'&&place==='hammock'&&!target?[0,1]:action==='swim'&&place==='pond'&&!target?[ISLAND.pondX,ISLAND.pondZ]:places[target]||places[place];
+const climbKey=`${action}|${place}|${since||''}`;
+if(action==='climb'&&!target&&(place==='lookout'||place==='tall-trees')){if(climb?.key!==climbKey){climb=startClimb(place,climbKey,since,until);climbTime=0;}}else climb=null;
+const activityTime=(Date.now()+serverOffset-Date.parse(since))/1000,lap=action==='swim'&&place==='pond'&&!target?swimAt(activityTime):null;
+const dest=climb?climb.start:lap?[lap.x,lap.z]:action==='sleep'&&place==='hammock'&&!target?[0,1]:places[target]||places[place];
 const travel = !!(target && places[target] && ['walk','run','swing'].includes(action));
 const swinging = action === 'swing';
 const key = `${action}|${place}|${target||''}|${since||''}`;
@@ -184,19 +225,28 @@ if (travel || swinging) {
   if(roams&&roam?.key!==roamKey)roam={key:roamKey,plan:roamPlan(action,place,seedFrom(roamKey))};
   if(!roams)roam=null;
   const elapsed=(Date.now()+serverOffset-Date.parse(since))/1000,pose=roam?.plan.at(Number.isFinite(elapsed)?Math.max(0,elapsed):t%9);
+  if(!(climb&&!descent&&followClimb(Number.isFinite(elapsed)?elapsed:t,dt))){
   const goal=pose?[pose.x,pose.z]:dest,dx=goal[0]-patch.position.x,dz=goal[1]-patch.position.z,dist=Math.hypot(dx,dz);
   // Catch up gently when he is out of place, and follow the roam exactly once he is on it.
   if(pose&&dist<1.5){patch.position.x=pose.x;patch.position.z=pose.z;if(pose.heading!==null)face(pose.heading,dt);}
+  else if(lap&&dist<.6){patch.position.x=lap.x;patch.position.z=lap.z;face(lap.heading,dt);}
   else if(dist>.15&&!descent){let step=Math.min(dist,dt*1.7);patch.position.x+=dx/dist*step;patch.position.z+=dz/dist*step;face(Math.atan2(dx,dz),dt);}
-  const arriving=pose?dist>=1.5:dist>.5;
-  if(action==='climb'&&!arriving&&place==='tall-trees')climbTime=Math.min(4,climbTime+dt);
-  patch.position.y=action==='swim'?ISLAND.pondY-.35:action==='climb'&&!arriving&&place==='tall-trees'?THREE.MathUtils.lerp(groundHeight(patch.position.x,patch.position.z),holdFor(0).grip[1]-1.8,THREE.MathUtils.smoothstep(climbTime/4,0,1)):action==='sleep'&&place==='hammock'&&!arriving?groundHeight(0,0)+1.5:groundHeight(patch.position.x,patch.position.z);
+  const arriving=pose?dist>=1.5:lap?dist>=.6:dist>.5;
+  if(climb&&!arriving)climbTime=Math.min(4,climbTime+dt);
+  patch.position.y=action==='swim'?ISLAND.pondY-.35:climb&&!arriving?THREE.MathUtils.lerp(groundHeight(patch.position.x,patch.position.z),climb.line.point(0)[1]-1.8,THREE.MathUtils.smoothstep(climbTime/4,0,1)):action==='sleep'&&place==='hammock'&&!arriving?groundHeight(0,0)+1.5:groundHeight(patch.position.x,patch.position.z);
   patch.rotation.z=0;
   if(action==='fish'&&!arriving)face(Math.atan2(ISLAND.pondX-patch.position.x,ISLAND.pondZ-patch.position.z),dt);
   let clip=arriving&&action!=='swim'?'walk':pose?pose.clip:names[action]||'idle';
-  if(action==='climb'&&!arriving&&place==='tall-trees'){wasAirborne=true;if(climbTime>=4)heldGrip=holdFor(0).grip;else clip='swing-start';}
+  if(climb&&!arriving){wasAirborne=true;clip='swing-start';}
+  if(lap&&!arriving&&!lap.stroke)clip='tread';
   if(descent){descent.elapsed+=dt;const f=Math.min(1,descent.elapsed/2);patch.position.y=THREE.MathUtils.lerp(descent.start,descent.ground,f);clip='rope-to-ground';heldGrip=null;if(f===1)descent=null;}
-  playClip(clip,['sit','swing-start','rope-to-ground'].includes(clip));
+  // In the hammock he sleeps either on his back or on his side, rolling over now and then.
+  if(action==='sleep'&&place==='hammock'&&!arriving&&!descent){
+    const at=Number.isFinite(elapsed)?Math.max(0,elapsed):t,back=seedFrom(roamKey)%2===0;face(back?Math.PI/2:0,dt);
+    if(back){patch.position.y=groundHeight(0,0)+.9;poseClip('sleep-lay',at%CLIPS['sleep-lay'].duration);}
+    else{const still=15*CLIPS.sleep.duration,k=at%(still+CLIPS['sleep-roll'].duration);if(k<still)poseClip('sleep',k%CLIPS.sleep.duration);else poseClip('sleep-roll',k-still);}
+  } else playClip(clip,['sit','swing-start','rope-to-ground'].includes(clip));
+  }
 }
 if(dt>0)patchVelocity.subVectors(patch.position,previousPatchPosition).multiplyScalar(1/dt).clampLength(0,5);
 // Match the stride to his ground speed so his feet neither slide nor race.
@@ -209,6 +259,7 @@ if(rightHandBone&&heldGrip){
   patch.updateMatrixWorld(true);rightHandBone.getWorldPosition(handWorld);
   if(heldRope!==null)scenery.setRope(heldRope,[handWorld.x,handWorld.y,handWorld.z]);
 }
+if(climb?.line.kind==='rope'&&climbTime>=4){const [x,y,z]=climb.line.point(0);scenery.setRope(climb.line.index,[x,y-.5,z]);}
 if(rightHandBone&&fishingRod.visible){patch.updateMatrixWorld(true);rightHandBone.getWorldPosition(handWorld);fishingRod.position.copy(patch.worldToLocal(handWorld.clone()));}
 // Tip his head back from the held sitting pose. Set it absolutely each frame so the tilt never accumulates.
 if(action==='watch-sky' && headBone && currentName==='sit' && currentAction.time >= clips.sit.duration*.8){

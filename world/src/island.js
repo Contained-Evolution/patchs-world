@@ -4,6 +4,7 @@ import { ISLAND, places, coastRadius, shoreFraction, groundHeight, pondFraction,
 import { anchorFor, holdFor, ROPE_TREES } from './world-state.js';
 import { forest, isReserved } from './forest.js';
 import { createTerrainTiles } from './terrain-mesh.js';
+import { CLIMB_WALLS } from './climbing.js';
 const rand=n=>{const v=Math.sin(n*127.1+311.7)*43758.5453123;return v-Math.floor(v);};
 function surfaceTexture(base, strokes, seed=1){
  const c=document.createElement('canvas');c.width=c.height=512;const g=c.getContext('2d');g.fillStyle=base;g.fillRect(0,0,512,512);
@@ -112,6 +113,8 @@ vec3 detail=texture2D(grassDetail,islandGround*.18).rgb;float inland=1.0-smooths
  const lanternY=groundHeight(cx-3,cz-6)+3;beam(wood,[cx-6,lanternY+.3,cz-6],[cx-3,lanternY+.3,cz-6],.07,.05);beam(rope,[cx-3,lanternY+.3,cz-6],[cx-3,lanternY,cz-6],.025);const lantern=add(new THREE.SphereGeometry(.22,8,6),new THREE.MeshBasicMaterial({color:0xffd68b}),cx-3,lanternY,cz-6);
  // Lookout rocks and beach driftwood are positioned away from their routes.
  for(let i=0;i<10;i++){let a=i*6.28/10,x=places.lookout[0]+Math.cos(a)*10,z=places.lookout[1]+Math.sin(a)*9;stone(x,z,1.5,1,1.2);}
+ // Climbing rocks keep their front exactly flat for Patch's braced feet; only the sides, back and top are rough.
+ for(const w of CLIMB_WALLS){const height=w.top-w.bottom,geo=new THREE.BoxGeometry(w.width,height,w.depth,14,8,6),p=geo.attributes.position;for(let i=0;i<p.count;i++){const x=p.getX(i),y=p.getY(i),z=p.getZ(i),behind=Math.max(0,Math.min(1,(w.depth/2-z)/.35)),bump=(Math.sin(x*3.1+y*2.3)*Math.cos(z*4.7-x)*.12+Math.sin(y*5.3+z*2.9)*.05)*behind;p.setXYZ(i,x*(1+bump*.25),y+(y>height/2-.01?bump*.6-.12*behind:0),z+bump);}geo.computeVertexNormals();const face=add(geo,rock,w.x-w.normal[0]*w.depth/2,w.bottom+height/2,w.z-w.normal[1]*w.depth/2);face.rotation.y=Math.atan2(w.normal[0],w.normal[1]);const lip=add(new THREE.BoxGeometry(w.width-.5,.09,.14),rock,w.x+w.normal[0]*.07,w.ledges[0]-.045,w.z+w.normal[1]*.07);lip.rotation.y=face.rotation.y;}
  for(const [x,z] of [[278,32],[268,41],[285,9]]){const y=groundHeight(x,z);beam(wood,[x-2.2,y+.2,z],[x+2,y+.4,z+1],.24,.14);}
  // Coastal outcrops sit beyond the walking boundary and break up the sand rim.
  const coastal=[];for(let i=0;i<62;i++){const band=i<35?-.72:-2.05,a=band+(rand(i+72000)-.5)*.75,q=1.015+rand(i+73000)*.055,r=coastRadius(a)*q,x=Math.cos(a)*ISLAND.radiusX*r,z=Math.sin(a)*ISLAND.radiusZ*r;coastal.push({x,z,s:2+rand(i+74000)*4,a});}

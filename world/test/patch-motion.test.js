@@ -4,6 +4,7 @@ import {patchRoute, roamPlan, ROAM, trunkClearance, seedFrom} from '../src/patch
 import {walkable} from '../src/visitor-controls.js';
 import {places} from '../src/terrain.js';
 import {walkRoute} from '../src/world-state.js';
+import {forest} from '../src/forest.js';
 
 test('his routes between places go around trunks and stay on dry land',()=>{
  const ids=Object.keys(places);
@@ -32,4 +33,12 @@ test('a roam can be joined late without replaying from the start',()=>{
  const seed=seedFrom('explore|cave|x'),early=roamPlan('explore','cave',seed),late=roamPlan('explore','cave',seed);
  for(let s=0;s<1200;s+=5)early.at(s);
  assert.deepEqual(late.at(1195),early.at(1195));
+});
+
+test('eating in the grove picks fruit facing a banana tree within reach',()=>{
+  const plan=roamPlan('eat','banana-grove',seedFrom('eat|banana-grove|x'));let picks=0;
+  for(let t=0;t<900;t+=.5){const pose=plan.at(t);if(pose.clip!=='pick-fruit')continue;picks++;
+    const tree=forest.filter(f=>f.grove).reduce((a,b)=>Math.hypot(a.x-pose.x,a.z-pose.z)<Math.hypot(b.x-pose.x,b.z-pose.z)?a:b);
+    assert.ok(Math.hypot(tree.x-pose.x,tree.z-pose.z)<1.3);assert.ok(Math.abs(Math.atan2(Math.sin(pose.heading-Math.atan2(tree.x-pose.x,tree.z-pose.z)),Math.cos(pose.heading-Math.atan2(tree.x-pose.x,tree.z-pose.z))))<.05);}
+  assert.ok(picks>0);
 });

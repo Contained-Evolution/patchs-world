@@ -29,6 +29,7 @@ export const ACTIVITIES = [
   { action: 'swim', place: 'pond', minutes: [10, 25], effects: { fun: 0.015, comfort: 0.005, energy: -0.0015 }, appeal: 0.5 },
   { action: 'swing', place: 'tall-trees', minutes: [10, 25], effects: { fun: 0.018, energy: -0.0015 }, appeal: 0.3 },
   { action: 'climb', place: 'tall-trees', minutes: [8, 18], effects: { fun: 0.012, energy: -0.0015 }, appeal: 0.3 },
+  { action: 'climb', place: 'lookout', minutes: [8, 16], effects: { fun: 0.012, energy: -0.002 }, appeal: 0.3 },
   { action: 'sit', place: 'beach', minutes: [10, 25], effects: { comfort: 0.01, fun: 0.003 }, appeal: 0.45 },
   { action: 'explore', place: 'tall-trees', minutes: [15, 35], effects: { fun: 0.016, energy: -0.002 }, appeal: 0.5 },
   { action: 'explore', place: 'cave', minutes: [10, 25], effects: { fun: 0.018, comfort: -0.003, energy: -0.002 }, appeal: 0.5 },
