@@ -119,3 +119,6 @@ body:not(.walking) .touch-controls { display:none; }
 @media(max-width:650px) { .camera-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 #map nav a{display:inline-flex;align-items:center;min-height:44px;color:inherit;text-underline-offset:4px;margin-right:14px}
 #letter-kind{display:block;font:inherit;max-width:100%;min-height:44px;margin:6px 0 14px;padding:6px 10px;color:#263d35;background:#fff3d6;border:1px solid #948065;border-radius:8px}
+.header-actions{display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap;justify-content:flex-end}#install-app{border:1px solid #f0c47e;border-radius:50px;background:#f0c47e;color:#20382e;padding:13px 18px;box-shadow:0 3px 18px #153f3b45}
+.install-help{width:min(440px,92vw);text-align:center}.install-help h2{margin:4px 0 12px;font-size:26px}.install-help p{line-height:1.5;color:#e4f0dc}#install-steps{font-size:19px;color:#fff8e6}.install-help .primary{margin-top:8px;font-size:17px}
+@media(max-width:650px){#install-app{padding:10px;font-size:14px}.header-actions{flex-direction:column;align-items:flex-end;gap:6px}}

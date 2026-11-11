@@ -13,6 +13,7 @@ import { createIsland } from './island.js';
 import { setupCommunity } from './community.js';
 import { setupNotifications } from './notifications.js';
 import { registerApp } from './app.js';
+import { setupInstall } from './install.js';
 import { ISLAND } from './terrain.js';
 import { travelFraction } from './travel-progress.js';
 import { adaptiveQuality } from './render-quality.js';
@@ -32,6 +33,7 @@ $('#open-map').onclick = () => { controls.pause(); dialog.showModal(); };
 $('#close-map').onclick = () => dialog.close();
 const community=setupCommunity(dialog);
 setupNotifications(dialog,community,registerApp());
+setupInstall();
 // Chris's account sees an Animations button in the menu that opens Patch's clip locker.
 const animations=setupAnimationViewer();
 $('#open-animations').onclick=()=>{dialog.close();controls.pause();animations.open();};
