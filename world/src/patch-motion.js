@@ -40,38 +40,29 @@ export function patchRoute(from,to,seed,remembered=[from,to]){
 export const ROAM={
  explore:{radius:{'tall-trees':45,cave:9,'tide-pools':22},legs:[6,22],pauses:[2,9],run:.12},
  look:{radius:{lookout:9},legs:[3,8],pauses:[6,16],run:0},
- eat:{radius:{'banana-grove':10},legs:[2,6],pauses:[8,20],run:0,pick:true},
 };
 // On his tablet he wanders a few steps now and then, reading or writing as he goes. At the computer he sits.
 const TABLET=Object.fromEntries(Object.keys(places).filter(place=>place!=='computer').map(place=>[place,place==='pond'?4:6]));
 for(const action of ['research','write'])ROAM[action]={radius:TABLET,legs:[2,5],pauses:[12,30],run:0,device:true};
-const WALK_SPEED=1.05,TABLET_SPEED=.55,RUN_SPEED=2.8,PICK=192/24;
+const WALK_SPEED=1.05,TABLET_SPEED=.55,RUN_SPEED=2.8;
 // A roam is a list of legs: walk from one spot to the next, then stop and do something there.
 export function roamPlan(action,place,seed){
  const kind=ROAM[action],center=places[place],radius=kind.radius[place]||12,random=rng(seed),legs=[];
  let x=center[0],z=center[1],time=0;
  const span=([a,b])=>a+random()*(b-a);
- function rest(walkEnd,tree){const pause=span(kind.pauses),roll=random();
-  // Beside a banana tree he faces it and picks fruit for one or two reaches.
-  if(tree)return{end:walkEnd+PICK*(pause>14?2:1),clip:'pick-fruit',facing:Math.atan2(tree.x-tree.fromX,tree.z-tree.fromZ)};
+ function rest(walkEnd){const pause=span(kind.pauses),roll=random();
   if(kind.device)return{end:walkEnd+pause,clip:'texting'};
   return{end:walkEnd+pause,clip:action==='explore'&&roll<.08?'jump':roll<.15&&pause>7?'sit-ground':roll<.6?'look-around':'idle'};}
  legs.push({x0:x,z0:z,x1:x,z1:z,t0:0,t1:0,...rest(0),speed:0});time=legs[0].end;
  function addLeg(){
-  let goal=null,tree=null;
-  // When he is eating he walks up to a fruit tree, stopping an arm's length from its trunk.
-  if(kind.pick)for(let tries=0;tries<6&&!goal;tries++){
-   const near=treesNear(center[0],center[1]).filter(t=>t.grove&&Math.hypot(t.x-center[0],t.z-center[1])<radius*1.8),pick=near[Math.floor(random()*near.length)];
-   if(!pick)break;const away=Math.atan2(z-pick.z,x-pick.x)+(random()*2-1)*.8,gx=pick.x+Math.cos(away)*1.05,gz=pick.z+Math.sin(away)*1.05;
-   if(lineOpen(x,z,gx,gz,.7)){goal=[gx,gz];tree={x:pick.x,z:pick.z,fromX:gx,fromZ:gz};}
-  }
+  let goal=null;
   for(let tries=0;tries<10&&!goal;tries++){
    const away=Math.hypot(x-center[0],z-center[1]),home=Math.atan2(center[1]-z,center[0]-x),angle=away>radius*.6?home+(random()*2-1)*1.1:random()*Math.PI*2,distance=Math.min(span(kind.legs),radius*1.4);
    const gx=x+Math.cos(angle)*distance,gz=z+Math.sin(angle)*distance;
    if(lineOpen(x,z,gx,gz,.8))goal=[gx,gz];
   }
   const running=goal&&random()<kind.run,speed=running?RUN_SPEED:kind.device?TABLET_SPEED:WALK_SPEED,[gx,gz]=goal||[x,z],walk=Math.hypot(gx-x,gz-z)/speed;
-  legs.push({x0:x,z0:z,x1:gx,z1:gz,t0:time,t1:time+walk,speed:goal?speed:0,...rest(time+walk,tree)});
+  legs.push({x0:x,z0:z,x1:gx,z1:gz,t0:time,t1:time+walk,speed:goal?speed:0,...rest(time+walk)});
   x=gx;z=gz;time=legs.at(-1).end;
  }
  return{at(seconds){

@@ -6,6 +6,7 @@ import { CLIPS } from './patch-clips.js';
 
 export const FOOD_STORE = places['banana-grove'];
 const mix=(a,b,t)=>a+(b-a)*t;
+const lidAt=progress=>Math.min(1,Math.max(0,progress)*1.6);
 // Clear spokes keep every basket trip on dry ground and outside tree trunks.
 export function forageTrees(){
  const [x,z]=FOOD_STORE;
@@ -41,9 +42,9 @@ export function foragePlan(seed){
   still('open-lid',home,{basket:'ground',heading:0,closing:true,reverse:true});
  }
  return {at(seconds){
-  seconds=Math.max(0,seconds);while(endTime<=seconds)next();
+  seconds=Number.isFinite(seconds)?Math.max(0,seconds):0;while(endTime<=seconds)next();
   let lo=0,hi=segments.length-1;while(lo<hi){const mid=(lo+hi+1)>>1;if(segments[mid].t0<=seconds)lo=mid;else hi=mid-1;}
   const seg=segments[lo],progress=(seconds-seg.t0)/(seg.t1-seg.t0),time=seconds-seg.t0;
-  return {...seg,x:mix(seg.from[0],seg.to[0],progress),z:mix(seg.from[1],seg.to[1],progress),heading:seg.heading??Math.atan2(seg.to[0]-seg.from[0],seg.to[1]-seg.from[1]),progress,time:seg.reverse?CLIPS[seg.clip].duration-time:time,filled:seg.picking?progress>.72:seg.deposit?progress<.6:!!seg.filled,lid:seg.opening?Math.min(1,progress*1.6):seg.closing?Math.max(0,1-progress*1.6):seg.deposit?1:0};
+  return {...seg,x:mix(seg.from[0],seg.to[0],progress),z:mix(seg.from[1],seg.to[1],progress),heading:seg.heading??Math.atan2(seg.to[0]-seg.from[0],seg.to[1]-seg.from[1]),progress,time:seg.reverse?CLIPS[seg.clip].duration-time:time,filled:seg.picking?progress>.72:seg.deposit?progress<.6:!!seg.filled,lid:seg.opening?lidAt(progress):seg.closing?lidAt(1-progress):seg.deposit?1:0};
  }};
 }

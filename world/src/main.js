@@ -85,7 +85,8 @@ new GLTFLoader().load(new URL('./assets/patch.glb', document.baseURI).href, gltf
   }
 }, undefined, error => { console.error('Unable to load Patch', error); $('#error').hidden = false; });
 function playClip(name, once = false) {
-  if (!mixer || !clips[name] || currentName === name) return;
+  if (!mixer || !clips[name]) return;
+  if (currentName === name) { currentAction.timeScale=1; return; }
   const next = mixer.clipAction(clips[name]);
   next.reset(); next.enabled = true; next.timeScale = 1; next.setLoop(once ? THREE.LoopOnce : THREE.LoopRepeat, once ? 1 : Infinity);
   next.clampWhenFinished = once;
@@ -93,7 +94,7 @@ function playClip(name, once = false) {
   next.fadeIn(.2).play(); currentAction = next; currentName = name;
 }
 // Clips that follow a shared plan are posed at the plan's time, so every visitor sees the same frame.
-function poseClip(name,time){playClip(name);if(currentName!==name||!currentAction)return;currentAction.timeScale=0;currentAction.time=Math.min(time,clips[name].duration-1e-3);}
+function poseClip(name,time){playClip(name);if(currentName!==name||!currentAction)return;currentAction.timeScale=0;currentAction.time=Math.max(0,Math.min(time,clips[name].duration-1e-3));}
 let state = null, hasLiveState = false, demo = false, journey = null, serverOffset = 0, descent = null, wasAirborne = false, climbTime = 0, climb = null, ropeExit = null;
 // He swims slow laps of the pond, stopping now and then to tread water.
 function swimAt(seconds){const lap=Math.max(0,seconds)||0,swum=Math.floor(lap/60)*40+Math.min(lap%60,40),a=swum*.034;return {x:ISLAND.pondX+Math.cos(a)*8,z:ISLAND.pondZ+Math.sin(a)*5.6,heading:Math.atan2(-8*Math.sin(a),5.6*Math.cos(a)),stroke:lap%60<40};}
@@ -245,8 +246,8 @@ if(ropeExit){
   journey=null;
   const names={idle:'idle',think:'idle',computer:'typing',research:'texting',write:'texting',look:'look-around',wave:'look-around',walk:'walk',run:'run',climb:'hang',swim:'swim',fish:'sit-ground',sit:'sit-ground',sleep:'sleep',eat:'idle',explore:'look-around','watch-sky':'sit-ground'};
   // Exploring and similar activities are a shared roam: he picks spots, walks there, stops and looks around.
-  const roams=!!ROAM[action]?.radius[place],roamKey=`${action}|${place}|${since||''}`;
-  if(roams&&roam?.key!==roamKey)roam={key:roamKey,plan:action==='eat'&&place==='banana-grove'?foragePlan(seedFrom(roamKey)):roamPlan(action,place,seedFrom(roamKey))};
+  const foraging=action==='eat'&&place==='banana-grove',roams=foraging||!!ROAM[action]?.radius[place],roamKey=`${action}|${place}|${since||''}`;
+  if(roams&&roam?.key!==roamKey)roam={key:roamKey,plan:foraging?foragePlan(seedFrom(roamKey)):roamPlan(action,place,seedFrom(roamKey))};
   if(!roams)roam=null;
   const elapsed=(Date.now()+serverOffset-Date.parse(since))/1000,pose=roam?.plan.at(Number.isFinite(elapsed)?Math.max(0,elapsed):t%9);
   if(!(climb&&!descent&&followClimb(Number.isFinite(elapsed)?elapsed:t,dt))){
