@@ -4,6 +4,8 @@ import { places, paths, groundHeight, walkRoute, swingLoop, trees, anchorFor, sw
 
 test('status describes activity, place and travel', () => {
   assert.equal(statusText({action:'fish', place:'pond'}), 'Patch is fishing at the pond.');
+  assert.equal(statusText({action:'think', place:'hammock'}), 'Patch is thinking by his hammock.');
+  assert.equal(statusText({action:'sit', place:'hammock'}), 'Patch is sitting by his hammock.');
   assert.equal(statusText({action:'sleep', place:'hammock'}), 'Patch is asleep in his hammock.');
   assert.equal(statusText({action:'swing', place:'tall-trees', target:'banana-grove'}), 'Patch is on his way to the banana grove.');
 });
