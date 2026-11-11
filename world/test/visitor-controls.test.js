@@ -16,3 +16,9 @@ test('landmarks are reachable on the walking surface',()=>{
   for(const [name,[x,z]] of Object.entries(places)) assert.ok(queue.some(([a,b])=>Math.hypot(a*step-x,b*step-z)<1.5),`${name} is unreachable`);
   for(let i=0;i<32;i++){const a=i*Math.PI/16,r=coastRadius(a)*(walkShoreLimit+.002);assert.equal(walkable(45*r*Math.cos(a),36*r*Math.sin(a)),false);}
 });
+
+test('cave entry is open and its back blocks a visitor',()=>{
+  assert.equal(walkable(-6,-33,-6,-32.5),true);
+  assert.equal(walkable(-6,-34.1,-6,-33.8),false);
+  assert.equal(walkable(-8,-33,-7,-33),false);
+});
