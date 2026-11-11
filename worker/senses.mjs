@@ -40,6 +40,7 @@ export function dayPart(time) {
 const SURROUNDINGS = {
   hammock: { day: 'Your hammock sways between two trees. The rope shelves creak a little.', night: 'Your hammock is dark and cozy. Frogs are singing somewhere.', tags: ['home', 'sleeping'] },
   shelves: { day: 'Bananas hang on your rope shelves, high off the ground like Mom taught you.', night: 'The shelves are just shadows. Something small rustles below them.', tags: ['food', 'rope', 'banana'] },
+  computer: { day: 'Your coconut computer hums under its palm tree. The screen glows green and the coconut keyboard is warm from the sun.', night: 'The coconut computer screen glows softly in the dark camp. Moths dance around it.', tags: ['computer', 'letters', 'home'] },
   pond: { day: 'The pond is green and still. The little stream gurgles into it.', night: 'The pond is black and full of stars. The stream keeps talking.', tags: ['water', 'river', 'fishing'] },
   'banana-grove': { day: 'Big floppy banana leaves everywhere. It smells sweet.', night: 'The banana leaves swish in the dark.', tags: ['banana', 'food', 'trees'] },
   'tall-trees': { day: 'Tall, tall trees with vines between them. Birds call from the canopy.', night: 'The tall trees creak. You can only see the tops against the sky.', tags: ['trees', 'swinging', 'canopy'] },
@@ -60,7 +61,7 @@ export const SHELTERED = new Set(['cave']);
 // Things lying around that he could pick up, and which of them he can eat.
 const FINDS = {
   beach: ['shell', 'driftwood'], 'tide-pools': ['shell', 'pebble'], 'tall-trees': ['feather', 'vine'], 'banana-grove': ['banana'],
-  shelves: ['banana'], meadow: ['flower'], cave: ['smooth stone'], pond: ['smooth stone', 'reed'], lookout: ['pebble'], hammock: [],
+  shelves: ['banana'], meadow: ['flower'], cave: ['smooth stone'], pond: ['smooth stone', 'reed'], lookout: ['pebble'], hammock: [], computer: [],
 };
 export const FOOD = ['banana', 'coconut'];
 

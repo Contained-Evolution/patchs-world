@@ -11,7 +11,7 @@ const MAX_CATCH_UP = 2 * 24 * 60 * MINUTE;
 
 // Rough island layout for travel times. The world side places things where it likes.
 const SPOTS = {
-  hammock: [0, 0], shelves: [1, 0], 'banana-grove': [-6, 4], 'tall-trees': [4, -7], pond: [7, 5],
+  hammock: [0, 0], shelves: [1, 0], computer: [-0.6, -0.5], 'banana-grove': [-6, 4], 'tall-trees': [4, -7], pond: [7, 5],
   beach: [13, -1], 'tide-pools': [11, -10], lookout: [-8, -11], meadow: [-10, 1], cave: [-3, -15],
 };
 
@@ -36,7 +36,7 @@ export const ACTIVITIES = [
   { action: 'explore', place: 'tide-pools', minutes: [15, 30], effects: { fun: 0.016, hunger: 0.003 }, appeal: 0.5 },
   { action: 'watch-sky', place: 'meadow', minutes: [10, 25], effects: { comfort: 0.012, fun: 0.008, social: 0.003 }, appeal: 0.4 },
   { action: 'look', place: 'lookout', minutes: [10, 20], effects: { comfort: 0.006, fun: 0.006, social: 0.003 }, appeal: 0.5 },
-  { action: 'phone', place: 'hammock', minutes: [10, 30], effects: { social: 0.015, fun: 0.006, comfort: 0.003 }, appeal: 0.4 },
+  { action: 'computer', place: 'computer', minutes: [10, 30], effects: { social: 0.015, fun: 0.006, comfort: 0.003 }, appeal: 0.4 },
   { action: 'think', place: 'hammock', minutes: [5, 15], effects: { comfort: 0.01, social: 0.002 }, appeal: 0.2 },
   { action: 'sleep', place: 'hammock', minutes: [20, 45], effects: { energy: 0.012, comfort: 0.006 }, nap: true },
 ];
@@ -47,12 +47,13 @@ const EFFECTS = {
   eat: { hunger: 0.05, comfort: 0.004 }, fish: { fun: 0.008, hunger: 0.004, comfort: 0.003 },
   swim: { fun: 0.015, comfort: 0.005, energy: -0.0015 }, swing: { fun: 0.018, energy: -0.0015 }, climb: { fun: 0.012, energy: -0.0015 },
   explore: { fun: 0.016, energy: -0.002 }, 'watch-sky': { comfort: 0.012, fun: 0.008, social: 0.003 }, look: { comfort: 0.006, fun: 0.006, social: 0.003 },
-  phone: { social: 0.015, fun: 0.006, comfort: 0.003 }, write: { fun: 0.008, social: 0.006 }, wave: { social: 0.006, fun: 0.004 },
+  computer: { social: 0.015, fun: 0.006, comfort: 0.003 }, research: { fun: 0.012, social: 0.002 }, write: { fun: 0.008, social: 0.006 },
+  wave: { social: 0.006, fun: 0.004 },
   sleep: { energy: 0.008, comfort: 0.004 },
 };
 export const CHOICES = Object.keys(EFFECTS);
 export const WHERE = {
-  eat: ['banana-grove', 'shelves', 'beach'], fish: ['pond'], swim: ['pond'], swing: ['tall-trees'], climb: ['tall-trees', 'lookout'],
+  eat: ['banana-grove', 'shelves', 'beach'], computer: ['computer'], fish: ['pond'], swim: ['pond'], swing: ['tall-trees'], climb: ['tall-trees', 'lookout'],
   explore: ['tall-trees', 'cave', 'tide-pools', 'beach', 'meadow', 'lookout', 'banana-grove', 'pond'],
 };
 export const PLACES_KNOWN = Object.keys(SPOTS);
@@ -255,6 +256,12 @@ export function advance(state, now) {
   return changed;
 }
 
+// Whether he was somewhere, or doing one of these things, at any point since a moment. Travel doesn't count.
+export function didSince(state, since, { place = null, actions = null } = {}) {
+  const here = entry => !entry.target && (!place || entry.place === place) && (!actions || actions.includes(entry.action));
+  return here(state.activity) || (state.log || []).some(entry => entry.at >= since && here(entry));
+}
+
 function mood(needs) {
   const [lowest, value] = Object.entries(needs).sort((a, b) => a[1] - b[1])[0];
   if (value > 0.55) return 'curious';
@@ -263,8 +270,8 @@ function mood(needs) {
 
 const DAY_FRACTION = time => localMinutes(time) / 1440;
 
-// The public view, in the shape of sampleState in shared/state.js.
-export function view(state, now) {
+// The public view, in the shape of sampleState in shared/state.js. `mail` is how many letters wait at the coconut computer.
+export function view(state, now, mail = 0) {
   const { activity } = state;
   const elapsed = Math.max(0, (now - activity.start) / MINUTE);
   const needs = applyMinutes(state.needs, activity, elapsed);
@@ -280,6 +287,7 @@ export function view(state, now) {
       says: activity.says && Number.isFinite(activity.saysAt) && now >= activity.saysAt && now - activity.saysAt < 8000 ? activity.says : null,
       speechUntil: activity.says && Number.isFinite(activity.saysAt) && now >= activity.saysAt && now - activity.saysAt < 8000 ? new Date(activity.saysAt + 8000).toISOString() : null,
       carrying: carrying(state).map(thing => thing.item),
+      mail,
       since: new Date(activity.start).toISOString(),
       until: new Date(activity.end).toISOString(),
     },

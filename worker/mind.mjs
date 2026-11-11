@@ -1,11 +1,12 @@
 // Patch's mind. It wakes when what he chose is done (sooner when he's in a bad way, never while asleep),
 // thinks about his day, and decides what he does next. It can also say something, remember something or learn a word.
-// In the evening it writes his diary with the higher-quality model.
+// In the evening it writes his diary with the higher-quality model. On his tablet he looks things up on the web
+// and writes in his journal and memories whenever he chooses; letters are read and answered only at the coconut computer.
 
 import { CHILDHOOD, PERSONA, LIFE_STORY } from './persona.mjs';
 import { perceive, nextWeather } from './senses.mjs';
 import { lightUp, recordRecall, normalTags, strengthOf, tagsIn, conceptGraph } from './memory-graph.mjs';
-import { CHOICES, WHERE, PLACES_KNOWN, TIME_ZONE, localMinutes, choose, travelMinutes, carrying, take, leave } from './body.mjs';
+import { CHOICES, WHERE, PLACES_KNOWN, TIME_ZONE, localMinutes, choose, travelMinutes, carrying, take, leave, didSince } from './body.mjs';
 import { STARTING_CATEGORIES } from '../shared/memory.js';
 
 // Main model first, backup second. OpenRouter falls back within the same request.
@@ -26,7 +27,7 @@ function clockWords(time) {
   return new Intl.DateTimeFormat('en-US', { timeZone: TIME_ZONE, weekday: 'long', hour: 'numeric', minute: '2-digit' }).format(new Date(time));
 }
 
-export async function think(env, messages, tier, maxTokens) {
+export async function think(env, messages, tier, maxTokens, extra = {}) {
   const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -44,12 +45,15 @@ export async function think(env, messages, tier, maxTokens) {
       // Visitors' letters pass through here, so only hosts that don't keep or train on prompts.
       provider: { data_collection: 'deny' },
       usage: { include: true },
+      ...extra,
     }),
   });
   if (!response.ok) throw Error(`OpenRouter ${response.status}: ${(await response.text()).slice(0, 300)}`);
   const result = await response.json();
   const text = result.choices?.[0]?.message?.content || '';
-  return { reply: parseJson(text), cost: Number(result.usage?.cost) || 0, model: result.model };
+  const sources = (result.choices?.[0]?.message?.annotations || []).filter(note => note?.type === 'url_citation' && /^https:\/\//.test(note.url_citation?.url || ''))
+    .map(note => ({ title: clean(note.url_citation.title, 120) || new URL(note.url_citation.url).hostname, url: note.url_citation.url }));
+  return { reply: parseJson(text), cost: Number(result.usage?.cost) || 0, model: result.model, sources };
 }
 
 export function parseJson(text) {
@@ -79,13 +83,13 @@ export function feelings(needs) {
 
 // What around him, and inside him, can remind him of things.
 const PLACE_TAGS = {
-  hammock: ['home', 'sleeping', 'island'], shelves: ['food', 'rope', 'home'], pond: ['water', 'swimming', 'fishing', 'river'],
+  hammock: ['home', 'sleeping', 'island'], shelves: ['food', 'rope', 'home'], computer: ['computer', 'letters', 'home'], pond: ['water', 'swimming', 'fishing', 'river'],
   'banana-grove': ['banana', 'food', 'trees'], 'tall-trees': ['trees', 'swinging', 'climbing', 'canopy'], beach: ['ocean', 'coconut', 'island', 'big world'],
   lookout: ['hills', 'big world', 'sky'], 'tide-pools': ['water', 'exploring', 'fish'], meadow: ['fields', 'clouds', 'sky'], cave: ['cave', 'echo', 'exploring'],
 };
 const ACTION_TAGS = {
   eat: ['food'], fish: ['fishing'], swim: ['swimming'], swing: ['swinging'], climb: ['climbing'], sleep: ['sleeping'], explore: ['exploring', 'adventure'],
-  'watch-sky': ['sky', 'clouds', 'stars'], phone: ['device', 'letters'], think: ['wondering'], look: ['big world'], sit: ['quiet'],
+  'watch-sky': ['sky', 'clouds', 'stars'], computer: ['computer', 'letters', 'friends'], research: ['learning', 'internet', 'wondering'], write: ['writing', 'stories'], think: ['wondering'], look: ['big world'], sit: ['quiet'],
 };
 export function cuesFor(body, mind, now) {
   const { activity, needs = {} } = body, cues = [...perceive(activity.target || activity.place, now).tags, ...(PLACE_TAGS[activity.target || activity.place] || []), ...(ACTION_TAGS[activity.action] || []), ...(mind.noticed || [])];
@@ -106,7 +110,7 @@ export function comeToMind(mind, memories, cues, now, limit = 8) {
   return lit.memories.map(entry => entry.memory);
 }
 
-const PLACE_WORDS = { hammock: 'your hammock', shelves: 'your rope shelves', pond: 'the pond', 'banana-grove': 'the banana grove', 'tall-trees': 'the tall trees', beach: 'the beach', lookout: 'the lookout', 'tide-pools': 'the tide pools', meadow: 'the meadow', cave: 'the cave' };
+const PLACE_WORDS = { hammock: 'your hammock', shelves: 'your rope shelves', computer: 'your coconut computer', pond: 'the pond', 'banana-grove': 'the banana grove', 'tall-trees': 'the tall trees', beach: 'the beach', lookout: 'the lookout', 'tide-pools': 'the tide pools', meadow: 'the meadow', cave: 'the cave' };
 function thingsLine(body, now) {
   const { place, target } = body.activity, lines = [`You are carrying: ${carrying(body).map(thing => thing.item).join(', ') || 'nothing'}.`];
   if (!target) {
@@ -130,7 +134,18 @@ function choicesText(body) {
 Places, and minutes to get there from here: ${PLACES_KNOWN.map(place => `${place} ${place === here ? '(here)' : travelMinutes(here, place)}`).join(', ')}.`;
 }
 
-function dayNotes(body, mind, memories, now, recalled = []) {
+// His tablet and the coconut computer: what they can do, how much internet time is left, and whether mail is waiting.
+export const WEB_MINUTES = 30, SEARCH_MINUTES = 5;
+export function webLeft(mind, now) { return mind.web?.day === localDate(now) ? Math.max(0, WEB_MINUTES - mind.web.minutes) : WEB_MINUTES; }
+function devicesLine(mind, now, mail) {
+  const lines = [`Your tablet goes everywhere with you: "research" looks something up on the internet and "write" lets you write in your journal and your memories, anywhere. Your coconut computer at camp can research too, and it is the only place you can read and answer letters. You have ${webLeft(mind, now)} minutes of internet left today (each search takes ${SEARCH_MINUTES}).`];
+  if (mail) lines.push(`Ping! Your tablet says ${mail === 1 ? 'a letter is' : `${mail} letters are`} waiting for you at the coconut computer.`);
+  const last = (mind.searches || []).slice(-3).filter(entry => entry.learned).map(entry => `- "${entry.query}": ${entry.learned}`);
+  if (last.length) lines.push(`Things you looked up lately:\n${last.join('\n')}`);
+  return lines.join('\n');
+}
+
+function dayNotes(body, mind, memories, now, recalled = [], mail = 0) {
   const since = mind.lastWake || now - 60 * MINUTE;
   const log = (body.log || []).filter(entry => entry.at >= since && !entry.target)
     .map(entry => `${clockWords(entry.at)}: ${entry.action} at the ${entry.place}`);
@@ -145,6 +160,7 @@ function dayNotes(body, mind, memories, now, recalled = []) {
     thingsLine(body, now),
     mind.problem ? `Last time you chose something you couldn't do: ${mind.problem}` : '',
     `How you feel: ${feelings(body.needs)}.`,
+    devicesLine(mind, now, mail),
     log.length ? `What you did since you last stopped to think:\n${log.join('\n')}` : 'Nothing new since you last stopped to think.',
     cameToMind.length ? `What comes to mind right now:\n${cameToMind.join('\n')}` : '',
     newest.length ? `Your newest island memories:\n${newest.join('\n')}` : memories.length ? '' : 'You have no island memories yet. Everything is new.',
@@ -157,7 +173,7 @@ const THINK_ASK = `Stop and think for a moment, as Patch. You decide what you do
 {
   "thought": "what you're thinking right now, 1-3 short sentences, in your own voice",
   "says": "something short you say out loud, or null",
-  "plan": null to keep doing what you're doing, or { "do": "one thing you can do", "where": "a place", "minutes": how long, "how": "walk, run or swing (to the tall trees) to get there, or null", "why": "a few words" },
+  "plan": null to keep doing what you're doing, or { "do": "one thing you can do", "where": "a place", "minutes": how long, "how": "walk, run or swing (to the tall trees) to get there, or null", "why": "a few words", "search": "for research or computer: what you want to look up on the internet, or null", "about": "for write: what you want to write about in your journal or memories, or null" },
   "remember": null or { "category": "a memory category", "subcategory": "a smaller group", "title": "a few words", "text": "the memory in your words", "feeling": "one word", "strength": 1 to 5 (5 = you will never forget it), "tags": ["2-8 short words for the things, people, places and feelings in it"] },
   "take": [things from here to pick up and carry, up to 3; you can carry 6 things],
   "leave": [things you are carrying to put down here; they stay until you come back],
@@ -210,10 +226,10 @@ export function overBudget(mind, now) {
 }
 
 // One moment of thought. Mutates body, mind, memories and categories.
-export async function ponder(env, { body, mind, memories, categories }, now) {
+export async function ponder(env, { body, mind, memories, categories, mail = 0 }, now) {
   if (overBudget(mind, now)) { body.mindAlive = false; return; }
   const recalled = comeToMind(mind, memories, cuesFor(body, mind, now), now);
-  const notes = dayNotes(body, mind, memories, now, recalled);
+  const notes = dayNotes(body, mind, memories, now, recalled, mail);
   const { reply, cost, model } = await think(env, [systemMessage(), { role: 'user', content: `${notes}
 
 ${choicesText(body)}
@@ -228,6 +244,9 @@ ${THINK_ASK}` }], 'everyday', 1500);
   // His choice is what happens next. Waiting with nothing chosen means a little more thinking.
   const plan = reply.plan && typeof reply.plan === 'object' ? reply.plan : null;
   mind.problem = plan ? choose(body, plan, now) : null;
+  // What he wants to look up or write about waits until he's actually on his tablet or at the computer.
+  if (plan && !mind.problem && ['research', 'computer'].includes(plan.do) && clean(plan.search, 120)) mind.wantSearch = { query: clean(plan.search, 120), at: now };
+  if (plan && !mind.problem && plan.do === 'write') mind.wantWrite = { about: clean(plan.about, 160), at: now };
   if (plan && !mind.problem) mind.decisions = [...(mind.decisions || []), { at: now, do: plan.do, where: body.activity.target || body.activity.place, minutes: body.queued?.minutes || Math.round((body.activity.end - body.activity.start) / MINUTE), why: clean(plan.why, 160) }].slice(-40);
   else if (body.activity.waiting) body.activity.end = Math.max(body.activity.end, now + 15 * MINUTE);
   body.mindAlive = true;
@@ -258,10 +277,112 @@ ${DIARY_ASK}` }], 'quality', 3000);
   if (!title || !text) return null;
   mind.diaryDate = today;
   learnWords(mind, reply.newWords, now);
-  return { date: today, title, text, model, at: now };
+  return { date: today, title, text, model, at: now, kind: 'evening' };
 }
 
-const LETTERS_ASK = `You found letters from the audience on your device. Read each one and write back, as Patch.
+// Domains his searches never visit. Every search result also passes the same filter as visitors' letters.
+const NOT_FOR_KIDS = ['pornhub.com', 'xvideos.com', 'xnxx.com', 'xhamster.com', 'onlyfans.com', 'redtube.com', 'youporn.com', 'chaturbate.com', 'rule34.xxx', '4chan.org', 'reddit.com', 'liveleak.com', 'bestgore.com'];
+const FORGET_WANT = 3 * 60 * MINUTE;
+
+const RESEARCH_ASK = query => `You are on the internet, looking up: "${query}". Read what the search found and tell what you learned, as Patch.
+Only use what the web results say; if they are grown-up, scary or not right for a kid, say you closed that page and set "kidSafe" to false.
+Reply with only a JSON object:
+{
+  "learned": "what you learned, 1-4 short sentences in your own voice",
+  "kidSafe": true or false,
+  "remember": null or { "category": "a memory category", "subcategory": "a smaller group", "title": "a few words", "text": "the memory in your words", "feeling": "one word", "strength": 1 to 5, "tags": ["2-8 short words"] },
+  "newWords": []
+}`;
+
+// One web search, on his tablet or at the coconut computer, once he's actually using them. Returns the entry or null.
+export async function research(env, { body, mind, memories, categories }, now) {
+  const want = mind.wantSearch;
+  if (!want) return null;
+  if (!didSince(body, want.at, { actions: ['research', 'computer'] })) { if (now - want.at > FORGET_WANT) mind.wantSearch = null; return null; }
+  mind.wantSearch = null;
+  const where = didSince(body, want.at, { place: 'computer' }) ? 'computer' : 'tablet';
+  if (overBudget(mind, now)) return null;
+  if (webLeft(mind, now) < SEARCH_MINUTES) {
+    const entry = { at: now, query: want.query, where, learned: null, sources: [], note: 'Out of internet minutes for today.' };
+    mind.searches = [...(mind.searches || []), entry].slice(-30);
+    return entry;
+  }
+  const day = localDate(now);
+  mind.web = { day, minutes: (mind.web?.day === day ? mind.web.minutes : 0) + SEARCH_MINUTES };
+  const recalled = comeToMind(mind, memories, ['learning', 'internet', ...tagsIn(want.query, conceptGraph(allMemories(memories)))], now, 4);
+  const { reply, cost, model, sources } = await think(env, [systemMessage(), { role: 'user', content: `${dayNotes(body, mind, memories, now, recalled)}
+
+${RESEARCH_ASK(want.query)}` }], 'everyday', 1500,
+    { plugins: [{ id: 'web', engine: 'exa', max_results: 5, exclude_domains: NOT_FOR_KIDS }] });
+  spend(mind, cost, now);
+  let learned = clean(reply.learned, 600), shown = sources.slice(0, 5), note = null;
+  // Safe search: his own kid check while reading, then the site's filter over what he learned and where from.
+  const check = learned && reply.kidSafe !== false ? await moderate(env, [want.query, learned, ...shown.map(source => source.title)].join('\n')) : { allowed: false, cost: 0 };
+  spend(mind, check.cost, now);
+  if (!check.allowed) { learned = null; shown = []; note = 'Closed: not right for kids.'; }
+  const entry = { at: now, query: want.query, where, learned, sources: shown, note, model };
+  mind.searches = [...(mind.searches || []), entry].slice(-30);
+  if (learned) {
+    rememberMemory(memories, categories, reply.remember, now, ['internet', 'learning']);
+    learnWords(mind, reply.newWords, now);
+    mind.thoughts = [...(mind.thoughts || []), { at: now, thought: `I looked up "${want.query}". ${learned}`, says: null, model }].slice(-40);
+  }
+  return entry;
+}
+
+const JOURNAL_ASK = (about, mine) => `You have your tablet out to write${about ? ` about: ${about}` : ''}. This is your own journal and your own memory book, and you are in charge of it.
+You can write a journal entry, add new memories, and rewrite or move your island memories (not your childhood ones) when you see them differently now.
+Your island memories:
+${mine.length ? mine.map(memory => `- ${memory.id} [${memory.category}/${memory.subcategory}] ${memory.title}: ${memory.text}`).join('\n') : '(none yet)'}
+Reply with only a JSON object:
+{
+  "journal": null or { "title": "a short title", "text": "your journal entry, 40-200 words, in your own voice" },
+  "memories": [up to 2 new memories as { "category", "subcategory", "title", "text", "feeling", "strength": 1 to 5, "tags": [] }],
+  "revise": [up to 2 of your island memories to change, as { "id", and any of "title", "text", "category", "subcategory", "feeling", "strength", "tags" }],
+  "newWords": []
+}
+Write only about things that really happened or that you really think and feel. Existing categories: ${Object.keys(STARTING_CATEGORIES).join(', ')}, island, or make your own.`;
+
+// He writes in his journal and memories on his tablet. Returns the journal entry, or null.
+export async function writeJournal(env, { body, mind, memories, categories }, now) {
+  const want = mind.wantWrite;
+  if (!want) return null;
+  if (!didSince(body, want.at, { actions: ['write'] })) { if (now - want.at > FORGET_WANT) mind.wantWrite = null; return null; }
+  mind.wantWrite = null;
+  if (overBudget(mind, now)) return null;
+  const mine = memories.filter(memory => memory.source === 'island').slice(-30);
+  const recalled = comeToMind(mind, memories, ['writing', 'stories', ...(want.about ? tagsIn(want.about, conceptGraph(allMemories(memories))) : [])], now, 6);
+  const { reply, cost, model } = await think(env, [systemMessage(), { role: 'user', content: `${dayNotes(body, mind, memories, now, recalled)}
+
+${JOURNAL_ASK(want.about, mine)}` }], 'quality', 3000);
+  spend(mind, cost, now);
+  (Array.isArray(reply.memories) ? reply.memories : []).slice(0, 2).forEach((raw, i) => rememberMemory(memories, categories, raw, now + i, ['writing']));
+  for (const raw of (Array.isArray(reply.revise) ? reply.revise : []).slice(0, 2)) reviseMemory(memories, categories, raw, now);
+  learnWords(mind, reply.newWords, now);
+  const title = clean(reply.journal?.title, 80), text = clean(reply.journal?.text, 2000);
+  return title && text ? { date: localDate(now), title, text, model, at: now, kind: 'tablet' } : null;
+}
+
+// He can rewrite or move his own island memories; childhood memories stay as they are.
+function reviseMemory(memories, categories, raw, now) {
+  const memory = memories.find(item => item.id === raw?.id && item.source === 'island');
+  if (!memory) return null;
+  for (const [key, max] of [['title', 80], ['text', 600], ['feeling', 20]]) if (clean(raw[key], max)) memory[key] = clean(raw[key], max);
+  if (raw.strength !== undefined) memory.strength = strengthOf(raw.strength);
+  if (Array.isArray(raw.tags) && raw.tags.length) memory.tags = normalTags(raw.tags);
+  if (slug(raw.category)) {
+    memory.category = slug(raw.category);
+    memory.subcategory = clean(raw.subcategory, 40)?.toLowerCase() || memory.subcategory;
+    if (!STARTING_CATEGORIES[memory.category]) {
+      const custom = categories[memory.category] ||= { title: clean(raw.category, 40), subcategories: [] };
+      if (!custom.subcategories.includes(memory.subcategory)) custom.subcategories.push(memory.subcategory);
+    }
+  }
+  memory.revisedAt = now;
+  return memory;
+}
+
+const LETTERS_ASK = `You are sitting at your coconut computer with letters from the audience. Read each one and type back, as Patch.
 Reply with only a JSON object:
 {
   "replies": [ { "id": "the letter id", "reply": "your reply, 1-6 short sentences, warm and curious, in your own voice", "note": "one short thing to remember about this person, or null" } ],

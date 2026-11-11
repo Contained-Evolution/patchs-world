@@ -13,10 +13,11 @@ import { CLIPS } from './patch-clips.js';
 import { CLIMB_WALLS, wallHold, holdLine, climbPlan, placement, approachVia } from './climbing.js';
 import { setupAnimationViewer } from './animation-viewer.js';
 import { makeTransfer } from './traversal.js';
+import { seatFor, usesTablet, deskClip } from './furniture.js';
 
 const $ = s => document.querySelector(s);
 const dialog = $('#map');
-for(const [label,id] of Object.entries({grove:'banana-grove',trees:'tall-trees',pond:'pond',camp:'hammock',beach:'beach',lookout:'lookout',meadow:'meadow',cave:'cave',tide:'tide-pools'})){const [x,z]=places[id],node=document.querySelector('.map-label.'+label);node.style.left=`${50+x/6.4}%`;node.style.top=`${50+z/7.2}%`;node.style.right='auto';node.style.bottom='auto';}
+for(const [label,id] of Object.entries({grove:'banana-grove',trees:'tall-trees',pond:'pond',camp:'hammock',computer:'computer',beach:'beach',lookout:'lookout',meadow:'meadow',cave:'cave',tide:'tide-pools'})){const [x,z]=places[id],node=document.querySelector('.map-label.'+label);node.style.left=`${50+x/6.4}%`;node.style.top=`${50+z/7.2}%`;node.style.right='auto';node.style.bottom='auto';}
 
 $('#open-map').onclick = () => { controls.pause(); dialog.showModal(); };
 $('#close-map').onclick = () => dialog.close();
@@ -45,22 +46,28 @@ function ellipsoid(material,x,y,z,sx,sy,sz,parent=scene){const m=mesh(new THREE.
 const scenery=createIsland(scene);
 const patch = new THREE.Group(); scene.add(patch);const patchVelocity=new THREE.Vector3(),previousPatchPosition=new THREE.Vector3();
 const fishingRod=new THREE.Group(),rodDirection=new THREE.Vector3(.1,.65,2.2),rod=new THREE.Mesh(new THREE.CylinderGeometry(.025,.045,rodDirection.length(),6),new THREE.MeshStandardMaterial({color:0x6b4d31}));rod.position.copy(rodDirection).multiplyScalar(.5);rod.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),rodDirection.clone().normalize());fishingRod.add(rod);const lineGeo=new THREE.BufferGeometry().setFromPoints([rodDirection,new THREE.Vector3(.1,-.7,3.3)]);fishingRod.add(new THREE.Line(lineGeo,new THREE.LineBasicMaterial({color:0xd8d1b7})));patch.add(fishingRod);const handWorld=new THREE.Vector3();
+// His tablet: a thin bamboo-cased slate with a glowing screen, held in his hands when he reads or writes away from the computer.
+const tablet=new THREE.Group(),tabletCase=new THREE.Mesh(new THREE.BoxGeometry(.24,.17,.016),new THREE.MeshStandardMaterial({color:0xe9d39a,roughness:.7})),tabletScreen=new THREE.Mesh(new THREE.PlaneGeometry(.215,.145),new THREE.MeshBasicMaterial({color:0x9fe3d2,toneMapped:false}));tabletScreen.position.z=.009;tablet.add(tabletCase,tabletScreen);tablet.visible=false;scene.add(tablet);
+const otherHand=new THREE.Vector3(),headWorld=new THREE.Vector3();
+// When letters are waiting, his tablet pings him: a little envelope bobs over his head until he goes to the coconut computer.
+function pingTexture(){const c=document.createElement('canvas');c.width=c.height=128;const g=c.getContext('2d');g.fillStyle='#ffd27a';g.beginPath();g.arc(64,64,54,0,Math.PI*2);g.fill();g.strokeStyle='#5b3b22';g.lineWidth=6;g.stroke();g.fillStyle='#3b2a1a';g.font='64px sans-serif';g.textAlign='center';g.textBaseline='middle';g.fillText('✉',64,70);const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;return t;}
+const ping=new THREE.Sprite(new THREE.SpriteMaterial({map:pingTexture(),depthTest:false,transparent:true}));ping.scale.setScalar(.42);ping.visible=false;ping.renderOrder=5;scene.add(ping);
 
 
-let mixer, patchModel, headBone, rightHandBone, clips = {}, strideSpeed = {}, currentAction, currentName, headRest = null, roam = null;
+let mixer, patchModel, headBone, rightHandBone, leftHandBone, clips = {}, strideSpeed = {}, currentAction, currentName, roam = null;
 // Turn smoothly toward a heading instead of snapping at each bend.
 function face(angle,dt){const turn=Math.atan2(Math.sin(angle-patch.rotation.y),Math.cos(angle-patch.rotation.y));patch.rotation.y+=turn*Math.min(1,dt*7);}
 const lookUp = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -0.6);
 new GLTFLoader().load(new URL('./assets/patch.glb', document.baseURI).href, gltf => {
   patchModel=gltf.scene; patch.add(patchModel);
-  gltf.scene.traverse(node => { if (node.isBone && /mixamorig[:_]?head$/i.test(node.name)) headBone=node; if(node.isBone && /mixamorig[:_]?righthand$/i.test(node.name)) rightHandBone=node; });
+  gltf.scene.traverse(node => { if (node.isBone && /mixamorig[:_]?head$/i.test(node.name)) headBone=node; if(node.isBone && /mixamorig[:_]?righthand$/i.test(node.name)) rightHandBone=node; if(node.isBone && /mixamorig[:_]?lefthand$/i.test(node.name)) leftHandBone=node; });
   mixer = new THREE.AnimationMixer(gltf.scene);
   for (const clip of gltf.animations) {
     // Locomotion is controlled by the island, not the source animation's travel.
     // Remove only the hips' steady drift, so the stride and bob stay and the loop never snaps back.
     const tracks = clip.tracks.map(track => {
       const copy = track.clone();
-      if (/(?:mixamorig[:_]?Hips).*\.position$/i.test(copy.name) && ['walk','run','swing','swim'].includes(clip.name)) {
+      if (/(?:mixamorig[:_]?Hips).*\.position$/i.test(copy.name) && ['walk','run','swing','swim','walk-texting'].includes(clip.name)) {
         const n=copy.times.length, drift=[0,1,2].map(c=>copy.values[(n-1)*3+c]-copy.values[c]), span=copy.times[n-1]-copy.times[0];
         if (span>0) { for (let i=0;i<n;i++) { const f=(copy.times[i]-copy.times[0])/span; for (let c=0;c<3;c++) copy.values[i*3+c]-=drift[c]*f; } strideSpeed[clip.name]=Math.hypot(...drift)/span; }
       }
@@ -122,7 +129,7 @@ function renderCare(p) {
   if (Array.isArray(p.carrying) && p.carrying.length) { const carried=document.createElement('p'); carried.className='care-carrying'; carried.textContent=`Carrying: ${p.carrying.join(', ')}`; list.append(carried); }
 }
 const localPreview = isLocalPreview(location.hostname), start = performance.now();
-const mockActions=['idle','walk','run','climb','swing','swim','fish','eat','sit','sleep','think','write','phone','wave','look','explore','watch-sky'], ids=Object.keys(places);
+const mockActions=['idle','walk','run','climb','swing','swim','fish','eat','sit','sleep','think','write','research','computer','wave','look','explore','watch-sky'], ids=Object.keys(places);
 async function poll() {
   try {
     const response = await fetch('/patch/api/state', {cache:'no-store'});
@@ -158,19 +165,19 @@ const rainGeo=new THREE.BufferGeometry(),drops=[];for(let i=0;i<500;i++)drops.pu
 let last=performance.now();patch.position.set(0,groundHeight(0,0),0);
 $('#find-patch').onclick=()=>{ if (state) controls.findPatch(patch.position,patchVelocity); };
 function frame(now){requestAnimationFrame(frame);if(animations.isOpen()){last=now;return;}updateQuality(now);const dt=Math.min((now-last)/1000,.05);last=now;let t=(now-start)/1000;
-if (demo) { let n=Math.floor(t/9); state={patch:{...sampleState.patch,action:mockActions[n%mockActions.length],place:ids[Math.floor(n/2)%ids.length],target:['walk','run','swing'].includes(mockActions[n%mockActions.length]) ? ids[(Math.floor(n/2)+1)%ids.length] : null,since:String(n),says:null},clock:{dayFraction:(.38+t/240)%1,weather:['clear','cloudy','rain','storm'][Math.floor(t/60)%4]}}; }
+if (demo) { let n=Math.floor(t/9); const mockAction=mockActions[n%mockActions.length];state={patch:{...sampleState.patch,mail:n%3,action:mockAction,place:mockAction==='computer'?'computer':ids[Math.floor(n/2)%ids.length],target:['walk','run','swing'].includes(mockActions[n%mockActions.length]) ? ids[(Math.floor(n/2)+1)%ids.length] : null,since:String(n),says:null},clock:{dayFraction:(.38+t/240)%1,weather:['clear','cloudy','rain','storm'][Math.floor(t/60)%4]}}; }
 if (demo) renderCare(state.patch);
 controls.update(dt);
 $('#find-patch').disabled=!state;
 if (!state) { patch.visible=false; scene.background=skyDay; scenery.update(reducedMotion.matches?0:dt,1); renderer.render(scene,camera); return; }
 patch.visible=true;previousPatchPosition.copy(patch.position);
-const {action,place,target,says,since,until,speechUntil}=state.patch;
-$('#status').textContent = statusText(state.patch);
+const {action,place,target,says,since,until,speechUntil}=state.patch,mail=Number(state.patch.mail)||0;scenery.setMail(mail);
+$('#status').textContent = statusText(state.patch)+(mail&&!(place==='computer'&&!target)?` ✉ ${mail} letter${mail===1?'':'s'} waiting at his coconut computer.`:'');
 scenery.resetRopes();let heldRope=null, heldGrip=null;fishingRod.visible=action==='fish'&&!target;
 const climbKey=`${action}|${place}|${since||''}`;
 if(action==='climb'&&!target&&(place==='lookout'||place==='tall-trees')){if(climb?.key!==climbKey){climb=startClimb(place,climbKey,since,until);climbTime=0;}}else climb=null;
 const activityTime=(Date.now()+serverOffset-Date.parse(since))/1000,lap=action==='swim'&&place==='pond'&&!target?swimAt(activityTime):null;
-const dest=climb?climb.start:lap?[lap.x,lap.z]:action==='sleep'&&place==='hammock'&&!target?[0,1]:places[target]||places[place];
+const seat=target?null:seatFor(action,place),dest=seat?[seat.x,seat.z]:climb?climb.start:lap?[lap.x,lap.z]:action==='sleep'&&place==='hammock'&&!target?[0,1]:places[target]||places[place];
 const travel = !!(target && places[target] && ['walk','run','swing'].includes(action));
 const swinging = action === 'swing';
 const key = `${action}|${place}|${target||''}|${since||''}`;
@@ -219,7 +226,7 @@ if (travel || swinging) {
   if(wasAirborne&&action!=='climb'){const ground=groundHeight(patch.position.x,patch.position.z);if(patch.position.y>ground+.5)descent={start:patch.position.y,ground,elapsed:0};wasAirborne=false;}
   if(action!=='climb')climbTime=0;
   journey=null;
-  const names={idle:'idle',think:'idle',phone:'idle',write:'idle',look:'look-around',wave:'look-around',walk:'walk',run:'run',climb:'hang',swim:'swim',fish:'sit',sit:'sit',sleep:'sleep',eat:'idle',explore:'look-around','watch-sky':'sit'};
+  const names={idle:'idle',think:'idle',computer:'typing',research:'texting',write:'texting',look:'look-around',wave:'look-around',walk:'walk',run:'run',climb:'hang',swim:'swim',fish:'sit-ground',sit:'sit-ground',sleep:'sleep',eat:'idle',explore:'look-around','watch-sky':'sit-ground'};
   // Exploring and similar activities are a shared roam: he picks spots, walks there, stops and looks around.
   const roams=!!ROAM[action]?.radius[place],roamKey=`${action}|${place}|${since||''}`;
   if(roams&&roam?.key!==roamKey)roam={key:roamKey,plan:roamPlan(action,place,seedFrom(roamKey))};
@@ -245,6 +252,11 @@ if (travel || swinging) {
     const at=Number.isFinite(elapsed)?Math.max(0,elapsed):t,back=seedFrom(roamKey)%2===0;face(back?Math.PI/2:0,dt);
     if(back){patch.position.y=groundHeight(0,0)+.9;poseClip('sleep-lay',at%CLIPS['sleep-lay'].duration);}
     else{const still=15*CLIPS.sleep.duration,k=at%(still+CLIPS['sleep-roll'].duration);if(k<still)poseClip('sleep',k%CLIPS.sleep.duration);else poseClip('sleep-roll',k-still);}
+  } else if(seat&&!arriving&&!descent){
+    // On a seat he settles onto it facing its way; at the coconut computer he reaches for the keys, types, and sits back near the end.
+    patch.position.x+=(seat.x-patch.position.x)*Math.min(1,dt*6);patch.position.z+=(seat.z-patch.position.z)*Math.min(1,dt*6);face(seat.heading,dt);
+    if(place==='computer'){const at=Number.isFinite(elapsed)?Math.max(0,elapsed):t%30,left=Number.isFinite(Date.parse(until))?(Date.parse(until)-Date.now()-serverOffset)/1000:60,desk=deskClip(action,at,left,{'sit-to-type':CLIPS['sit-to-type'].duration,'type-to-sit':CLIPS['type-to-sit'].duration,typing:CLIPS.typing.duration});poseClip(desk.clip,desk.time);}
+    else playClip('sit',true);
   } else playClip(clip,['sit','swing-start','rope-to-ground'].includes(clip));
   }
 }
@@ -260,12 +272,14 @@ if(rightHandBone&&heldGrip){
   if(heldRope!==null)scenery.setRope(heldRope,[handWorld.x,handWorld.y,handWorld.z]);
 }
 if(climb?.line.kind==='rope'&&climbTime>=4){const [x,y,z]=climb.line.point(0);scenery.setRope(climb.line.index,[x,y-.5,z]);}
+// The tablet sits between his hands when both hold it, otherwise in his right hand, screen turned to his face.
+tablet.visible=!!(rightHandBone&&headBone&&usesTablet(action,place)&&!target&&['texting','walk-texting'].includes(currentName));
+if(tablet.visible){patch.updateMatrixWorld(true);rightHandBone.getWorldPosition(handWorld);headBone.getWorldPosition(headWorld);if(currentName==='walk-texting'&&leftHandBone){leftHandBone.getWorldPosition(otherHand);handWorld.lerp(otherHand,.5);}tablet.position.copy(handWorld);tablet.lookAt(headWorld);tablet.translateZ(.03);}
+ping.visible=mail>0&&!(place==='computer'&&!target)&&action!=='sleep';if(ping.visible)ping.position.set(patch.position.x,patch.position.y+1.7+Math.sin(t*3)*.06,patch.position.z);
 if(rightHandBone&&fishingRod.visible){patch.updateMatrixWorld(true);rightHandBone.getWorldPosition(handWorld);fishingRod.position.copy(patch.worldToLocal(handWorld.clone()));}
 // Tip his head back from the held sitting pose. Set it absolutely each frame so the tilt never accumulates.
-if(action==='watch-sky' && headBone && currentName==='sit' && currentAction.time >= clips.sit.duration*.8){
-  if(!headRest) headRest=headBone.quaternion.clone();
-  headBone.quaternion.copy(headRest).multiply(lookUp);
-} else headRest=null;
+// The ground sit animates his head, so the tilt goes on top of each frame's pose.
+if(action==='watch-sky' && headBone && currentName==='sit-ground') headBone.quaternion.multiply(lookUp);
 const speechLive=!!says && Number.isFinite(Date.parse(speechUntil)) && Date.now()+serverOffset<Date.parse(speechUntil);$('#bubble').hidden=!speechLive;$('#bubble').textContent=speechLive?says:'';
 let day=Number.isFinite(state.clock.dayFraction)?state.clock.dayFraction:.5;let daylight=THREE.MathUtils.smoothstep(Math.sin((day-.25)*Math.PI*2),-.12,.2);let weather=state.clock.weather;let overcast=weather==='cloudy'||weather==='rain'||weather==='storm';sky.copy(skyNight).lerp(skyDay,daylight*(overcast?.65:1));updateSky(daylight);scene.background=skyTexture;scene.fog.color.copy(sky);hemi.intensity=1.25+daylight*(overcast?.4:1.15);sunLight.intensity=daylight*(overcast?.6:2.4)+(1-daylight)*.65;sunLight.color.copy(moonColor).lerp(sunColor,daylight);let angle=(day-.25)*Math.PI*2;sun.position.set(Math.cos(angle)*900,Math.sin(angle)*900,0);moon.position.copy(sun.position).multiplyScalar(-1);sunLight.position.copy(daylight>.05?sun.position:moon.position);stars.material.opacity=1-daylight;stars.visible=daylight<.98;clouds.forEach((c,i)=>{c.visible=overcast||i<5;c.position.x+=reducedMotion.matches?0:dt*.14;if(c.position.x>520)c.position.x=-520;});rain.visible=weather==='rain'||weather==='storm';if(rain.visible){rain.position.x=camera.position.x;rain.position.z=camera.position.z;rain.position.y=camera.position.y-(reducedMotion.matches?0:t*12%30);}
 scenery.update(reducedMotion.matches?0:dt,daylight);renderer.render(scene,camera);}

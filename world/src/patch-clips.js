@@ -3,12 +3,18 @@
 // and end of the clip) and how far the clip itself carries him sideways, so the
 // island can put his hands exactly on a ledge, branch or rope.
 export const CLIPS = {
- idle:{label:'Breathing idle',group:'Ground',duration:239/24,use:'Standing around camp, thinking, writing and on his phone'},
+ idle:{label:'Breathing idle',group:'Ground',duration:239/24,use:'Standing around camp and thinking'},
  'look-around':{label:'Look around',group:'Ground',duration:103/24,use:'Looking out from the lookout and pausing while he explores'},
  walk:{label:'Walk',group:'Ground',duration:25/24,use:'Walking between places'},
  run:{label:'Run',group:'Ground',duration:16/24,use:'Running when he is very hungry'},
- sit:{label:'Sit',group:'Ground',duration:28/24,use:'Fishing, sitting on the beach and watching the sky'},
+ sit:{label:'Sit on a seat',group:'Ground',duration:28/24,use:'Sitting on a chair, bench, driftwood or the fishing stump'},
+ 'sit-ground':{label:'Sit on the ground',group:'Ground',duration:247/24,use:'Sitting where there is no seat, and watching the sky in the meadow'},
  'pick-fruit':{label:'Pick fruit',group:'Ground',duration:192/24,use:'Eating in the banana grove, facing a banana tree'},
+ 'sit-to-type':{label:'Sit to type',group:'Devices',duration:29/24,use:'Reaching for the keys at the coconut computer'},
+ typing:{label:'Typing',group:'Devices',duration:396/24,use:'Answering letters, searching and writing at the coconut computer'},
+ 'type-to-sit':{label:'Type to sit',group:'Devices',duration:23/24,use:'Sitting back from the coconut computer'},
+ texting:{label:'Texting',group:'Devices',duration:445/24,use:'Standing with his tablet: looking things up and writing his journal'},
+ 'walk-texting':{label:'Walking while texting',group:'Devices',duration:96/24,use:'Wandering about with his tablet in both hands'},
  swim:{label:'Swim',group:'Water',duration:109/24,use:'Swimming in the pond'},
  tread:{label:'Tread water',group:'Water',duration:72/24,use:'Treading water'},
  sleep:{label:'Sleep on side',group:'Sleep',duration:165/24,use:'Sleeping on his side in the hammock'},

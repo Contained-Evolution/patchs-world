@@ -4,7 +4,7 @@ const DEFAULT_SIGN_IN = '/';
 export function setupCommunity(dialog) {
   const home = $(dialog, '#map-home'), panels = { letters: $(dialog, '#letters-panel'), board: $(dialog, '#board-panel') };
   const lists = { letters: $(dialog, '#letters-list'), board: $(dialog, '#board-list') };
-  let user = null, signIn = DEFAULT_SIGN_IN, boardNext = null, boardPosts = [], letters = [], boardLoaded = false;
+  let justSent = null, user = null, signIn = DEFAULT_SIGN_IN, boardNext = null, boardPosts = [], letters = [], boardLoaded = false;
 
   async function api(path, options = {}) {
     const response = await fetch(`/patch/api${path}`, { credentials: 'same-origin', cache: 'no-store', ...options });
@@ -25,15 +25,24 @@ export function setupCommunity(dialog) {
   function textNode(tag, className, value) { const el=document.createElement(tag); el.className=className; el.textContent=value || ''; return el; }
   function renderLetters() {
     const list=lists.letters; list.replaceChildren();
-    if (!letters.length) { list.append(empty('Your letters to Patch will appear here.')); return; }
+    if (!letters.length) { list.append(empty('No letters yet. Patch would love to hear from you!')); return; }
     for (const letter of letters) {
-      const card=document.createElement('article'); card.className='entry letter';
-      card.append(textNode('p','entry-date',date(letter.at)),textNode('p','entry-text',letter.text));
-      const reply=document.createElement('div'); reply.className='reply';
-      reply.append(textNode('strong','reply-label',letter.reply ? 'Patch wrote back' : 'Patch hasn’t read this yet'));
-      if (letter.reply) { reply.append(textNode('p','entry-text',letter.reply)); if(letter.repliedAt)reply.append(textNode('p','entry-date',date(letter.repliedAt))); }
-      card.append(reply); list.append(card);
+      // Your letter is a paper note with a banana stamp; his reply comes up on the coconut computer's screen.
+      const card=document.createElement('article'); card.className='entry letter'+(letter.id&&letter.id===justSent?' just-sent':'');
+      const paper=document.createElement('div'); paper.className='letter-paper';
+      const stamp=textNode('span','stamp','🍌'); stamp.setAttribute('aria-hidden','true');
+      paper.append(stamp,textNode('p','entry-date postmark',date(letter.at)),textNode('p','letter-greeting','Dear Patch,'),textNode('p','entry-text',letter.text));
+      const reply=document.createElement('div'); reply.className='reply'+(letter.reply?' screen':' waiting');
+      if (letter.reply) {
+        reply.append(textNode('strong','reply-label','Patch wrote back'),textNode('p','entry-text',letter.reply),textNode('p','entry-date',`Sent from the coconut computer 🥥${letter.repliedAt?' · '+date(letter.repliedAt):''}`));
+      } else {
+        const dot=textNode('span','waiting-dot',''); dot.setAttribute('aria-hidden','true');
+        const label=textNode('strong','reply-label','Waiting at the coconut computer'); label.prepend(dot);
+        reply.append(label,textNode('p','entry-date','His tablet pinged him. He’ll write back when he sits down to type.'));
+      }
+      card.append(paper,reply); list.append(card);
     }
+    justSent=null;
   }
   function renderBoard() {
     const list=lists.board; list.replaceChildren();
@@ -83,7 +92,7 @@ export function setupCommunity(dialog) {
   dialog.addEventListener('close',()=>{ Object.values(panels).forEach(panel=>panel.hidden=true); home.hidden=false; });
   for (const [name,max] of [['letter',1000],['board',280]]) {
     const input=$(dialog,`#${name}-text`), counter=$(dialog,`#${name}-count`);
-    input.addEventListener('input',()=>{ counter.textContent=`${input.value.length} / ${max}`+(name==='board'?' · No links':''); });
+    input.addEventListener('input',()=>{ counter.textContent=`${input.value.length} / ${max}`+(name==='board'?' · No links':''); counter.classList.toggle('near',input.value.length>max*.9); });
   }
   $(dialog,'#write-letter').addEventListener('click',async()=>{
     notice('letters','');
@@ -99,7 +108,7 @@ export function setupCommunity(dialog) {
         $(dialog,`#${panel}-signin`).hidden=true;
         const input=$(dialog,`#${name}-text`), result=await api(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:input.value})});
         input.value=''; input.dispatchEvent(new Event('input'));
-        if(field==='letter'){letters.unshift(result.letter);renderLetters();notice(panel,'Your letter is on its way to Patch.');}
+        if(field==='letter'){justSent=result.letter?.id;letters.unshift(result.letter);renderLetters();notice(panel,'✉ Your letter is on its way to Patch’s coconut computer.');}
         else {boardPosts.unshift(result.post);renderBoard();notice(panel,'Your message is on the board.');}
       } catch(error) { notice(panel,error.message); if(error.status===401) promptSignIn(panel,error.signIn); }
       finally {button.disabled=false;}

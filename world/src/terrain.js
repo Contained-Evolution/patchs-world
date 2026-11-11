@@ -1,8 +1,8 @@
 export const TERRAIN_RINGS=160, TERRAIN_SLICES=256;
 export const ISLAND = { radiusX: 320, radiusZ: 360, ocean: 0, pondX: 105, pondZ: 66, pondY: 3.0, pondRX: 25, pondRZ: 17 };
-export const places = { hammock:[0,0], shelves:[5,2], 'banana-grove':[-92,55], 'tall-trees':[72,-104], pond:[77,66], beach:[280,22], 'tide-pools':[220,-190], lookout:[-155,-205], meadow:[-176,48], cave:[-58,-244] };
+export const places = { hammock:[0,0], shelves:[5,2], computer:[-7,-6], 'banana-grove':[-92,55], 'tall-trees':[72,-104], pond:[77,66], beach:[280,22], 'tide-pools':[220,-190], lookout:[-155,-205], meadow:[-176,48], cave:[-58,-244] };
 const routeControls = {
- hammock:[[0,0]], shelves:[[0,0],[5,2]],
+ hammock:[[0,0]], shelves:[[0,0],[5,2]], computer:[[0,0],[-7,-6]],
  'banana-grove':[[0,0],[-28,12],[-60,35],[-92,55]],
  'tall-trees':[[0,0],[25,-30],[48,-65],[72,-104]],
  pond:[[0,0],[30,20],[58,45],[77,66]],

@@ -41,7 +41,10 @@ export const ROAM={
  look:{radius:{lookout:9},legs:[3,8],pauses:[6,16],run:0},
  eat:{radius:{'banana-grove':10},legs:[2,6],pauses:[8,20],run:0,pick:true},
 };
-const WALK_SPEED=1.05,RUN_SPEED=2.8,PICK=192/24;
+// On his tablet he wanders a few steps now and then, reading or writing as he goes. At the computer he sits.
+const TABLET=Object.fromEntries(Object.keys(places).filter(place=>place!=='computer').map(place=>[place,place==='pond'?4:6]));
+for(const action of ['research','write'])ROAM[action]={radius:TABLET,legs:[2,5],pauses:[12,30],run:0,device:true};
+const WALK_SPEED=1.05,TABLET_SPEED=.55,RUN_SPEED=2.8,PICK=192/24;
 // A roam is a list of legs: walk from one spot to the next, then stop and do something there.
 export function roamPlan(action,place,seed){
  const kind=ROAM[action],center=places[place],radius=kind.radius[place]||12,random=rng(seed),legs=[];
@@ -50,7 +53,8 @@ export function roamPlan(action,place,seed){
  function rest(walkEnd,tree){const pause=span(kind.pauses),roll=random();
   // Beside a banana tree he faces it and picks fruit for one or two reaches.
   if(tree)return{end:walkEnd+PICK*(pause>14?2:1),clip:'pick-fruit',facing:Math.atan2(tree.x-tree.fromX,tree.z-tree.fromZ)};
-  return{end:walkEnd+pause,clip:roll<.15&&pause>7?'sit':roll<.6?'look-around':'idle'};}
+  if(kind.device)return{end:walkEnd+pause,clip:'texting'};
+  return{end:walkEnd+pause,clip:roll<.15&&pause>7?'sit-ground':roll<.6?'look-around':'idle'};}
  legs.push({x0:x,z0:z,x1:x,z1:z,t0:0,t1:0,...rest(0),speed:0});time=legs[0].end;
  function addLeg(){
   let goal=null,tree=null;
@@ -65,7 +69,7 @@ export function roamPlan(action,place,seed){
    const gx=x+Math.cos(angle)*distance,gz=z+Math.sin(angle)*distance;
    if(lineOpen(x,z,gx,gz,.8))goal=[gx,gz];
   }
-  const running=goal&&random()<kind.run,speed=running?RUN_SPEED:WALK_SPEED,[gx,gz]=goal||[x,z],walk=Math.hypot(gx-x,gz-z)/speed;
+  const running=goal&&random()<kind.run,speed=running?RUN_SPEED:kind.device?TABLET_SPEED:WALK_SPEED,[gx,gz]=goal||[x,z],walk=Math.hypot(gx-x,gz-z)/speed;
   legs.push({x0:x,z0:z,x1:gx,z1:gz,t0:time,t1:time+walk,speed:goal?speed:0,...rest(time+walk,tree)});
   x=gx;z=gz;time=legs.at(-1).end;
  }
@@ -73,7 +77,7 @@ export function roamPlan(action,place,seed){
   while(time<=seconds)addLeg();
   let lo=0,hi=legs.length-1;while(lo<hi){const mid=(lo+hi+1)>>1;if(legs[mid].t0<=seconds)lo=mid;else hi=mid-1;}
   const leg=legs[lo];
-  if(seconds<leg.t1){const p=(seconds-leg.t0)/(leg.t1-leg.t0);return{x:leg.x0+(leg.x1-leg.x0)*p,z:leg.z0+(leg.z1-leg.z0)*p,heading:Math.atan2(leg.x1-leg.x0,leg.z1-leg.z0),clip:leg.speed>=RUN_SPEED?'run':'walk',moving:true};}
+  if(seconds<leg.t1){const p=(seconds-leg.t0)/(leg.t1-leg.t0);return{x:leg.x0+(leg.x1-leg.x0)*p,z:leg.z0+(leg.z1-leg.z0)*p,heading:Math.atan2(leg.x1-leg.x0,leg.z1-leg.z0),clip:leg.speed>=RUN_SPEED?'run':kind.device?'walk-texting':'walk',moving:true};}
   return{x:leg.x1,z:leg.z1,heading:leg.facing??null,clip:leg.clip,moving:false,time:seconds-leg.t1};
  }};
 }

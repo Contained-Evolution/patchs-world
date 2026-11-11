@@ -56,3 +56,32 @@ nav button[hidden]{display:none}
 .locker-controls button[aria-pressed=false]{opacity:.6}
 #locker-scrub{flex:1;min-width:60px;accent-color:#ffe36e}
 @media(max-width:650px){#locker-canvas{top:84px;height:calc(66dvh - 230px)}.locker-head{left:16px;right:16px}.locker-list{top:auto;bottom:0;left:0;right:0;width:auto;height:34dvh;padding:10px 16px max(12px,env(safe-area-inset-bottom));background:#0d0a2bdd;border-top:1px solid #ffffff26}.locker-list h3{margin:8px 0 4px}.locker-now{right:16px;left:16px;width:auto;bottom:calc(34dvh + 10px);padding:10px 12px}#locker-name{font-size:19px}#locker-use{font-size:14px}}
+
+/* Letters to Patch: paper notes with a banana stamp, and replies on the coconut computer's screen. */
+.map-label.computer{transform:translate(-105%,-115%)}
+.community .stationery{position:relative;padding:20px 18px 16px;background:#fbf3dc;color:#3a2d1f;border:0;border-radius:6px 6px 14px 14px;box-shadow:0 10px 26px #0006}
+.community .stationery label{display:flex;align-items:center;min-height:52px;padding-right:56px;font-size:21px;color:#5b3b22;margin:0 0 8px}
+.community .stationery textarea{border:1px dashed #c9b07c;color:#3a2d1f;line-height:30px;padding:0 10px;background:#fffaf0 repeating-linear-gradient(transparent 0 29px,#eadcb8 29px 30px);background-attachment:local}
+.community .stationery .form-footer{color:#7a6343}
+.community .stationery .primary{background:#2f7d6d;color:#fff8e6}
+.stamp{position:absolute;top:10px;right:12px;display:grid;place-items:center;width:44px;height:52px;font-size:24px;background:#fff8e6;border:2px dashed #d39a3c;border-radius:4px;transform:rotate(6deg);box-shadow:0 1px 3px #0003}
+#letter-count.near,#board-count.near{color:#c0582f;font-weight:bold}
+#letters-list .entry.letter{padding:0;border:0;background:transparent;display:grid;gap:8px}
+.letter-paper{position:relative;padding:16px 64px 12px 16px;background:#fbf3dc;color:#3a2d1f;border-radius:6px;box-shadow:0 6px 16px #0005;transform:rotate(-.4deg)}
+#letters-list .entry.letter:nth-child(even) .letter-paper{transform:rotate(.5deg)}
+.letter-paper .stamp{width:36px;height:42px;font-size:19px}
+.letter-paper .postmark{display:inline-block;padding:2px 8px;border:1.5px solid #b07a4a;border-radius:20px;color:#8a5a33;font-size:12px}
+.letter-greeting{margin:10px 0 0;color:#5b3b22;font-size:17px}
+.letter-paper .entry-text{color:#3a2d1f}
+.reply.screen{position:relative;margin:0 0 0 22px;padding:14px 16px 12px;border:6px solid #9b7a45;border-radius:14px;background:linear-gradient(#2f7d6d,#174a43);color:#eaf7ef;box-shadow:inset 0 0 18px #9fe3d255,0 6px 16px #0005}
+.reply.screen::before{content:'';position:absolute;left:-22px;top:18px;width:16px;height:2px;background:#9b7a45}
+.reply.screen .reply-label{color:#ffd27a}.reply.screen .entry-date{color:#bfe3d6}
+.reply.waiting{margin:0 0 0 22px;padding:10px 14px;border:1.5px dashed #a7bd96;border-radius:12px;background:#203f34;color:#e4f0dc}
+.reply.waiting .reply-label{display:flex;align-items:center;gap:8px}
+.waiting-dot{width:9px;height:9px;border-radius:50%;background:#ffd27a;animation:waiting 1.6s ease-in-out infinite}
+@keyframes waiting{50%{opacity:.25;transform:scale(.7)}}
+.entry.letter.just-sent{animation:sent .7s cubic-bezier(.2,.9,.3,1.2)}
+@keyframes sent{from{opacity:0;transform:translateY(-26px) rotate(-3deg) scale(.92)}to{opacity:1;transform:none}}
+#letters-list .empty{padding:18px;border:1.5px dashed #78916d;border-radius:12px;text-align:center}
+@media(max-width:650px){.letter-paper{padding:14px 52px 10px 12px}.reply.screen,.reply.waiting{margin-left:10px}.reply.screen::before{display:none}.community .stationery{padding:16px 12px 12px}}
+@media(prefers-reduced-motion:reduce){.waiting-dot,.entry.letter.just-sent{animation:none}}

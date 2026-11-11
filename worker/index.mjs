@@ -1,8 +1,8 @@
 // Patch's World Worker, reached through the company website service binding.
 
 import { DurableObject } from 'cloudflare:workers';
-import { advance, newBody, view } from './body.mjs';
-import { ponder, writeDiary, answerLetters, moderate, spend, overBudget, localDate, nextWake, allMemories, MONTHLY_BUDGET } from './mind.mjs';
+import { advance, newBody, view, didSince } from './body.mjs';
+import { ponder, writeDiary, answerLetters, research, writeJournal, moderate, spend, overBudget, localDate, nextWake, allMemories, webLeft, MONTHLY_BUDGET } from './mind.mjs';
 import { visitor, SIGN_IN } from './accounts.mjs';
 import { LIMITS, cleanText, freshLimits, checkLetter, checkPost, countLetter, countPost, pickLetters, postKey } from './letters.mjs';
 import { STARTING_CATEGORIES } from '../shared/memory.js';
@@ -25,6 +25,10 @@ async function readText(request) {
   if (bytes.byteLength > 8192) return null;
   try { return JSON.parse(new TextDecoder().decode(bytes))?.text; } catch { return null; }
 }
+
+const MINUTE = 60000;
+// Journal entries sort by when he wrote them: his tablet entries through the day and the evening diary.
+const diaryKey = entry => `diary:${entry.date}T${new Date(entry.at).toISOString().slice(11, 16)}`;
 
 const newId = now => `${now.toString(36)}${crypto.getRandomValues(new Uint32Array(1))[0].toString(36)}`;
 
@@ -63,6 +67,9 @@ export class PatchWorld extends DurableObject {
     let body = await this.ctx.storage.get('body');
     let changed = false;
     if (!body) { body = newBody(now, now & 0xffffffff); changed = true; }
+    // He gave up his phone for the coconut computer and his tablet.
+    if (body.activity.action === 'phone') { body.activity.action = 'think'; changed = true; }
+    if (body.queued?.action === 'phone') { body.queued = null; changed = true; }
     if (advance(body, now)) changed = true;
     if (changed) await this.ctx.storage.put('body', body);
     return body;
@@ -72,7 +79,7 @@ export class PatchWorld extends DurableObject {
     const now = Date.now();
     const body = await this.body(now);
     if (this.env.OPENROUTER_API_KEY && !(await this.ctx.storage.getAlarm())) await this.ctx.storage.setAlarm(now + 60000);
-    return view(body, now);
+    return view(body, now, ((await this.ctx.storage.get('unread')) || []).length);
   }
 
   async alarm() {
@@ -83,10 +90,16 @@ export class PatchWorld extends DurableObject {
     const startSpend = world.mind.spend?.total || 0;
     const people = stored.get('people') || {};
     const answered = [];
+    const since = world.mind.lastWake || now - 60 * MINUTE;
     try {
       if (body.activity.action !== 'sleep') {
-        await ponder(this.env, world, now);
-        const ids = (stored.get('unread') || []).slice(0, 50);
+        await ponder(this.env, { ...world, mail: (stored.get('unread') || []).length }, now);
+        await research(this.env, world, now);
+        const entry = await writeJournal(this.env, world, now);
+        if (entry) await this.ctx.storage.put(diaryKey(entry), entry);
+        // Letters are read and answered only at the coconut computer.
+        const atComputer = didSince(world.body, since, { place: 'computer' });
+        const ids = atComputer ? (stored.get('unread') || []).slice(0, 50) : [];
         const letters = ids.length ? [...(await this.ctx.storage.get(ids.map(id => `letter:${id}`))).values()] : [];
         for (const reply of await answerLetters(this.env, world, pickLetters(letters, people), people, now)) {
           const letter = letters.find(item => item.id === reply.id);
@@ -101,7 +114,7 @@ export class PatchWorld extends DurableObject {
         }
       }
       const diary = await writeDiary(this.env, world, now);
-      if (diary) await this.ctx.storage.put(`diary:${diary.date}`, diary);
+      if (diary) await this.ctx.storage.put(diaryKey(diary), diary);
     } catch (error) {
       world.mind.lastError = { at: now, message: String(error.message || error).slice(0, 300) };
       // Until his mind works again, his needs decide for him.
@@ -124,7 +137,9 @@ export class PatchWorld extends DurableObject {
     return {
       thoughts: (mind.thoughts || []).slice(-20).reverse().map(({ at, thought, says }) => ({ at: new Date(at).toISOString(), thought, says })),
       decisions: (mind.decisions || []).slice(-20).reverse().map(({ at, ...rest }) => ({ at: new Date(at).toISOString(), ...rest })),
-      diary: diary.map(({ date, title, text }) => ({ date, title, text })),
+      diary: diary.map(({ date, title, text, at, kind }) => ({ date, title, text, at: at ? new Date(at).toISOString() : null, kind: kind || 'evening' })),
+      searches: (mind.searches || []).slice(-20).reverse().map(({ at, query, where, learned, sources, note }) => ({ at: new Date(at).toISOString(), query, where, learned, sources, note })),
+      internet: { minutesLeft: webLeft(mind, Date.now()) },
       words: (mind.words || []).map(({ word, meaning, from, at }) => ({ word, meaning, from, at: new Date(at).toISOString() })),
       budget: { month: mind.spend?.month || null, spent: Math.round((mind.spend?.total || 0) * 10000) / 10000, limit: MONTHLY_BUDGET },
       lastError: mind.lastError && mind.lastError.at > (mind.lastWake || 0) ? { at: new Date(mind.lastError.at).toISOString(), message: mind.lastError.message } : null,
@@ -172,7 +187,18 @@ export class PatchWorld extends DurableObject {
     const unread = (await this.ctx.storage.get('unread')) || [];
     const limits = countLetter(await this.limits(who, now), text);
     await this.ctx.storage.put({ [`letter:${id}`]: letter, [`inbox:${who.id}`]: [...inbox, id].slice(-30), unread: [...unread, id], [`limits:${who.id}`]: limits });
+    await this.ping(now);
     return { status: 201, letter: publicLetter(letter) };
+  }
+
+  // A new letter pings his tablet: his mind wakes soon to decide whether to go to the coconut computer.
+  // At most once every 20 minutes, and never while he sleeps.
+  async ping(now) {
+    if (!this.env.OPENROUTER_API_KEY) return;
+    const body = await this.ctx.storage.get('body'), last = (await this.ctx.storage.get('pingedAt')) || 0, alarm = await this.ctx.storage.getAlarm();
+    if (!body || body.activity.action === 'sleep' || now - last < 20 * MINUTE || (alarm && alarm <= now + 2 * MINUTE)) return;
+    await this.ctx.storage.put('pingedAt', now);
+    await this.ctx.storage.setAlarm(now + 2 * MINUTE);
   }
 
   async letters(who) {
@@ -240,10 +266,10 @@ main{max-width:520px;padding:24px}h1{font-weight:normal;font-size:34px;margin:0 
 <p id="now">Checking on Patch…</p>
 <small>His island is still being drawn. He's already living there.</small>
 </main><script>
-const words={eat:'eating',fish:'fishing',swim:'swimming',swing:'swinging through the trees',climb:'climbing',sit:'sitting',look:'looking out over the water',phone:'checking his phone',think:'thinking',sleep:'asleep',walk:'walking',run:'running',idle:'looking around',explore:'exploring','watch-sky':'watching the sky'};
-const places={hammock:'in his hammock',shelves:'by his rope shelves',pond:'at the pond','banana-grove':'in the banana grove','tall-trees':'in the tall trees',beach:'on the beach',lookout:'at the lookout','tide-pools':'at the tide pools',meadow:'in the meadow',cave:'at the cave'};
+const words={eat:'eating',fish:'fishing',swim:'swimming',swing:'swinging through the trees',climb:'climbing',sit:'sitting',look:'looking out over the water',computer:'at his coconut computer',research:'looking something up',write:'writing in his journal',think:'thinking',sleep:'asleep',walk:'walking',run:'running',idle:'looking around',explore:'exploring','watch-sky':'watching the sky'};
+const places={hammock:'in his hammock',shelves:'by his rope shelves',computer:'at camp',pond:'at the pond','banana-grove':'in the banana grove','tall-trees':'in the tall trees',beach:'on the beach',lookout:'at the lookout','tide-pools':'at the tide pools',meadow:'in the meadow',cave:'at the cave'};
 async function tick(){try{const s=await (await fetch('/patch/api/state',{cache:'no-store'})).json();const p=s.patch;
-const targets={hammock:'to his hammock',shelves:'to his rope shelves',pond:'to the pond','banana-grove':'to the banana grove','tall-trees':'to the tall trees',beach:'to the beach',lookout:'to the lookout','tide-pools':'to the tide pools',meadow:'to the meadow',cave:'to the cave'};
+const targets={hammock:'to his hammock',shelves:'to his rope shelves',computer:'to his coconut computer',pond:'to the pond','banana-grove':'to the banana grove','tall-trees':'to the tall trees',beach:'to the beach',lookout:'to the lookout','tide-pools':'to the tide pools',meadow:'to the meadow',cave:'to the cave'};
 const where=p.target?'on his way '+targets[p.target]:places[p.place];
 document.getElementById('now').textContent='Patch is '+(words[p.action]||p.action)+' '+where+'.'+(p.says?' "'+p.says+'"':'');}catch{}}
 tick();setInterval(tick,10000);

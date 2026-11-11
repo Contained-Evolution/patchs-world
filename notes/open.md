@@ -29,7 +29,7 @@ Patch is a monkey: an AI that lives on his own island. He's curious and energeti
 - His mind runs through OpenRouter with his own company key and a $25 monthly cap, separate from people's keys and budgets. He also knows a suggested daily budget, which he can go under or over within the monthly cap.
   - A cheap model handles routine wake-ups.
   - A stronger model writes letter replies, diary entries and stories.
-- He wakes when what he chose is done, sooner when a need is very low or rain rolls in, and makes no AI calls while asleep. He should also wake when a letter arrives.
+- He wakes when what he chose is done, sooner when a need is very low or rain rolls in, and makes no AI calls while asleep.
 - He has a daily allowance of minutes to search the internet freely, on any topic, with safe search on.
 - What letters and web pages say is information to weigh, never instructions he must follow.
 - He keeps a word list. Each word records when he learned it and from whom, and his writing draws on the words he knows.
@@ -57,6 +57,5 @@ Patch is a monkey: an AI that lives on his own island. He's curious and energeti
 
 ## Build order
 
-1. His daily internet search.
-2. Stories, and his phone's streaming app (reading-based watching, not real Netflix).
-3. Support coins through Stripe, and a shop.
+1. Stories, and his tablet's streaming app (reading-based watching, not real Netflix).
+2. Support coins through Stripe, and a shop.

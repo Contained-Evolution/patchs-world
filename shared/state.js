@@ -2,11 +2,14 @@
 // GET /patch/api/state returns { patch, clock }; the browser polls it every few seconds.
 
 // Places on the island. The world side owns their positions; the Worker only uses the IDs.
-// hammock and shelves together are his camp. tall-trees is the jungle forest; pond includes the stream and waterfall.
-export const PLACES = ['hammock', 'shelves', 'pond', 'banana-grove', 'tall-trees', 'beach', 'lookout', 'tide-pools', 'meadow', 'cave'];
+// hammock, shelves and computer (the coconut computer, his desk under a coconut palm) together are his camp.
+// tall-trees is the jungle forest; pond includes the stream and waterfall.
+export const PLACES = ['hammock', 'shelves', 'computer', 'pond', 'banana-grove', 'tall-trees', 'beach', 'lookout', 'tide-pools', 'meadow', 'cave'];
 
 // What Patch can be doing. Each maps to an animation or procedural motion in the browser.
-export const ACTIONS = ['idle', 'walk', 'run', 'climb', 'swing', 'swim', 'fish', 'eat', 'sit', 'sleep', 'think', 'write', 'phone', 'wave', 'look', 'explore', 'watch-sky'];
+// computer: at the coconut computer, reading and answering letters and searching the web.
+// research and write: on his tablet anywhere (searching the web; writing his journal and memories), or typing when at the computer.
+export const ACTIONS = ['idle', 'walk', 'run', 'climb', 'swing', 'swim', 'fish', 'eat', 'sit', 'sleep', 'think', 'write', 'research', 'computer', 'wave', 'look', 'explore', 'watch-sky'];
 
 // Needs run from 0 (empty) to 1 (full).
 export const NEEDS = ['hunger', 'energy', 'fun', 'comfort', 'social'];
@@ -21,6 +24,7 @@ export const sampleState = {
     says: null, // a short line he says out loud, or null
     speechUntil: null, // expiry for the spoken line
     carrying: ['smooth river stone from Dad'], // what he has with him
+    mail: 0, // letters waiting for him at the coconut computer; his tablet pings him about them
     since: '2026-01-01T12:00:00Z', // when the current action started
     until: '2026-01-01T12:05:00Z', // when the current action ends
   },
