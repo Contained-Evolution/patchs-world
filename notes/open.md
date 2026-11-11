@@ -26,7 +26,7 @@ Patch is a monkey: an AI that lives on his own island. He's curious and energeti
 ## Mind
 
 - His mind decides what he does, where and for how long, guided by his memories, feelings and senses. His needs only pick for him when his mind is unavailable.
-- His mind runs through OpenRouter with his own company key and a $25 monthly cap, separate from people's keys and budgets. He also knows a suggested daily budget, which he can go under or over within the monthly cap.
+- His mind runs through OpenRouter with his own company key and a $25 monthly cap, separate from people's keys and budgets.
   - A cheap model handles routine wake-ups.
   - A stronger model writes letter replies, diary entries and stories.
 - He wakes when what he chose is done, sooner when a need is very low or rain rolls in, and makes no AI calls while asleep.
