@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { ISLAND, places, coastRadius, shoreFraction, groundHeight, pondFraction, STREAM, TIDE_POOLS, tideWaterHeight } from './terrain.js';
-import { trees, anchorFor } from './world-state.js';
+import { anchorFor, holdFor, ROPE_TREES } from './world-state.js';
 import { forest, isReserved } from './forest.js';
 import { createTerrainTiles } from './terrain-mesh.js';
 const rand=n=>{const v=Math.sin(n*127.1+311.7)*43758.5453123;return v-Math.floor(v);};
@@ -67,8 +67,14 @@ vec3 detail=texture2D(grassDetail,islandGround*.18).rgb;float inland=1.0-smooths
  // The meadow remains open and is dotted with small flowers.
  const flowers=[];for(let i=0;i<500;i++){let a=rand(i+50000)*6.283,r=Math.sqrt(rand(i+51000))*45,x=places.meadow[0]+Math.cos(a)*r,z=places.meadow[1]+Math.sin(a)*r;if(shoreFraction(x,z)<.89)flowers.push([x,z,i]);}
  const flowerMap=new THREE.TextureLoader().load(new URL('./assets/wildflowers.png',document.baseURI).href);flowerMap.colorSpace=THREE.SRGBColorSpace;flowerMap.anisotropy=4;const flowerMat=material(0xffffff,{map:flowerMap,alphaTest:.65,side:THREE.DoubleSide}),flowerMesh=new THREE.InstancedMesh(new THREE.PlaneGeometry(1,1),flowerMat,flowers.length*2);flowers.forEach(([x,z,i],k)=>{for(let j=0;j<2;j++){const scale=.5+rand(i+52000)*.4;pose.position.set(x,groundHeight(x,z)+scale*.42,z);pose.rotation.set(0,rand(i+53000)*3+j*Math.PI/2,0);pose.scale.setScalar(scale);pose.updateMatrix();flowerMesh.setMatrixAt(k*2+j,pose.matrix);}});flowerMesh.instanceMatrix.needsUpdate=true;flowerMesh.computeBoundingSphere();scene.add(flowerMesh);
- // Each swinging handhold has a visible living branch.
- const handholds=new THREE.InstancedMesh(new THREE.CylinderGeometry(.09,.18,1,7),bark,trees.length);trees.forEach((tree,i)=>{const [x,z,h]=tree,y=groundHeight(x,z),a=new THREE.Vector3(...anchorFor(tree)),start=new THREE.Vector3(x,y+h-1,z),d=a.clone().sub(start);pose.position.copy(start).add(a).multiplyScalar(.5);pose.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),d.clone().normalize());pose.scale.set(1,d.length(),1);pose.updateMatrix();handholds.setMatrixAt(i,pose.matrix);});handholds.instanceMatrix.needsUpdate=true;handholds.computeBoundingSphere();scene.add(handholds);
+ // Every forest tree has an outward handhold. The traversal trees use the
+ // same anchor calculation, so their visible wood and Patch's grip coincide.
+ const handholds=new THREE.InstancedMesh(new THREE.CylinderGeometry(.09,.18,1,7),bark,forest.length);
+ forest.forEach((tree,i)=>{const {x,z,h}=tree,a=new THREE.Vector3(...anchorFor([x,z,h])),start=new THREE.Vector3(x,a.y,z),d=a.clone().sub(start);pose.position.copy(start).add(a).multiplyScalar(.5);pose.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize());pose.scale.set(1,a.distanceTo(start),1);pose.updateMatrix();handholds.setMatrixAt(i,pose.matrix);});
+ handholds.instanceMatrix.needsUpdate=true;handholds.computeBoundingSphere();scene.add(handholds);
+ // Rope trees have their own visible rope even when Patch is elsewhere.
+ const ropes=new Map();for(const i of ROPE_TREES){const hold=holdFor(i),geometry=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(...hold.anchor),new THREE.Vector3(...hold.grip)]),line=new THREE.Line(geometry,new THREE.LineBasicMaterial({color:0xb39a6c}));scene.add(line);ropes.set(i,line);}
+ function setRope(i,end){const line=ropes.get(i);if(!line)return;const p=line.geometry.attributes.position,hold=holdFor(i),tip=end||hold.grip;p.setXYZ(1,...tip);p.needsUpdate=true;line.geometry.computeBoundingSphere();}
  // Scrub, flowers and coastal stones are instanced rather than individual meshes.
  for(let i=0;i<600;i++){let x=(rand(i+16000)*2-1)*300,z=(rand(i+18000)*2-1)*340;if(shoreFraction(x,z)>.93||reserved(x,z)||rand(i+19000)<.5)continue;rocks.push({x,z,s:.4+rand(i+20000)*2});}
  const rockMesh=new THREE.InstancedMesh(boulder,rock,rocks.length);rocks.forEach((r,i)=>{pose.position.set(r.x,groundHeight(r.x,r.z)+r.s*.25,r.z);pose.rotation.set(.1,rand(i+41)*6,.15);pose.scale.set(r.s*1.3,r.s*.55,r.s);pose.updateMatrix();rockMesh.setMatrixAt(i,pose.matrix);});rockMesh.instanceMatrix.needsUpdate=true;rockMesh.computeBoundingSphere();scene.add(rockMesh);
@@ -113,5 +119,5 @@ vec3 detail=texture2D(grassDetail,islandGround*.18).rgb;float inland=1.0-smooths
  // Tidal basins are carved into the same heightfield used by visitors.
  for(const pool of TIDE_POOLS){const [x,z,rx,rz]=pool,p=add(new THREE.CircleGeometry(1,32),water,x,tideWaterHeight(pool),z);p.rotation.x=-Math.PI/2;p.scale.set(rx*.8,rz*.8,1);for(let i=0;i<7;i++){const a=i*6.28/7,px=x+Math.cos(a)*rx*1.2,pz=z+Math.sin(a)*rz*1.2;stone(px,pz,1,.6,.8);}}
  const boulderMesh=new THREE.InstancedMesh(boulder,rock,stones.length);stones.forEach((p,i)=>{pose.position.set(p.x,groundHeight(p.x,p.z)+p.sy*.10,p.z);pose.rotation.set(rand(p.x+p.z)*.4,rand(p.x-p.z)*6,.1);pose.scale.set(p.sx,p.sy,p.sz);pose.updateMatrix();boulderMesh.setMatrixAt(i,pose.matrix);});boulderMesh.instanceMatrix.needsUpdate=true;boulderMesh.computeBoundingSphere();scene.add(boulderMesh);
- return { update(dt,daylight){waterTime.value+=dt;waterLight.value=daylight;flowMap.offset.y-=dt*.7;foliage.emissiveIntensity=.05+daylight*.3;foliageDark.emissiveIntensity=.05+daylight*.3;} };
+ return { setRope, resetRopes(){for(const i of ROPE_TREES)setRope(i,null);}, update(dt,daylight){waterTime.value+=dt;waterLight.value=daylight;flowMap.offset.y-=dt*.7;foliage.emissiveIntensity=.05+daylight*.3;foliageDark.emissiveIntensity=.05+daylight*.3;} };
 }
