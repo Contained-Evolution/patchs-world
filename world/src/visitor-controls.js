@@ -7,13 +7,13 @@ for(let row=0;row<4;row++) for(let col=0;col<5;col++) obstacles.push([-16+col*2+
 for(let z=-10;z<=20;z+=5) obstacles.push([32-Math.abs(z)*.13,z,.45]);
 for(let i=0;i<15;i++){const a=i*2.4,r=2+(i%4)*1.1;obstacles.push([22+Math.cos(a)*r,-20+Math.sin(a)*r,.55]);}
 export function walkable(x,z,fromX=x,fromZ=z) {
-  if ((x/44)**2+(z/35)**2 > 1) return false;
+  if ((x/43)**2+(z/34)**2 > 1) return false;
   const d=Math.hypot(x-fromX,z-fromZ);
   if (d && Math.abs(groundHeight(x,z)-groundHeight(fromX,fromZ))/d > 1.1) return false;
   return !obstacles.some(([ox,oz,r]) => Math.hypot(x-ox,z-oz)<r && Math.hypot(x-ox,z-oz)<Math.hypot(fromX-ox,fromZ-oz));
 }
 export function createVisitorControls(camera, canvas, dialog) {
-  let mode='walk', yaw=0, pitch=0, touchLook=null;
+  let mode='walk', yaw=0, pitch=0, touchLook=null, lastTouch=0;
   const keys=new Set(), touch=new Set(), euler=new THREE.Euler(0,0,0,'YXZ');
   const walk=document.querySelector('#walk'), fly=document.querySelector('#fly'), hint=document.querySelector('#explore-hint');
   const orientation=()=>{euler.set(pitch,yaw,0);camera.quaternion.setFromEuler(euler);};
@@ -23,14 +23,14 @@ export function createVisitorControls(camera, canvas, dialog) {
   const pause=()=>{keys.clear();touch.clear();touchLook=null;if(document.pointerLockElement===canvas) document.exitPointerLock();};
   walk.onclick=()=>setMode('walk');fly.onclick=()=>setMode('fly');
   document.querySelector('#overview').onclick=()=>{setMode('fly');camera.position.set(48,48,58);pointAt(0,1,0);};
-  canvas.addEventListener('click',e=>{if(e.pointerType==='touch'||dialog.open||matchMedia('(pointer: coarse)').matches)return;canvas.requestPointerLock?.();});
+  canvas.addEventListener('click',e=>{if(Date.now()-lastTouch<800||dialog.open||matchMedia('(pointer: coarse)').matches)return;canvas.requestPointerLock?.();});
   document.addEventListener('mousemove',e=>{if(document.pointerLockElement===canvas&&!dialog.open)look(e.movementX,e.movementY);});
   const allowed=new Set(['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','ShiftLeft','ShiftRight','Space','ControlLeft','ControlRight','KeyC']);
-  addEventListener('keydown',e=>{if(dialog.open||!allowed.has(e.code)||document.pointerLockElement!==canvas)return;e.preventDefault();keys.add(e.code);});
+  addEventListener('keydown',e=>{if(dialog.open||!allowed.has(e.code)||e.altKey||e.metaKey||(['INPUT','TEXTAREA','SELECT','BUTTON','A'].includes(document.activeElement?.tagName)))return;e.preventDefault();keys.add(e.code);});
   addEventListener('keyup',e=>keys.delete(e.code));
   document.addEventListener('pointerlockchange',()=>{if(document.pointerLockElement!==canvas)keys.clear();});
   addEventListener('blur',pause);
-  canvas.addEventListener('pointerdown',e=>{if(e.pointerType==='touch'&&!dialog.open){touchLook={id:e.pointerId,x:e.clientX,y:e.clientY};canvas.setPointerCapture(e.pointerId);}});
+  canvas.addEventListener('pointerdown',e=>{if(e.pointerType==='touch'&&!dialog.open){lastTouch=Date.now();touchLook={id:e.pointerId,x:e.clientX,y:e.clientY};canvas.setPointerCapture(e.pointerId);}});
   canvas.addEventListener('pointermove',e=>{if(touchLook?.id===e.pointerId){look(e.clientX-touchLook.x,e.clientY-touchLook.y);touchLook.x=e.clientX;touchLook.y=e.clientY;}});
   const endLook=e=>{if(touchLook?.id===e.pointerId)touchLook=null;};canvas.addEventListener('pointerup',endLook);canvas.addEventListener('pointercancel',endLook);
   document.querySelectorAll('[data-move]').forEach(button=>{const name=button.dataset.move;button.addEventListener('pointerdown',e=>{e.preventDefault();button.setPointerCapture(e.pointerId);touch.add(name);});for(const event of ['pointerup','pointercancel','lostpointercapture'])button.addEventListener(event,()=>touch.delete(name));});

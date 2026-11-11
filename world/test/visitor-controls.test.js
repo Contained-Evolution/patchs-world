@@ -13,5 +13,6 @@ test('landmarks are reachable on the walking surface',()=>{
     }
   }
   for(const [name,[x,z]] of Object.entries(places)) assert.ok(queue.some(([a,b])=>Math.hypot(a*step-x,b*step-z)<1.5),`${name} is unreachable`);
-  assert.equal(walkable(46,0),false);
+  assert.equal(walkable(43.1,0),false);
+  assert.equal(walkable(0,34.1),false);
 });
