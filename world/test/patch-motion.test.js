@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {patchRoute, roamPlan, ROAM, seedFrom} from '../src/patch-motion.js';
+import {patchRoute, roamPlan, ROAM, rng, seedFrom, swimPlan} from '../src/patch-motion.js';
 import {walkable, clearGroundLine, nearestWalkable} from '../src/island-collision.js';
 import {places} from '../src/terrain.js';
 import {walkRoute} from '../src/world-state.js';
@@ -48,6 +48,23 @@ test('a roam can be joined late without replaying from the start',()=>{
  const seed=seedFrom('explore|cave|x'),early=roamPlan('explore','cave',seed),late=roamPlan('explore','cave',seed);
  for(let s=0;s<1200;s+=5)early.at(s);
  assert.deepEqual(late.at(1195),early.at(1195));
+});
+
+test('cave exploring keeps its walking and grounded inspection poses',()=>{
+ const plan=roamPlan('explore','cave',47,undefined,'happy');
+ const clips=new Set(Array.from({length:1800},(_,i)=>plan.at(i*.5).clip));
+ assert.ok(clips.has('walk')&&clips.has('look-around'));
+ for(const clip of ['run','flip','jump','sit-ground'])assert.ok(!clips.has(clip),clip);
+});
+
+test('swimming starts with a stroke and treads at a fixed point during breaks',()=>{
+ const happy=swimPlan(rng(5),'happy','clear'),tired=swimPlan(rng(5),'tired','storm');
+ const firstTread=plan=>Array.from({length:80},(_,i)=>i).find(i=>!plan.at(i).stroke);
+ assert.ok(happy.at(0).stroke);
+ const at=firstTread(tired);
+ assert.ok(at<firstTread(happy));
+ assert.deepEqual(tired.at(at),tired.at(at+2));
+ assert.deepEqual(tired.at(800),swimPlan(rng(5),'tired','storm').at(800));
 });
 
 test('eating in the grove picks fruit facing a banana tree within reach',()=>{

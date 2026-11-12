@@ -63,9 +63,9 @@ export function createPatchMouth(model) {
   });
   const ease = (uniform, target, [up, down], dt) => { uniform.value += (target - uniform.value) * (1 - Math.exp(-Math.max(0, dt) * (target > uniform.value ? up : down))); };
   return {
-    update(speech, timing, now, sleeping, dt) {
+    update(speech, timing, now, sleeping, dt, chew = 0) {
       const shape = speechMouth(speech, timing, now, sleeping);
-      ease(uniforms.patchMouthOpening, shape.open, RATES.open, dt);
+      ease(uniforms.patchMouthOpening, Math.max(shape.open, chew), RATES.open, dt);
       ease(uniforms.patchMouthRound, shape.round, RATES.round, dt);
       ease(uniforms.patchMouthWide, shape.wide, RATES.wide, dt);
     },

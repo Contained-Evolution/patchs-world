@@ -1,10 +1,10 @@
 // Where Patch's feet go. Every choice is seeded from the activity's start time,
 // so each visitor sees the same Patch making the same choices.
 import { CLIPS } from './patch-clips.js';
-import { places } from './terrain.js';
+import { ISLAND, groundHeight, places } from './terrain.js';
 import { clearGroundLine, nearestWalkable, walkable } from './island-collision.js';
 import { COMPUTER_TENT, SEATS, insideComputerTent } from './furniture.js';
-import { BEATS, pickBeat, walkClip } from './patch-beats.js';
+import { BEATS, TABLET_BEATS, pickBeat, walkClip } from './patch-beats.js';
 
 export function seedFrom(text){let h=2166136261;for(const c of String(text))h=Math.imul(h^c.charCodeAt(0),16777619);return h>>>0;}
 export function rng(seed){let a=seed>>>0;return()=>{a=(a+0x6d2b79f5)>>>0;let t=a;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return((t^(t>>>14))>>>0)/4294967296;};}
@@ -104,20 +104,49 @@ export const ROAM={
 const TABLET=Object.fromEntries(Object.keys(places).filter(place=>place!=='computer').map(place=>[place,place==='pond'?4:6]));
 for(const action of ['research','write'])ROAM[action]={radius:TABLET,legs:[2,5],pauses:[12,30],run:0,device:true};
 const WALK_SPEED=1.05,TABLET_SPEED=.55,RUN_SPEED=2.8;
+export function hasAnimationRoom(x,z,solids) {
+ const height=groundHeight(x,z);
+ return [[-1.6,0],[1.6,0],[0,-1.6],[0,1.6]].every(([dx,dz])=>
+  Math.abs(groundHeight(x+dx,z+dz)-height)<.3&&clearGroundLine([x,z],[x+dx,z+dz],solids));
+}
+
+// The stroke moves him around the pond. A tread break holds the same point and heading.
+export function swimPlan(random,spirit,weather) {
+ const strokes={happy:[40,65],okay:[30,52],tired:[18,32],grumpy:[24,40]}[spirit]||[30,52];
+ const scale=weather==='storm'?.65:weather==='rain'?.85:1;
+ const legs=[];
+ let end=0,swum=0;
+ return {at(seconds){
+  seconds=Number.isFinite(seconds)?Math.max(0,seconds):0;
+  while(end<=seconds){
+   const stroke=(strokes[0]+random()*(strokes[1]-strokes[0]))*scale;
+   const rest=9+random()*14+(spirit==='tired'?10:0);
+   legs.push({start:end,stroke,swum});
+   end+=stroke+rest;swum+=stroke;
+  }
+  let lo=0,hi=legs.length-1;
+  while(lo<hi){const mid=(lo+hi+1)>>1;if(legs[mid].start<=seconds)lo=mid;else hi=mid-1;}
+  const leg=legs[lo],time=seconds-leg.start,stroke=time<leg.stroke,a=(leg.swum+Math.min(time,leg.stroke))*.034;
+  return {x:ISLAND.pondX+Math.cos(a)*8,z:ISLAND.pondZ+Math.sin(a)*5.6,heading:Math.atan2(-8*Math.sin(a),5.6*Math.cos(a)),stroke};
+ }};
+}
 // A roam is a list of legs: walk from one spot to the next, then stop and do something there.
 // What he does at each stop comes from the activity's table in patch-beats.js, in the spirit he set out in.
-export function roamPlan(action,place,seed,solids,spirit='okay'){
+export function roamPlan(action,place,seed,solids,spirit='okay',weather='clear'){
  // With his tablet he stands clear of any seat at the place, in front of it.
  const kind=ROAM[action],seat=kind.device&&SEATS[place],near=seat&&Math.hypot(seat.x-places[place][0],seat.z-places[place][1])<1.5,origin=near?[seat.x+Math.sin(seat.heading)*1.6,seat.z+Math.cos(seat.heading)*1.6]:places[place],center=nearestWalkable(...origin,solids)||origin,radius=kind.radius[place]||12,random=rng(seed),legs=[];
- let x=center[0],z=center[1],time=0,last=null,stops=0;
- const span=([a,b])=>a+random()*(b-a),table=BEATS[action]||BEATS.explore,played=new Map();
- function rest(walkEnd){const pause=span(kind.pauses),end=walkEnd+pause;
-  // With his tablet he mostly holds it in both hands; now and then he thumbs it one-handed. The first stop pulls it out.
-  if(kind.device)return{end,clip:stops++&&pause>CLIPS.texting.duration*.6&&random()<.3?'texting':'tablet-stand'};
-  const row=pickBeat(table,spirit,random,{last,played,at:walkEnd,span:pause}),clip=row?.clip||'idle';
+ let x=center[0],z=center[1],time=0,last=null;
+ const span=([a,b])=>a+random()*(b-a),table=kind.device?TABLET_BEATS[action]:BEATS.explore,played=new Map();
+ const cautious=['cave','tide-pools','pond','lookout'].includes(place)||['rain','storm'].includes(weather);
+ function rest(walkEnd,x,z){
+  const pause=span(kind.pauses)*(kind.device&&action==='write'?1.4:spirit==='tired'?1.3:1),end=walkEnd+pause;
+  // The first tablet stop includes the take-out animation.
+  const row=kind.device&&walkEnd===0?null:pickBeat(table,spirit,random,{
+   last,played,at:walkEnd,span:pause,weather,room:!cautious&&hasAnimationRoom(x,z,solids)
+  }),clip=row?.clip||table.base;
   last=clip;played.set(clip,end);
   return{end,clip};}
- legs.push({x0:x,z0:z,x1:x,z1:z,t0:0,t1:0,...rest(0),speed:0});time=legs[0].end;
+ legs.push({x0:x,z0:z,x1:x,z1:z,t0:0,t1:0,...rest(0,x,z),speed:0});time=legs[0].end;
  function addLeg(){
   let goal=null;
   for(let tries=0;tries<10&&!goal;tries++){
@@ -125,17 +154,20 @@ export function roamPlan(action,place,seed,solids,spirit='okay'){
    const gx=x+Math.cos(angle)*distance,gz=z+Math.sin(angle)*distance;
    if(walkable(gx,gz,undefined,undefined,solids)&&clearGroundLine([x,z],[gx,gz],solids)&&!(near&&Math.hypot(gx-seat.x,gz-seat.z)<1.1))goal=[gx,gz];
   }
-  const running=goal&&random()<kind.run,speed=running?RUN_SPEED:kind.device?TABLET_SPEED:WALK_SPEED,[gx,gz]=goal||[x,z],walk=Math.hypot(gx-x,gz-z)/speed;
-  legs.push({x0:x,z0:z,x1:gx,z1:gz,t0:time,t1:time+walk,speed:goal?speed:0,...rest(time+walk)});
+  const running=goal&&!cautious&&random()<kind.run*(spirit==='happy'?1.8:spirit==='tired'?0:1),speed=running?RUN_SPEED:kind.device?TABLET_SPEED:WALK_SPEED,[gx,gz]=goal||[x,z],walk=Math.hypot(gx-x,gz-z)/speed;
+  legs.push({x0:x,z0:z,x1:gx,z1:gz,t0:time,t1:time+walk,speed:goal?speed:0,...rest(time+walk,gx,gz)});
   x=gx;z=gz;time=legs.at(-1).end;
  }
  return{at(seconds){
   while(time<=seconds)addLeg();
   let lo=0,hi=legs.length-1;while(lo<hi){const mid=(lo+hi+1)>>1;if(legs[mid].t0<=seconds)lo=mid;else hi=mid-1;}
   const leg=legs[lo];
-  if(seconds<leg.t1){const p=(seconds-leg.t0)/(leg.t1-leg.t0);return{x:leg.x0+(leg.x1-leg.x0)*p,z:leg.z0+(leg.z1-leg.z0)*p,heading:Math.atan2(leg.x1-leg.x0,leg.z1-leg.z0),clip:leg.speed>=RUN_SPEED?'run':kind.device?'walk-texting':walkClip(spirit),moving:true};}
+  if(seconds<leg.t1){const p=(seconds-leg.t0)/(leg.t1-leg.t0);return{x:leg.x0+(leg.x1-leg.x0)*p,z:leg.z0+(leg.z1-leg.z0)*p,heading:Math.atan2(leg.x1-leg.x0,leg.z1-leg.z0),clip:leg.speed>=RUN_SPEED?'run':kind.device?'walk-texting':walkClip(cautious?'okay':spirit,weather),moving:true};}
   // He pulls his tablet out once, at the start; after that each stop picks up the two-handed part of the clip.
-  if(leg.clip==='tablet-stand'){const c=CLIPS['tablet-stand'],k=seconds-leg.t1,loop=c.duration-c.held;return{x:leg.x1,z:leg.z1,heading:null,clip:leg.clip,moving:false,time:lo===0&&k<c.duration?k:c.held+(lo===0?k-c.duration:k)%loop};}
+  if(leg.clip==='tablet-stand'||leg.clip==='texting'&&seconds-leg.t1>=CLIPS.texting.duration){
+   const c=CLIPS['tablet-stand'],k=seconds-leg.t1,loop=c.duration-c.held,offset=leg.clip==='texting'?k-CLIPS.texting.duration:k;
+   return{x:leg.x1,z:leg.z1,heading:null,clip:'tablet-stand',moving:false,time:lo===0&&k<c.duration?k:c.held+(lo===0?k-c.duration:offset)%loop};
+  }
   const pauseTime=seconds-leg.t1,length=CLIPS[leg.clip].duration;
   // A clip that plays once hands back to his idle; the others loop.
   if(CLIPS[leg.clip].once&&pauseTime>=length)return{x:leg.x1,z:leg.z1,heading:leg.facing??null,clip:'idle',moving:false,time:(pauseTime-length)%CLIPS.idle.duration};

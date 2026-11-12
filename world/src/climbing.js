@@ -86,8 +86,8 @@ export function canGrab(line,s){const reach=line.levels[0]-line.ground(s);return
 // A seeded climb: a list of timed segments every visitor plays the same way.
 // From the ground he walks along the face, jumps up, hangs, shimmies, hops up
 // and drops; on a branch or rope he only uses the moves that hold allows.
-export function climbPlan(line,random,{duration,fromGround}){
- if(line.kind==='rope')return ropeClimbPlan(line,duration);
+export function climbPlan(line,random,{duration,fromGround,spirit,weather}){
+ if(line.kind==='rope')return ropeClimbPlan(line,duration,{spirit,weather});
  const segments=[];let t=0,s=fromGround?mix(line.range[0],line.range[1],random()):0,level=0,hanging=!fromGround,lean=random()<.5?'left':'right',moves=0;
  const add=(mode,clip,length,extra={})=>{segments.push({mode,clip,t0:t,t1:t+length,s,level,...extra});t+=length;};
  const loops=clip=>CLIPS[clip].duration*(1+Math.floor(random()*2));
@@ -101,7 +101,8 @@ export function climbPlan(line,random,{duration,fromGround}){
    add('grab',HANG_CLIPS.braced.grab,CLIPS[HANG_CLIPS.braced.grab].duration);hanging=true;level=0;moves=0;continue;
   }
   const {style,moves:allowed}=hangMoves(line,s,level),clips=HANG_CLIPS[style];
-  const weights={idle:1,left:lean==='left'?2:.6,right:lean==='right'?2:.6,up:.7,drop:.15+moves*.05};
+  const cautious=spirit==='tired'||weather==='rain'||weather==='storm';
+  const weights={idle:cautious?4:2,left:lean==='left'?2:.6,right:lean==='right'?2:.6,up:cautious?0:spirit==='happy'?1.4:.7,drop:.15+moves*.05};
   let roll=random()*allowed.reduce((sum,m)=>sum+weights[m],0),move=allowed[0];
   for(const m of allowed){roll-=weights[m];if(roll<=0){move=m;break;}}
   if((move==='left'||move==='right')&&!allowed.includes(lean))lean=move;
@@ -127,14 +128,20 @@ const canopyClip=()=>CLIPS['climb-top']?'climb-top':'swing-land';
 function timedPlan(line,segments){
  return {line,segments,at(seconds){let index=segments.findIndex(s=>seconds<s.t1);if(index<0)index=segments.length-1;const seg=segments[index],time=Math.max(0,seconds-seg.t0);return {...seg,index,time,progress:Math.min(1,time/(seg.t1-seg.t0))};}};
 }
-export function ropeClimbPlan(line,duration){
+export function ropeClimbPlan(line,duration,{spirit,weather}={}){
  const landing=CLIPS[canopyClip()].duration,hand=CLIPS['rope-climb'].hands[0];
  const rise=line.anchor[1]-line.point(0)[1],up=rise/.3*CLIPS['rope-climb'].duration;
  const down=(line.anchor[1]-hand[1]-line.ground(0))/.55;
- const scale=Math.min(1,Math.max(2,duration-4-landing*2-10)/(up+down));
- const ascent=up*scale,descent=down*scale,leave=Math.max(ascent+landing+1,duration-4-landing-descent);
+ const pause=duration>90&&(spirit==='tired'||weather==='rain'||weather==='storm')?CLIPS['rope-hang'].duration*2:0;
+ const scale=Math.min(1,Math.max(2,duration-4-landing*2-10-pause)/(up+down));
+ const ascent=up*scale+pause,half=(ascent-pause)/2,descent=down*scale,leave=Math.max(ascent+landing+1,duration-4-landing-descent);
+ const climb=pause?[
+  {mode:'rope-climb',clip:'rope-climb',t0:0,t1:half,riseTo:.5},
+  {mode:'rope-pause',clip:'rope-hang',t0:half,t1:half+pause},
+  {mode:'rope-climb',clip:'rope-climb',t0:half+pause,t1:ascent,riseFrom:.5},
+ ]:[{mode:'rope-climb',clip:'rope-climb',t0:0,t1:ascent}];
  return timedPlan(line,[
-  {mode:'rope-climb',clip:'rope-climb',t0:0,t1:ascent},
+  ...climb,
   {mode:'canopy-land',clip:canopyClip(),t0:ascent,t1:ascent+landing},
   {mode:'canopy-rest',clip:'sleep-lay',t0:ascent+landing,t1:leave},
   {mode:'canopy-leave',clip:canopyClip(),t0:leave,t1:leave+landing},
@@ -169,10 +176,12 @@ export function placement(line,seg){
    time:mode==='canopy-leave'?Math.max(0,CLIPS[clip].duration-time):mode==='rope-down'?CLIPS[clip].duration-loopTime:loopTime};
  }
 
- if(mode==='rope-climb'||mode==='canopy-land'||mode==='canopy-rest'){
-  const [x,top,z]=line.anchor,hand=CLIPS['rope-climb'].hands[0];
+ if(mode==='rope-climb'||mode==='rope-pause'||mode==='canopy-land'||mode==='canopy-rest'){
+  const [x,top,z]=line.anchor,hand=CLIPS[mode==='rope-pause'?'rope-hang':'rope-climb'].hands[0];
+  if(mode==='rope-pause')return {x:x-f[0]*hand[0],y:mix(line.point(0)[1],top,.5)-hand[1],z:z-f[1]*hand[0],heading:line.heading,clip,time:loopTime};
   const back=mode==='rope-climb'?hand[0]:mix(hand[0],0,mode==='canopy-rest'?1:smooth(.15,.85,progress));
-  const y=mode==='rope-climb'?mix(line.point(0)[1],top,progress)-hand[1]:mode==='canopy-land'?mix(top-hand[1],top,smooth(.15,.85,progress)):top-.5;
+  const rise=mix(seg.riseFrom??0,seg.riseTo??1,progress);
+  const y=mode==='rope-climb'?mix(line.point(0)[1],top,rise)-hand[1]:mode==='canopy-land'?mix(top-hand[1],top,smooth(.15,.85,progress)):top-.5;
   return {x:x-f[0]*back,y,z:z-f[1]*back,heading:line.heading,clip,time:mode==='canopy-land'?time:loopTime};
  }
  if(mode==='walk'){const s=mix(seg.s0,seg.s1,progress),[x,z]=line.stand(s),side=leftOf(line.heading),dir=Math.sign(seg.s1-seg.s0)||1;return {x,z,y:groundHeight(x,z),heading:Math.atan2(side[0]*dir,side[1]*dir),clip,time:loopTime,moving:true};}

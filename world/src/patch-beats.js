@@ -8,6 +8,13 @@ import { CLIPS } from './patch-clips.js';
 
 export const SPIRITS = ['okay', 'happy', 'tired', 'grumpy'];
 const beat = (clip, okay, happy, tired, grumpy, wait = 0, extra = {}) => ({ clip, weight: { okay, happy, tired, grumpy }, wait, ...extra });
+const tablet = (oneHanded, twoHanded) => ({
+  postures: ['stand'], holding: 'tablet', base: 'tablet-stand', breaks: [twoHanded, oneHanded],
+});
+export const TABLET_BEATS = {
+  research: tablet(beat('texting', 2, 2, 1, 1, 60, { again: true }), beat('tablet-stand', 5, 5, 6, 6, 0, { again: true })),
+  write: tablet(beat('texting', 3, 4, 2, 2, 35, { again: true }), beat('tablet-stand', 4, 4, 5, 5, 0, { again: true })),
+};
 
 // `postures` are the ways he may hold his body in the activity and `holding` is
 // what is in his hands. `gap` is how long the base clip plays between breaks.
@@ -34,9 +41,9 @@ export const BEATS = {
     beat('happy-swing',     .3,   2,   0,   0,   60),
     beat('dance-swing-2',    0, 1.5,   0,   0,   90, { hold: [5, 10] }),
     beat('excited',          0,   1,   0,   0,  120),
-    beat('jump',            .3, 1.5,   0,   0,   45),
-    beat('flip',             0,  .5,   0,   0,  180),
-    beat('backflip',         0,  .5,   0,   0,  180),
+    beat('jump',            .3, 1.5,   0,   0,   45, { room: true, weatherWeight: { rain: 0, storm: 0 } }),
+    beat('flip',             0,  .5,   0,   0,  180, { room: true, weatherWeight: { rain: 0, storm: 0 } }),
+    beat('backflip',         0,  .5,   0,   0,  180, { room: true, weatherWeight: { rain: 0, storm: 0 } }),
     beat('yawn',            .2,   0,   6,  .5,   60),
     beat('angry',            0,   0,   0,   3,   90),
     beat('angry-point',      0,   0,   0,   2,   30),
@@ -47,10 +54,13 @@ export const BEATS = {
     beat('yawn',            .2,   0,   5,  .5,   60),
     beat('angry',            0,   0,   0, 1.5,  120),
   ] },
+  'think@seat': { postures: ['seat'], base: 'seat-idle', gap: [15, 40], breaks: [
+    beat('sit', 1, 2, 3, 2, 20, { hold: [5, 12], again: true }),
+  ] },
   look: { postures: ['stand'], base: 'idle', gap: [3, 8], breaks: [
     beat('look-around',      6,   6,   4,   4,    0),
     beat('happy-idle',       1,   3,   0,   0,   20, { hold: [4, 8] }),
-    beat('jump',            .2,   1,   0,   0,   60),
+    beat('jump',            .2,   1,   0,   0,   60, { room: true, weatherWeight: { rain: 0, storm: 0 } }),
     beat('yawn',            .1,   0,   4,   0,   60),
     beat('angry-point',      0,   0,   0,   2,   30),
   ] },
@@ -58,13 +68,12 @@ export const BEATS = {
     beat('excited',          5,   8,   2,   1,    0),
     beat('happy-idle',       3,   3,   3,   2,    0, { hold: [4, 8] }),
     beat('happy-swing',      2,   3,   0,   0,   30),
-    beat('jump',             1,   2,   0,   0,   20),
+    beat('jump',             1,   2,   0,   0,   20, { room: true, weatherWeight: { rain: 0, storm: 0 } }),
     beat('look-around',      2,   2,   2,   3,    6),
   ] },
-  eat: { postures: ['stand'], base: 'idle', gap: [8, 16], breaks: [
+  eat: { postures: ['stand'], base: 'idle', gap: [10, 22], breaks: [
     beat('look-around',      2,   2,   1,   2,   12),
     beat('happy-idle',       1,   3,   0,   0,   25, { hold: [4, 6] }),
-    beat('yawn',             0,   0,   2,   0,   90),
   ] },
   // At the rope shelves he reaches up for each banana before he eats it.
   'eat@shelves': { postures: ['stand'], base: 'idle', gap: [8, 16], breaks: [
@@ -78,9 +87,9 @@ export const BEATS = {
     beat('idle',             3,   2,   3,   3,    0),
     beat('happy-idle',      .5,   3,   0,   0,   20),
     beat('happy-idle-2',     0,   2,   0,   0,   30),
-    beat('jump',             1,   2,   0,   0,   30),
-    beat('flip',            .2,   1,   0,   0,  120),
-    beat('sit-ground',       1,   1,   4,   1,   60, { min: 7 }),
+    beat('jump',             1,   2,   0,   0,   30, { room: true, weatherWeight: { rain: 0, storm: 0 } }),
+    beat('flip',            .2,   1,   0,   0,  120, { room: true, weatherWeight: { rain: 0, storm: 0 } }),
+    beat('sit-ground',       1,   1,   4,   1,   60, { room: true, min: 7, weatherWeight: { rain: 0, storm: 0 } }),
     beat('yawn',             0,   0,   3,   0,   90, { min: 8 }),
     beat('angry-point',      0,   0,   0, 1.5,   40),
   ] },
@@ -95,8 +104,8 @@ export const BEATS = {
   sit: { postures: ['ground', 'lie'], base: 'sit-ground', gap: [20, 45], breaks: [
     beat('sit-idle-2',       3,   3,   2,   3,    0, { hold: [20, 45] }),
     beat('sit-idle-3',       2,   3,   4,   1,    0, { hold: [20, 45] }),
-    beat('lay',              2,   2,   3,   1,    0, { hold: [20, 45] }),
-    beat('lay-pose',         1,   1,   2,   1,   60, { hold: [20, 40] }),
+    beat('lay',              2,   2,   3,   1,    0, { hold: [20, 45], weatherWeight: { rain: 0, storm: 0 } }),
+    beat('lay-pose',         1,   1,   2,   1,   60, { hold: [20, 40], weatherWeight: { rain: 0, storm: 0 } }),
   ] },
   // On a chair, bench, driftwood or stump, once he has lowered himself onto it.
   'sit@seat': { postures: ['seat'], base: 'seat-idle', gap: [8, 20], breaks: [
@@ -104,8 +113,9 @@ export const BEATS = {
     beat('sit-cheer',        0,   3,   0,   0,   40),
     beat('sit-scared',       0,   0,   0,   2,   90),
   ] },
-  'fish@seat': { postures: ['seat'], holding: 'rod', base: 'seat-idle', gap: [10, 25], breaks: [
-    beat('sit',              1,   1,   1,   1,    0, { hold: [6, 12] }),
+  'fish@seat': { postures: ['seat'], holding: 'rod', base: 'seat-idle', gap: [14, 38],
+    moodGap: { happy: .8, tired: 1.4, grumpy: .9 }, weatherGap: { storm: 1.3 }, breaks: [
+    beat('sit',              1,   1,   1,   1,    0, { hold: [3, 5], again: true }),
   ] },
   // He strings dances together, keeping the beat between them.
   dance: { postures: ['stand'], base: 'dance-swing-2', gap: [2.5, 7.5], breaks: [
@@ -115,13 +125,13 @@ export const BEATS = {
     beat('dance-hip-hop-3',  2,   3,   1,   2,   40),
     beat('dance-arms',       3,   3,   4,   3,   40),
     beat('dance-swing',      2,   3,   1,   2,   40),
-    beat('flip',            .5,   1,   0,  .3,   60),
-    beat('backflip',        .5,   1,   0,  .3,   60),
+    beat('flip',            .5,   1,   0,  .3,   60, { room: true, weatherWeight: { rain: 0, storm: 0 } }),
+    beat('backflip',        .5,   1,   0,  .3,   60, { room: true, weatherWeight: { rain: 0, storm: 0 } }),
     beat('excited',         .5,   1,   0,   0,   90),
   ] },
   // A shot is a draw and a held aim; between shots he checks his bow or looks for his mark.
   archery: { postures: ['stand'], holding: 'bow', base: 'bow-idle', gap: [3, 8], breaks: [
-    beat('bow-draw',         6,   6,   4,   6,    0, { then: 'bow-aim', hold: [2.5, 5], again: true }),
+    beat('bow-draw',         6,   7,   4,   6,    0, { then: 'bow-aim', hold: [2.5, 5], again: true, weatherWeight: { rain: .7, storm: .35 } }),
     beat('bow-look',         2,   2,   1,   2,   10),
     beat('bow-examine',    1.5, 1.5,   2,   2,   25),
   ] },
@@ -139,7 +149,7 @@ export function fits(clip, { postures, holding = null }) {
 
 // One weighted choice from a table. `last` is the break before, `played` maps each
 // clip to when it last ended, `at` is now and `span` is how long he has.
-export function pickBeat(table, spirit, random, { last = null, played = new Map(), at = 0, span = Infinity, weather = 'clear' } = {}) {
+export function pickBeat(table, spirit, random, { last = null, played = new Map(), at = 0, span = Infinity, weather = 'clear', room = true } = {}) {
   const mood = SPIRITS.includes(spirit) ? spirit : 'okay';
   const weight = row => row.weight[mood] * (row.weatherWeight?.[weather] ?? 1);
   const open = table.breaks.filter(row => {
@@ -147,7 +157,7 @@ export function pickBeat(table, spirit, random, { last = null, played = new Map(
     const minimum = Math.max(row.min || 0, clip.once ? clip.duration : 0);
     const lastEnd = played.get(row.clip) ?? -Infinity;
     return weight(row) > 0 && (row.again || row.clip !== last)
-      && minimum <= span && lastEnd + row.wait <= at && fits(row.clip, table);
+      && minimum <= span && lastEnd + row.wait <= at && fits(row.clip, table) && (!row.room || room);
   });
   let roll = random() * open.reduce((sum, row) => sum + weight(row), 0);
   for (const row of open) { roll -= weight(row); if (roll <= 0) return row; }
@@ -156,7 +166,7 @@ export function pickBeat(table, spirit, random, { last = null, played = new Map(
 
 // A seeded timeline for a standing-still activity: the base clip, a break, the base clip again.
 // at(seconds) gives the clip and the time within it, and can be joined at any moment.
-export function beatPlan(name, random, spirit = 'okay', weather = 'clear') {
+export function beatPlan(name, random, spirit = 'okay', weather = 'clear', room = true) {
   const table = BEATS[name], beats = [], played = new Map();
   let time = 0, last = null;
   const span = ([a, b]) => a + random() * (b - a);
@@ -166,7 +176,7 @@ export function beatPlan(name, random, spirit = 'okay', weather = 'clear') {
   function next() {
     const gapScale = (table.moodGap?.[spirit] ?? 1) * (table.weatherGap?.[weather] ?? 1);
     add(table.base, span(table.gap) * gapScale);
-    const row = pickBeat(table, spirit, random, { last, played, at: time, weather });
+    const row = pickBeat(table, spirit, random, { last, played, at: time, weather, room });
     if (!row) return;
     if (row.then) { add(row.clip, CLIPS[row.clip].duration); add(row.then, held(row.then, row.hold)); }
     else add(row.clip, row.hold ? held(row.clip, row.hold) : CLIPS[row.clip].duration);
@@ -180,9 +190,9 @@ export function beatPlan(name, random, spirit = 'okay', weather = 'clear') {
     let lo = 0, hi = beats.length - 1;
     while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (beats[mid].t0 <= seconds) lo = mid; else hi = mid - 1; }
     const { clip, t0 } = beats[lo];
-    return { clip, time: (seconds - t0) % CLIPS[clip].duration, base: clip === table.base, index: lo };
+    return { clip, time: (seconds - t0) % CLIPS[clip].duration, elapsed: seconds - t0, base: clip === table.base, index: lo };
   } };
 }
 
 // He walks with a spring in his step when he feels good.
-export const walkClip = spirit => spirit === 'happy' ? 'happy-walk' : 'walk';
+export const walkClip = (spirit, weather) => spirit === 'happy' && !['rain', 'storm'].includes(weather) ? 'happy-walk' : 'walk';

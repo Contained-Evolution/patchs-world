@@ -20,6 +20,20 @@ test('every clip in patch.glb is registered with its real length',()=>{
  for(const style of Object.values(HANG_CLIPS))for(const clip of Object.values(style))assert.ok(CLIPS[clip],clip);
 });
 
+test('tired rope climbs pause with the same grip height before continuing upward',()=>{
+ const line=holdLine(holdFor(1),0);
+ const plan=climbPlan(line,rng(7),{duration:600,fromGround:false,spirit:'tired'});
+ const pause=plan.segments.find(segment=>segment.mode==='rope-pause');
+ assert.ok(pause);
+ const before=placement(line,plan.at(pause.t0-1e-5));
+ const held=placement(line,plan.at(pause.t0+1));
+ const after=placement(line,plan.at(pause.t1));
+ assert.equal(held.clip,'rope-hang');
+ const height=pose=>pose.y+CLIPS[pose.clip].hands[0][1];
+ assert.ok(Math.abs(height(before)-height(held))<1e-4);
+ assert.ok(Math.abs(height(after)-height(held))<1e-4);
+});
+
 test('braced hangs only happen on the flat climbing face',()=>{
  const line=wallHold(CLIMB_WALLS[0]);
  for(let s=line.range[0];s<=line.range[1];s+=.05)for(const level of [0,1])assert.equal(hangStyle(line,s,level),'braced');

@@ -1,20 +1,34 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
-import { BEATS, SPIRITS, beatPlan, beatsFor, fits, pickBeat, walkClip } from '../src/patch-beats.js';
+import { BEATS, TABLET_BEATS, SPIRITS, beatPlan, beatsFor, fits, pickBeat, walkClip } from '../src/patch-beats.js';
 import { CLIPS } from '../src/patch-clips.js';
 import { rng, seedFrom } from '../src/patch-motion.js';
 
 const clipsOf = table => [table.base, ...table.breaks.flatMap(row => [row.clip, row.then, row.resume].filter(Boolean))];
 
 test('no beat collides with how he is standing or what he is holding', () => {
-  for (const [name, table] of Object.entries(BEATS)) {
+  for (const [name, table] of Object.entries({ ...BEATS, ...TABLET_BEATS })) {
     for (const clip of clipsOf(table)) assert.ok(fits(clip, table), `${clip} collides with ${name}`);
   }
   assert.equal(fits('yawn', BEATS.archery), false, 'his hands are full of bow');
   assert.equal(fits('bow-aim', BEATS.idle), false, 'he has no bow in his hands');
   assert.equal(fits('sit-cheer', BEATS.idle), false, 'he is not sitting');
   assert.equal(fits('idle', BEATS.archery), true, 'relaxed arms can hold something');
+});
+
+test('dance keeps its base step and skips flips on cramped or wet ground', () => {
+  const clips = (weather, room) => {
+    const plan = beatPlan('dance', rng(7), 'happy', weather, room);
+    assert.equal(plan.at(0).clip, 'dance-swing-2');
+    return new Set(Array.from({ length: 900 }, (_, i) => plan.at(i * 4).clip));
+  };
+  assert.ok(clips('clear', true).has('flip'));
+  for (const poses of [clips('clear', false), clips('rain', true)]) {
+    assert.ok(poses.size > 4);
+    assert.ok(!poses.has('flip') && !poses.has('backflip'));
+  }
+  assert.equal(walkClip('happy', 'rain'), 'walk');
 });
 
 test('every clip in the model is played somewhere on the island, or marked spare', () => {

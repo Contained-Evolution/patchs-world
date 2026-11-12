@@ -15,7 +15,7 @@ export function forageTrees(solids){
  return targets;
 }
 
-export function foragePlan(seed,solids){
+export function foragePlan(seed,solids,spirit='okay',weather='clear'){
  const random=rng(seed),trees=forageTrees(solids),segments=[];let endTime=0,trip=0;
  const remaining=[];
  function nextTree(){
@@ -40,7 +40,10 @@ export function foragePlan(seed,solids){
   const target=nextTree();
   if(!target){add('idle',30,FOOD_STORE,FOOD_STORE);return;}
   const {tree,route}=target,home=route[0],end=route.at(-1);
-  const gait=['carry-walk','carry-jog','carry-run'][trip++%3],speed={'carry-walk':1.05,'carry-jog':1.8,'carry-run':2.8}[gait];
+  const gaits=weather==='storm'||spirit==='tired'?['carry-walk']:
+   weather==='rain'||spirit==='grumpy'?['carry-walk','carry-jog']:
+   spirit==='happy'?['carry-jog','carry-run','carry-jog','carry-walk']:['carry-walk','carry-jog','carry-run'];
+  const gait=gaits[trip++%gaits.length],speed={'carry-walk':1.05,'carry-jog':1.8,'carry-run':2.8}[gait];
   const faceTree=Math.atan2(tree.x-end[0],tree.z-end[1]);
   const still=(clip,at,extra={})=>add(clip,CLIPS[clip].duration,at,at,extra);
   still('pick-up',home,{basket:'lifting',filled:false,heading:0});
@@ -61,6 +64,7 @@ export function foragePlan(seed,solids){
   still('open-lid',home,{basket:'ground',filled:true,heading:0,opening:true});
   still('pick-up',home,{basket:'ground',filled:true,heading:0,deposit:true});
   still('open-lid',home,{basket:'ground',heading:0,closing:true,reverse:true});
+  add('idle',CLIPS.idle.duration,home,home,{basket:'ground',heading:0,meal:true});
  }
  return {at(seconds){
   seconds=Number.isFinite(seconds)?Math.max(0,seconds):0;while(endTime<=seconds)next();

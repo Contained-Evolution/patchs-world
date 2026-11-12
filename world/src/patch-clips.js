@@ -33,7 +33,7 @@ export const CLIPS = {
  'sit-to-type':{label:'Sit to type',group:'Devices',duration:29/24,posture:'seat',arms:'keys',use:'Reaching for the keys at the coconut computer'},
  typing:{label:'Typing',group:'Devices',duration:396/24,posture:'seat',arms:'keys',use:'Answering letters, searching and writing at the coconut computer'},
  'type-to-sit':{label:'Type to sit',group:'Devices',duration:23/24,posture:'seat',arms:'keys',use:'Sitting back from the coconut computer'},
- texting:{label:'Texting',group:'Devices',duration:445/24,posture:'stand',arms:'tablet',use:'Phone-style texting with one hand; in the locker only'},
+ texting:{label:'Texting',group:'Devices',duration:445/24,posture:'stand',arms:'tablet',once:true,use:'Using the tablet with one hand between two-handed stretches'},
  // His hand brings the tablet up at `out` seconds and both hands hold it from `held`; the rest loops.
  'tablet-stand':{label:'Texting while standing',group:'Devices',duration:566/24,out:42/24,held:53/24,posture:'stand',arms:'tablet',use:'Pulling out his tablet, then reading and writing on it standing up'},
  'walk-texting':{label:'Walking while texting',group:'Devices',duration:96/24,posture:'move',arms:'tablet',use:'Wandering about with his tablet in both hands'},

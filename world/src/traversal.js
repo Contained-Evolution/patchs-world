@@ -4,6 +4,22 @@ const mix=(a,b,t)=>a+(b-a)*t;
 const smooth=t=>t*t*(3-2*t);
 const radius=.95;
 
+// In-place swings pause on a supported hold. Through journeys keep their server timing.
+export function swingRhythm(seconds,lengths,spirit,weather) {
+ const pace=spirit==='happy'?3.6:spirit==='tired'?2.3:3;
+ const rest=(spirit==='tired'?4:spirit==='happy'?1:2)+(weather==='storm'?2:0);
+ const duration=lengths.reduce((sum,length)=>sum+length/pace+rest,0);
+ let time=Math.max(0,seconds)%duration,distance=0;
+ for(const length of lengths){
+  const moving=length/pace;
+  if(time<moving)return {distance:distance+time*pace,resting:false};
+  distance+=length;
+  if(time<moving+rest)return {distance,resting:true};
+  time-=moving+rest;
+ }
+ return {distance:0,resting:false};
+}
+
 // Plan the hand's path, including the two pendulum arcs and the airborne
 // transfer. The renderer uses this same point for Patch's animated grip.
 export function makeTransfer(from,to) {

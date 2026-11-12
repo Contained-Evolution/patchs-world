@@ -38,6 +38,7 @@ const DESK = new Set(['computer', 'research', 'write']);
 export function seatFor(action, place) {
  if (!SEATS[place]) return null;
  if (action === 'sit' || (action === 'fish' && place === 'pond')) return SEATS[place];
+ if (action === 'think' && place === 'hammock') return SEATS.hammock;
  if (place === 'computer' && (DESK.has(action) || action === 'think' || action === 'idle')) return SEATS.computer;
  return null;
 }

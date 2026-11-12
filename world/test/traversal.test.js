@@ -1,7 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { traversalLoop, trees, ROPE_LENGTH } from '../src/world-state.js';
-import { makeTransfer } from '../src/traversal.js';
+import { makeTransfer, swingRhythm } from '../src/traversal.js';
+
+test('swing breaks occur at a hold and tired Patch rests longer',()=>{
+ assert.deepEqual(swingRhythm(4,[6,9],'tired','clear'),{distance:6,resting:true});
+ assert.deepEqual(swingRhythm(6,[6,9],'tired','clear'),{distance:6,resting:true});
+ assert.ok(swingRhythm(4,[6,9],'happy','clear').distance>6);
+});
 
 test('each branch and rope transfer clears every tall-tree trunk and joins continuously',()=>{
  const holds=traversalLoop(),types=new Set();

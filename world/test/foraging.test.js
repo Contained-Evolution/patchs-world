@@ -28,6 +28,15 @@ test('one-shot basket interactions stay within the source clip and preserve posi
  for(let t=0;t<500;t+=.07){const pose=plan.at(t);if(!pose.moving){assert.ok(pose.time>=0&&pose.time<=CLIPS[pose.clip].duration);assert.deepEqual(pose.from,pose.to);}}
 });
 
+test('a tired Patch walks with the basket and eats at the store after unloading',()=>{
+ const plan=foragePlan(9,undefined,'tired','rain');
+ const poses=Array.from({length:900},(_,i)=>plan.at(i));
+ assert.ok(poses.some(pose=>pose.meal&&pose.clip==='idle'&&pose.x===FOOD_STORE[0]&&pose.z===FOOD_STORE[1]));
+ const carrying=poses.filter(pose=>pose.moving);
+ assert.ok(carrying.length>0);
+ assert.ok(carrying.every(pose=>pose.clip==='carry-walk'&&pose.basket==='held'));
+});
+
 test('closing the lid retraces the opening animation at the same clip time',()=>{
  const plan=foragePlan(9);let opening,closing;
  for(let t=0;t<300;t+=.1){const pose=plan.at(t);if(pose.opening&&!opening)opening=pose;if(pose.closing){closing=pose;break;}}
