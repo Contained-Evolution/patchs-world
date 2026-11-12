@@ -12,6 +12,7 @@ import { concepts } from './memory-graph.mjs';
 import { cleanSubscription, addDevice, sendPush, gone, deliveries } from './push.mjs';
 import { canSpeak, voiceRoom, countVoice, record } from './voice.mjs';
 import { estimateMs, schedule, speechView } from '../shared/speech.js';
+import { drafts, configured, authorizeX, xHeaders, publish, receiptKey } from './social.mjs';
 import { feedFrom } from '../shared/feed.js';
 
 const headers = {
@@ -41,6 +42,30 @@ const newId = now => `${now.toString(36)}${crypto.getRandomValues(new Uint32Arra
 
 // The one Patch. Every visitor reads the same body; one alarm runs his mind.
 export class PatchWorld extends DurableObject {
+  async socialDrafts() {
+    return Promise.all(Object.entries(drafts).map(async ([platform, draft]) => ({
+      platform, ...draft, ready: configured(this.env, platform),
+      receipt: await this.ctx.storage.get(receiptKey(platform)),
+    })));
+  }
+
+  async publishDraft(owner, platform, callback) {
+    if (!Object.hasOwn(drafts, platform) || !configured(this.env, platform)) {
+      return { status: 503, error: 'Publishing is unavailable for this account.' };
+    }
+    const storage = this.ctx.storage;
+    try {
+      const receipt = await storage.get(receiptKey(platform));
+      if (receipt) return { status: 409, error: 'This draft already has a submission record.' };
+      if (platform === 'x' && !callback) return { status: 200, authorize: await authorizeX(storage, this.env, owner) };
+      const headers = platform === 'x' ? await xHeaders(storage, this.env, owner, callback.state, callback.code) : null;
+      const result = await publish(storage, this.env, platform, headers);
+      return { status: result.state === 'published' ? 200 : 502, ...result };
+    } catch (error) {
+      return { status: 502, error: error.message };
+    }
+  }
+
   // Once, when his mind took charge of his day: delete every letter, board post and record of who wrote.
   async freshStart(now) {
     if (this.started || await this.ctx.storage.get('freshStart')) { this.started = true; return; }
@@ -472,6 +497,21 @@ async function visitorApi(request, env, url, path) {
   if (path === '/api/me' && request.method === 'GET') return json({ user: who && { name: who.name, admin: who.admin }, signIn: SIGN_IN });
   if (!who) return json({ error: 'Sign in to talk to Patch.', signIn: SIGN_IN }, 401);
   const send = ({ status, ...body }) => json(body, status);
+  if (path.startsWith('/api/social/')) {
+    if (!who.admin) return json({ error: 'Owner access required.' }, 403);
+    if (path === '/api/social/drafts' && request.method === 'GET') return json(await patch.socialDrafts());
+    if (path === '/api/social/publish' && request.method === 'POST') {
+      return send(await patch.publishDraft(who.id, (await readJson(request))?.platform));
+    }
+    if (path === '/api/social/x/callback' && request.method === 'GET') {
+      const result = await patch.publishDraft(who.id, 'x', {
+        state: url.searchParams.get('state'), code: url.searchParams.get('code'),
+      });
+      const query = result.error ? '?social=' + encodeURIComponent(result.error) : '';
+      return Response.redirect(SITE + '/journal.html' + query + '#social-drafts', 303);
+    }
+    return json({ error: 'Not found.' }, 404);
+  }
   if (path === '/api/letters' && request.method === 'GET') return json({ letters: await patch.letters(who) });
   if (path === '/api/letters' && request.method === 'POST') return send(await patch.sendLetter(who, await readJson(request)));
   if (path === '/api/gifts' && request.method === 'GET') return json(await patch.gifts(who));
@@ -509,7 +549,7 @@ export default {
       const kept = { ...headers, 'cache-control': 'public, max-age=31536000, immutable' };
       return voice[2] ? audioResponse(request, clip.audio, kept) : Response.json(clip, { headers: kept });
     }
-    if (path === '/api/me' || path === '/api/letters' || path === '/api/gifts' || path.startsWith('/api/board') || path.startsWith('/api/push')) return visitorApi(request, env, url, path);
+    if (path === '/api/me' || path === '/api/letters' || path === '/api/gifts' || path.startsWith('/api/board') || path.startsWith('/api/push') || path.startsWith('/api/social/')) return visitorApi(request, env, url, path);
     if (path.startsWith('/api/')) return json({ error: 'Not found.' }, 404);
 
     const assetUrl = new URL(path === '/' ? '/index.html' : path, url);

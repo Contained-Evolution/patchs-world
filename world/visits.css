@@ -42,3 +42,9 @@ button+button{background:transparent;color:#20554b;margin-top:6px}
 #entries-list button[aria-current]{background:#f0c47e;color:#20382e;border-color:#f0c47e}
 #entries-list small{font-size:.85rem;opacity:.85}
 @media(prefers-reduced-motion:reduce){#entries-drawer{transition:none}}
+
+#social-drafts { margin: 1rem auto; max-width: 74rem; }
+#social-previews { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit,minmax(min(100%,16rem),1fr)); }
+#social-previews article { padding: 1rem; border-radius: .75rem; background: #f6f4e8; color: #163833; }
+#social-previews p { white-space: pre-wrap; overflow-wrap: anywhere; }
+#social-previews img { display: block; width: min(100%,16rem); margin: 0 0 1rem; border-radius: .5rem; }

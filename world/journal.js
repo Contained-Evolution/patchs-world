@@ -98,3 +98,67 @@ async function openJournal() {
 }
 
 openJournal().catch(() => { status.textContent = 'Patch’s journal couldn’t open. Try refreshing the page.'; });
+
+async function openSocialDrafts() {
+  const response = await fetch('./api/social/drafts');
+  if (!response.ok) return;
+  const drafts = await response.json();
+  const section = document.querySelector('#social-drafts');
+  const status = document.querySelector('#social-status');
+  const previews = document.querySelector('#social-previews');
+  const error = new URLSearchParams(location.search).get('social');
+  if (error) status.textContent = error;
+  for (const draft of drafts) {
+    const card = document.createElement('article');
+    const heading = document.createElement('h3');
+    const platform = { x: 'X', facebook: 'Facebook', instagram: 'Instagram' }[draft.platform];
+    heading.textContent = platform + ' ' + draft.account;
+    const body = document.createElement('p');
+    body.textContent = draft.text;
+    card.append(heading, body);
+    if (draft.image) {
+      const image = document.createElement('img');
+      image.src = draft.image;
+      image.alt = 'Patch portrait on the Zoom, Crab Cloud! journal card';
+      card.append(image);
+    }
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = draft.receipt?.state === 'published' ? 'Published' :
+      draft.receipt ? 'Check the account' : draft.ready ? 'Approve and publish' : 'Account setup pending';
+    button.disabled = Boolean(draft.receipt) || !draft.ready;
+    button.onclick = async () => {
+      button.disabled = true;
+      status.textContent = 'Submitting to ' + platform + '...';
+      try {
+        const response = await fetch('./api/social/publish', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ platform: draft.platform }),
+        });
+        const result = await response.json();
+        if (result.authorize) {
+          window.top.location.assign(result.authorize);
+          return;
+        }
+        if (!response.ok) {
+          status.textContent = result.error || 'The post could not be sent.';
+          if (result.state === 'submitted' || response.status === 409) {
+            button.textContent = 'Check the account';
+            return;
+          }
+          button.disabled = false;
+          return;
+        }
+        button.textContent = 'Published';
+        status.textContent = platform + ' confirmed publication.';
+      } catch {
+        status.textContent = 'Could not confirm publication. Reload the journal to check the submission record.';
+      }
+    };
+    card.append(button);
+    previews.append(card);
+  }
+  section.hidden = false;
+}
+openSocialDrafts().catch(() => {});

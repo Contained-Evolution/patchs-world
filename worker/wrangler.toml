@@ -14,6 +14,7 @@ html_handling = "none"
 
 # Web Push public key. Its private half is the VAPID_PRIVATE_KEY secret.
 [vars]
+PATCH_X_CLIENT_ID = "VDB2RW5rZEd3UTBLazRkZ2hwNlM6MTpjaQ"
 VAPID_PUBLIC_KEY = "BNgbQ0CDOxGp2lu2AYN_pCj9Cate9SuCI8gLBP8pJUAlfQzHEDZ-M2h-oZMPhqBzGgo7_UgoQ5P2DPab4sLqJFU"
 
 # Patch's ElevenLabs voice and the most characters a month it may use. The key is the ELEVENLABS_API_KEY secret.
