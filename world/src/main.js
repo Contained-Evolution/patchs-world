@@ -750,7 +750,8 @@ if(riverRide&&!ropeExit){
     }
     else{
       // He lowers himself onto the seat, then follows the seat's beats. Each clip is slid so his hips stay on it.
-      const down=CLIPS['stand-to-sit'].duration,seatedFor=sitTime-satAt;
+      // Fishing starts on the server's clock so refreshing during the first cast keeps his pose.
+      const down=CLIPS['stand-to-sit'].duration,seatedFor=action==='fish'?sitTime:sitTime-satAt;
       const beat=seatedFor<down?{clip:'stand-to-sit',time:seatedFor}:beats?.plan.at(sitTime)??{clip:'seat-idle',time:sitTime%CLIPS['seat-idle'].duration};
       seatShift=(CLIPS[beat.clip].seat-CLIPS.sit.seat)*(beat.clip==='stand-to-sit'?THREE.MathUtils.smoothstep(seatedFor/down,.25,.9):1);
       poseClip(beat.clip,beat.time);
