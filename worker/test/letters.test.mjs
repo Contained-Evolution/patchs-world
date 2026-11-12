@@ -19,6 +19,15 @@ test('letters: empty, too long, too many, duplicate and full mailbox are refused
   assert.match(checkLetter('new', freshLimits(null, 'x'), LIMITS.unreadCap), /full/);
 });
 
+test('the owner exemption only bypasses the daily letter limit', () => {
+  const limits = { ...freshLimits(null, '2026-06-01'), letters: LIMITS.lettersPerDay, seen: ['already sent'] };
+  const owner = { exemptFromDailyLimit: true };
+  assert.equal(checkLetter('Another letter', limits, 0, owner), null);
+  assert.match(checkLetter('Another letter', limits, 0, { exemptFromDailyLimit: false }), /a day/);
+  assert.match(checkLetter('Already sent', limits, 0, owner), /already sent/);
+  assert.match(checkLetter('Another letter', limits, LIMITS.unreadCap, owner), /full/);
+});
+
 test('limits reset each day', () => {
   const today = countLetter(freshLimits(null, '2026-06-01'), 'a');
   assert.equal(freshLimits(today, '2026-06-01').letters, 1);

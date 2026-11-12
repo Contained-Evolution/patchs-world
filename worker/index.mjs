@@ -332,7 +332,8 @@ export class PatchWorld extends DurableObject {
     const now = Date.now(), text = cleanText(raw?.text), lookup = raw?.lookup === true;
     if (lookup && (text.length > 120 || /https?:|www\.|[\r\n]/i.test(text))) return { status: 400, error: 'Write a lookup question of up to 120 characters without links.' };
     if (await this.isBlocked(who)) return { status: 403, error: "You can't write to Patch." };
-    const problem = checkLetter(text, await this.limits(who, now), ((await this.ctx.storage.get('unread')) || []).length);
+    const unreadCount = ((await this.ctx.storage.get('unread')) || []).length;
+    const problem = checkLetter(text, await this.limits(who, now), unreadCount, { exemptFromDailyLimit: who.admin });
     if (problem) return { status: /a day|full/.test(problem) ? 429 : 400, error: problem };
     let refused;
     try { refused = await this.filter(text, now); } catch { return { status: 503, error: "Patch can't get mail right now. Try again soon." }; }

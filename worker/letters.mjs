@@ -24,10 +24,10 @@ export function freshLimits(limits, day) {
   return limits?.day === day ? limits : { day, letters: 0, posts: 0, lastPostAt: 0, seen: [] };
 }
 
-export function checkLetter(text, limits, unreadCount) {
+export function checkLetter(text, limits, unreadCount, { exemptFromDailyLimit = false } = {}) {
   if (!text) return 'Write something to Patch first.';
   if (text.length > LIMITS.letterLength) return `Letters can be up to ${LIMITS.letterLength} characters.`;
-  if (limits.letters >= LIMITS.lettersPerDay) return `You can send Patch ${LIMITS.lettersPerDay} letters a day. Write again tomorrow!`;
+  if (!exemptFromDailyLimit && limits.letters >= LIMITS.lettersPerDay) return `You can send Patch ${LIMITS.lettersPerDay} letters a day. Write again tomorrow!`;
   if (limits.seen.includes(fingerprint(text))) return 'You already sent that today.';
   if (unreadCount >= LIMITS.unreadCap) return "Patch's mailbox is full right now. Try again tomorrow.";
   return null;
