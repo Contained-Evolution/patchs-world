@@ -1,12 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SEATS, computerActivity, seatFor, usesTablet, deskClip } from '../src/furniture.js';
+import { SEATS, computerActivity, seatFor, usesTablet, deskBeats, deskClip } from '../src/furniture.js';
 import { places, groundHeight } from '../src/terrain.js';
 import { statusText } from '../src/world-state.js';
-import { roamPlan, seedFrom } from '../src/patch-motion.js';
+import { rng, roamPlan, seedFrom } from '../src/patch-motion.js';
 import { CLIPS } from '../src/patch-clips.js';
 
-const durations = { 'sit-to-type': 29 / 24, 'type-to-sit': 23 / 24, typing: 396 / 24 };
+import { beatPlan } from '../src/patch-beats.js';
 
 test('he only sits on a seat where one stands; elsewhere he sits on the ground', () => {
   assert.equal(seatFor('sit', 'beach'), SEATS.beach);
@@ -42,15 +42,25 @@ test('the tablet is for research and writing away from the computer', () => {
   assert.equal(usesTablet('sit', 'beach'), false);
 });
 
-test('at the desk he reaches for the keys, types, and sits back near the end', () => {
-  assert.equal(deskClip('computer', .5, 600, durations).clip, 'sit-to-type');
-  const typing = deskClip('computer', 100, 600, durations);
+test('at the desk he types, takes seated reading breaks and reaches for the keys again', () => {
+  const plan = beatPlan(deskBeats('computer'), rng(7));
+  assert.equal(deskClip('computer', .5, 600, plan).clip, 'sit-to-type');
+  const typing = deskClip('computer', 20, 600, plan);
   assert.equal(typing.clip, 'typing');
-  assert.ok(typing.time >= 0 && typing.time < durations.typing);
-  const back = deskClip('research', 100, .4, durations);
+  assert.ok(typing.time >= 0 && typing.time < CLIPS.typing.duration);
+  const back = deskClip('research', 20, .4, plan);
   assert.equal(back.clip, 'type-to-sit');
-  assert.ok(back.time > 0 && back.time <= durations['type-to-sit']);
-  assert.deepEqual(deskClip('think', 5, 300, durations), { clip: 'type-to-sit', time: durations['type-to-sit'] });
+  assert.ok(back.time > 0 && back.time <= CLIPS['type-to-sit'].duration);
+  const sequence = [];
+  for (let s = 0; s < 120; s += .2) {
+    const { clip } = deskClip('computer', s, 600, plan);
+    if (clip !== sequence.at(-1)) sequence.push(clip);
+  }
+  assert.deepEqual(sequence.slice(0, 3), ['sit-to-type', 'typing', 'type-to-sit']);
+  assert.ok(['sit', 'seat-idle'].includes(sequence[3]));
+  assert.deepEqual(sequence.slice(4, 6), ['sit-to-type', 'typing']);
+  const reading = beatPlan(deskBeats('think'), rng(7));
+  assert.equal(deskClip('think', 5, 300, reading).clip, 'seat-idle');
 });
 
 test('with his tablet he pulls it out once, then wanders slowly, reading as he goes', () => {

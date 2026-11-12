@@ -99,7 +99,6 @@ function searchRoute(from,to,solids,seed){
 // How far he roams for an activity, and how restless he is while doing it.
 export const ROAM={
  explore:{radius:{'tall-trees':45,cave:9,'tide-pools':22,lookout:9,beach:28,meadow:30,'banana-grove':14,pond:10},legs:[6,22],pauses:[2,9],run:.12},
- look:{radius:{lookout:9},legs:[3,8],pauses:[6,16],run:0},
 };
 // On his tablet he wanders a few steps now and then, reading or writing as he goes. At the computer he sits.
 const TABLET=Object.fromEntries(Object.keys(places).filter(place=>place!=='computer').map(place=>[place,place==='pond'?4:6]));

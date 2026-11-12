@@ -304,6 +304,7 @@ export function view(state, now, mail = 0) {
       needs,
       mood: activity.action === 'sleep' ? 'asleep' : mood(needs),
       spirit: spirit(state.needs, activity),
+      activityWeather: weatherAt(activity.start),
       // Spoken words come from the mind, not from canned body activity lines.
       says: activity.says && Number.isFinite(activity.saysAt) && now >= activity.saysAt && now - activity.saysAt < 8000 ? activity.says : null,
       speechUntil: activity.says && Number.isFinite(activity.saysAt) && now >= activity.saysAt && now - activity.saysAt < 8000 ? new Date(activity.saysAt + 8000).toISOString() : null,

@@ -15,6 +15,18 @@ const beat = (clip, okay, happy, tired, grumpy, wait = 0, extra = {}) => ({ clip
 // `min` keeps it for stops at least that long.
 export const BEATS = {
   //                        okay happy tired grumpy wait
+  sleep: { postures: ['lie'], base: 'sleep', gap: [130, 310],
+    moodGap: { tired: 1.35, grumpy: .8 }, weatherGap: { storm: .75 }, breaks: [
+    beat('sleep-roll',        1,   1,   1,   1,  120, { again: true }),
+  ] },
+  'computer@desk': { postures: ['seat'], holding: 'keys', base: 'typing', gap: [32, 68],
+    moodGap: { happy: 1.15, tired: .75, grumpy: .85 }, breaks: [
+    beat('type-to-sit',      1,   1,   1,   1,    0, { then: 'seat-idle', hold: [6, 15], resume: 'sit-to-type', again: true }),
+    beat('type-to-sit',      1,   1,   3,   2,    0, { then: 'sit', hold: [3, 7], resume: 'sit-to-type', again: true }),
+  ] },
+  'read@desk': { postures: ['seat'], base: 'seat-idle', gap: [15, 40], breaks: [
+    beat('sit',             1,   2,   2,   1,    0, { hold: [5, 10], again: true }),
+  ] },
   idle: { postures: ['stand'], base: 'idle', gap: [4, 12], breaks: [
     beat('look-around',      4,   4,   2,   2,    8),
     beat('happy-idle',       1,   4,   0,   0,   15, { hold: [4, 8] }),
@@ -76,8 +88,8 @@ export const BEATS = {
   'watch-sky': { postures: ['ground', 'lie'], base: 'sit-ground', gap: [30, 90], breaks: [
     beat('sit-idle-3',       4,   4,   4,   4,    0, { hold: [40, 120] }),
     beat('sit-idle-2',       2,   2,   1,   3,    0, { hold: [20, 60] }),
-    beat('sky-watch',        5,   5,   6,   2,    0, { hold: [60, 180] }),
-    beat('lay',              2,   2,   2,   2,    0, { hold: [30, 90] }),
+    beat('sky-watch',        5,   5,   6,   2,    0, { hold: [60, 180], weatherWeight: { rain: 0, storm: 0 } }),
+    beat('lay',              2,   2,   2,   2,    0, { hold: [30, 90], weatherWeight: { rain: .25, storm: 0 } }),
   ] },
   // Sitting where there is no seat.
   sit: { postures: ['ground', 'lie'], base: 'sit-ground', gap: [20, 45], breaks: [
@@ -127,23 +139,24 @@ export function fits(clip, { postures, holding = null }) {
 
 // One weighted choice from a table. `last` is the break before, `played` maps each
 // clip to when it last ended, `at` is now and `span` is how long he has.
-export function pickBeat(table, spirit, random, { last = null, played = new Map(), at = 0, span = Infinity } = {}) {
+export function pickBeat(table, spirit, random, { last = null, played = new Map(), at = 0, span = Infinity, weather = 'clear' } = {}) {
   const mood = SPIRITS.includes(spirit) ? spirit : 'okay';
+  const weight = row => row.weight[mood] * (row.weatherWeight?.[weather] ?? 1);
   const open = table.breaks.filter(row => {
     const clip = CLIPS[row.clip];
     const minimum = Math.max(row.min || 0, clip.once ? clip.duration : 0);
     const lastEnd = played.get(row.clip) ?? -Infinity;
-    return row.weight[mood] > 0 && (row.again || row.clip !== last)
+    return weight(row) > 0 && (row.again || row.clip !== last)
       && minimum <= span && lastEnd + row.wait <= at && fits(row.clip, table);
   });
-  let roll = random() * open.reduce((sum, row) => sum + row.weight[mood], 0);
-  for (const row of open) { roll -= row.weight[mood]; if (roll <= 0) return row; }
+  let roll = random() * open.reduce((sum, row) => sum + weight(row), 0);
+  for (const row of open) { roll -= weight(row); if (roll <= 0) return row; }
   return open.at(-1) || null;
 }
 
 // A seeded timeline for a standing-still activity: the base clip, a break, the base clip again.
 // at(seconds) gives the clip and the time within it, and can be joined at any moment.
-export function beatPlan(name, random, spirit = 'okay') {
+export function beatPlan(name, random, spirit = 'okay', weather = 'clear') {
   const table = BEATS[name], beats = [], played = new Map();
   let time = 0, last = null;
   const span = ([a, b]) => a + random() * (b - a);
@@ -151,11 +164,13 @@ export function beatPlan(name, random, spirit = 'okay') {
   // A held clip plays whole loops, so it hands over on its own first frame.
   const held = (clip, hold) => Math.max(1, Math.round(span(hold) / CLIPS[clip].duration)) * CLIPS[clip].duration;
   function next() {
-    add(table.base, span(table.gap));
-    const row = pickBeat(table, spirit, random, { last, played, at: time });
+    const gapScale = (table.moodGap?.[spirit] ?? 1) * (table.weatherGap?.[weather] ?? 1);
+    add(table.base, span(table.gap) * gapScale);
+    const row = pickBeat(table, spirit, random, { last, played, at: time, weather });
     if (!row) return;
     if (row.then) { add(row.clip, CLIPS[row.clip].duration); add(row.then, held(row.then, row.hold)); }
     else add(row.clip, row.hold ? held(row.clip, row.hold) : CLIPS[row.clip].duration);
+    if (row.resume) add(row.resume, CLIPS[row.resume].duration);
     last = row.clip;
     played.set(row.clip, time);
   }

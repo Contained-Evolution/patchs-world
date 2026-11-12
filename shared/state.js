@@ -24,6 +24,7 @@ export const sampleState = {
     needs: { hunger: 0.4, energy: 0.8, fun: 0.6, comfort: 0.7, social: 0.3 },
     mood: 'curious',
     spirit: 'okay', // how he carries himself through this activity: okay | happy | tired | grumpy
+    activityWeather: 'clear', // weather when the activity began
     says: null, // a short line he says out loud, or null
     speechUntil: null, // expiry for the spoken line
     speech: null, // the line being said or about to start: { text, at, until, voice } (voice: recording id, or null)

@@ -1,6 +1,7 @@
 // Where Patch sits. Each seat is a spot his feet stand on (he sits back onto the seat behind them),
 // the way he faces, and what it is. Sizes match his clips: seated hips are about .28 above his feet.
 import { places } from './terrain.js';
+import { CLIPS } from './patch-clips.js';
 
 export const SEAT_HEIGHT = .22;
 export const SEATS = {
@@ -43,11 +44,14 @@ export function seatFor(action, place) {
 // On the tablet unless he is at the coconut computer.
 export const usesTablet = (action, place) => (action === 'research' || action === 'write') && place !== 'computer';
 
-// What he does at the desk, from the moment he sat down: get his hands to the keys, type, and sit back near the end.
-export function deskClip(action, seconds, remaining, durations) {
- const up = durations['sit-to-type'], back = durations['type-to-sit'];
- if (!DESK.has(action)) return { clip: 'type-to-sit', time: back };
- if (remaining < back) return { clip: 'type-to-sit', time: Math.max(0, back - remaining) };
+export const deskBeats = action => DESK.has(action) ? 'computer@desk' : 'read@desk';
+
+// Desk work starts with reaching for the keys, then follows the shared timeline.
+export function deskClip(action, seconds, remaining, plan) {
+ if (!DESK.has(action)) return plan.at(seconds);
+ const up = CLIPS['sit-to-type'].duration, back = CLIPS['type-to-sit'].duration;
  if (seconds < up) return { clip: 'sit-to-type', time: Math.max(0, seconds) };
- return { clip: 'typing', time: (seconds - up) % durations.typing };
+ const pose = plan.at(seconds - up);
+ if (pose.clip === 'typing' && remaining < back) return { clip: 'type-to-sit', time: Math.max(0, back - remaining) };
+ return pose;
 }

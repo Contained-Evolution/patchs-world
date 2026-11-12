@@ -5,7 +5,7 @@ import { BEATS, SPIRITS, beatPlan, beatsFor, fits, pickBeat, walkClip } from '..
 import { CLIPS } from '../src/patch-clips.js';
 import { rng, seedFrom } from '../src/patch-motion.js';
 
-const clipsOf = table => [table.base, ...table.breaks.flatMap(row => [row.clip, ...(row.then ? [row.then] : [])])];
+const clipsOf = table => [table.base, ...table.breaks.flatMap(row => [row.clip, row.then, row.resume].filter(Boolean))];
 
 test('no beat collides with how he is standing or what he is holding', () => {
   for (const [name, table] of Object.entries(BEATS)) {
@@ -81,5 +81,28 @@ test('a short stop leaves out the long breaks, and a place can have its own tabl
   for (let i = 0; i < 200; i++) assert.notEqual(pickBeat(BEATS.explore, 'tired', rng(i), { span: 4 })?.clip, 'sit-ground');
   assert.equal(beatsFor('eat', 'shelves'), 'eat@shelves');
   assert.equal(beatsFor('eat', 'beach'), 'eat');
-  assert.equal(beatsFor('sleep', 'hammock'), null);
+  assert.equal(beatsFor('sleep', 'hammock'), 'sleep');
+});
+
+test('sleep starts lying down, varies its roll timing, and can be joined mid-roll', () => {
+  const rested = beatPlan('sleep', rng(7), 'okay');
+  const storm = beatPlan('sleep', rng(7), 'okay', 'storm');
+  const tired = beatPlan('sleep', rng(7), 'tired');
+  const firstRoll = plan => {
+    for (let s = 0; s < 600; s++) if (plan.at(s).clip === 'sleep-roll') return s;
+  };
+  assert.equal(rested.at(0).clip, 'sleep');
+  const roll = firstRoll(rested);
+  assert.ok(firstRoll(storm) < roll && firstRoll(tired) > roll);
+  assert.deepEqual(beatPlan('sleep', rng(7), 'okay').at(roll), rested.at(roll));
+  assert.equal(rested.at(roll + 20).clip, 'sleep');
+});
+
+test('sky watching stays seated during a storm', () => {
+  const poses = weather => {
+    const plan = beatPlan('watch-sky', rng(7), 'okay', weather);
+    return new Set(Array.from({ length: 120 }, (_, i) => plan.at(i * 10).clip));
+  };
+  assert.ok(poses('clear').has('sky-watch'));
+  assert.deepEqual([...poses('storm')].sort(), ['sit-ground', 'sit-idle-2', 'sit-idle-3']);
 });

@@ -27,7 +27,7 @@ import { CLIMB_WALLS, wallHold, holdLine, climbPlan, ropeExitPlan, placement } f
 import { setupAnimationViewer } from './animation-viewer.js';
 import { NEEDS, overallHealth, makeGauge } from './health-gauge.js';
 import { makeTransfer } from './traversal.js';
-import { seatFor, usesTablet, deskClip } from './furniture.js';
+import { seatFor, usesTablet, deskBeats, deskClip } from './furniture.js';
 import { beatPlan, beatsFor, walkClip } from './patch-beats.js';
 
 const $ = s => document.querySelector(s);
@@ -248,7 +248,7 @@ function playClip(name, once = false) {
 // Clips that follow a shared plan are posed at the plan's time, so every visitor sees the same frame.
 function poseClip(name,time){playClip(name);if(currentName!==name||!currentAction)return;currentAction.timeScale=0;currentAction.time=Math.max(0,Math.min(time,clips[name].duration-1e-3));}
 let state = null, hasLiveState = false, demo = false, journey = null, serverOffset = 0, descent = null, wasAirborne = false, climbTime = 0, climb = null, ropeExit = null;
-let groundApproach = null, groundActivity = null, inFurniture = false, swimAccess = null, enteringPond = false, beats = null, bedPlace = null, sleepOnBack = false, satAt = 0, seatShift = 0;
+let groundApproach = null, groundActivity = null, inFurniture = false, swimAccess = null, enteringPond = false, beats = null, satAt = 0, seatShift = 0;
 const GROUND_ARRIVAL_DISTANCE = .15;
 const SWIM_ARRIVAL_DISTANCE = .6;
 function approachGround(goal, dt) {
@@ -363,7 +363,12 @@ async function poll() {
     // A poll can arrive after an activity ended while this tab was paused. Place
     // Patch at the server's destination instead of replaying an obsolete journey.
     const [px,pz]=places[next.patch.place];
-    if (!state || (previous && previous.since!==next.patch.since && !next.patch.target && Math.hypot(patch.position.x-px,patch.position.z-pz)>60)) {const spawn=nearestWalkable(px,pz,solids);if(spawn)patch.position.set(spawn[0],groundHeight(...spawn),spawn[1]);}
+    if (!hasLiveState || (previous && previous.since!==next.patch.since && !next.patch.target && Math.hypot(patch.position.x-px,patch.position.z-pz)>60)) {
+      const seat = next.patch.target ? null : seatFor(next.patch.action, next.patch.place);
+      const spawn = seat ? [seat.x, seat.z] : nearestWalkable(px,pz,solids);
+      if (spawn) patch.position.set(spawn[0],groundHeight(...spawn),spawn[1]);
+      if (seat) patch.rotation.y = seat.heading;
+    }
     state = next; hasLiveState = true; demo = false;
     updateOutfit();
     renderCare(next.patch);
@@ -445,23 +450,22 @@ patch.visible=true;previousPatchPosition.copy(patch.position);
 const {action,place,target,since,until,speech}=state.patch,mail=Number(state.patch.mail)||0;scenery.setComputer(mail,action,place,target,(Date.parse(until)-Date.now()-serverOffset)/1000);
 $('#status').textContent = statusText(state.patch)+(mail&&!(place==='computer'&&!target)?` ✉ ${mail} letter${mail===1?'':'s'} waiting at his coconut computer.`:'');
 foodPose=null;scenery.resetRopes();let heldRope=null, heldGrip=null;fishingRod.visible=action==='fish'&&!target;
-const climbKey=`${action}|${place}|${since||''}`,spirit=state.patch.spirit||'okay';
+const climbKey=`${action}|${place}|${since||''}`,spirit=state.patch.spirit||'okay',sleeping=action==='sleep'&&!target;
 const serverNow=Date.now()+serverOffset,timing=speechTiming(speech),talking=!!speech&&serverNow>=Date.parse(speech.at)&&serverNow<Date.parse(speech.until);
-if(climb?.line.kind==='rope'&&(climb.key!==climbKey||target)&&wasAirborne&&!ropeExit){
+if(sleeping){ropeExit=null;descent=null;wasAirborne=false;}
+else if(climb?.line.kind==='rope'&&(climb.key!==climbKey||target)&&wasAirborne&&!ropeExit){
  const line=climb.line;ropeExit={line,plan:ropeExitPlan(line,{x:patch.position.x,y:patch.position.y,z:patch.position.z},currentName==='sleep-lay'),elapsed:0};
  descent=null;journey=null;climb=null;
 }
 
 if(!ropeExit&&action==='climb'&&!target&&(place==='lookout'||place==='tall-trees')){if(climb?.key!==climbKey){climb=startClimb(place,climbKey,since,until);climbTime=0;}}else climb=null;
 const activityTime=(Date.now()+serverOffset-Date.parse(since))/1000,lap=action==='swim'&&place==='pond'&&!target?swimAt(activityTime):null;
-const seat=target?null:seatFor(action,place),dest=seat?[seat.x,seat.z]:climb?climb.start:lap?[lap.x,lap.z]:action==='sleep'&&place==='hammock'&&!target?hammock.approach:action==='sleep'&&!target?[patch.position.x,patch.position.z]:places[target]||places[place];
+const seat=target?null:seatFor(action,place),dest=seat?[seat.x,seat.z]:climb?climb.start:lap?[lap.x,lap.z]:places[target]||places[place];
 const travel = !!(target && places[target] && ['walk','run','swing'].includes(action));
 const swinging = action === 'swing';
 const key = `${action}|${place}|${target||''}|${since||''}`;
-// One sleep running into the next leaves him lying where he is.
-if(groundActivity!==key){const stays=inFurniture&&action==='sleep'&&!target&&bedPlace===place;groundActivity=key;groundApproach=null;inFurniture=stays;swimAccess=null;enteringPond=false;}
-if(action!=='sleep')bedPlace=null;
-const leavingPond=!lap&&(swimAccess||inPond(patch.position.x,patch.position.z));
+if(groundActivity!==key){groundActivity=key;groundApproach=null;inFurniture=false;swimAccess=null;enteringPond=false;}
+const leavingPond=!sleeping&&!lap&&(swimAccess||inPond(patch.position.x,patch.position.z));
 if(leavingPond){
  const here=[patch.position.x,patch.position.z];
  swimAccess ??= pondAccess(here,solids);
@@ -550,8 +554,8 @@ if(leavingPond){
   if(roams&&roam?.key!==roamKey)roam={key:roamKey,plan:foraging?foragePlan(seedFrom(roamKey),solids):roamPlan(action,place,seedFrom(roamKey),solids,spirit)};
   if(!roams)roam=null;
   // Standing still, he follows the activity's seeded beats instead of one looping clip.
-  const beatName=roams||lap||climb||place==='computer'&&seat?null:beatsFor(action,place,!!seat);
-  if(beatName&&beats?.key!==roamKey)beats={key:roamKey,plan:beatPlan(beatName,rng(seedFrom(roamKey)),spirit)};
+  const beatName=roams||lap||climb?null:place==='computer'&&seat?deskBeats(action):beatsFor(action,place,!!seat);
+  if(beatName&&beats?.key!==roamKey)beats={key:roamKey,plan:beatPlan(beatName,rng(seedFrom(roamKey)),spirit,place==='cave'?'clear':state.patch.activityWeather)};
   if(!beatName)beats=null;
   const elapsed=(Date.now()+serverOffset-Date.parse(since))/1000,pose=roam?.plan.at(Number.isFinite(elapsed)?Math.max(0,elapsed):t%9);
   if(!(climb&&!descent&&followClimb(Number.isFinite(elapsed)?elapsed:t,dt))){
@@ -564,7 +568,7 @@ if(leavingPond){
   if(enteringPond&&Math.hypot(here[0]-swimAccess.water[0],here[1]-swimAccess.water[1])<.25)enteringPond=false;
   const swimming=!!lap&&(inWater||enteringPond);
   // Travel to bed is a separate activity. Once asleep, he stays at the bed.
-  if(action==='sleep'&&place!=='hammock')inFurniture=true;
+  if(sleeping)inFurniture=true;
   const goal=pose?[pose.x,pose.z]:lap?(enteringPond?swimAccess.water:swimming?dest:swimAccess?.bank||here):nearestWalkable(...dest,solids)||here;
   const dx=goal[0]-here[0],dz=goal[1]-here[1],dist=Math.hypot(dx,dz);
   let arriving=!inFurniture&&dist>(swimming?SWIM_ARRIVAL_DISTANCE:GROUND_ARRIVAL_DISTANCE),moving=false;
@@ -587,25 +591,16 @@ if(leavingPond){
   if(climb&&!arriving){wasAirborne=true;clip=climb.line.kind==='rope'?'rope-climb':'swing-start';}
   if(swimming&&!arriving&&!lap.stroke)clip='tread';
   if(descent){descent.elapsed+=dt;const f=Math.min(1,descent.elapsed/2);patch.position.y=THREE.MathUtils.lerp(descent.start,descent.ground,f);clip='fall';heldGrip=null;if(f===1)descent=null;}
-  // He yawns and lies down: in his hammock, or on the ground right where he is. He sleeps on his back or on his side, rolling over now and then.
-  if(action==='sleep'&&!arriving&&!descent){
-    const at=Number.isFinite(elapsed)?Math.max(0,elapsed):t,bed=place==='hammock';
-    const back=bedPlace===place?sleepOnBack:seedFrom(roamKey)%2===0;
-    if(bed)patch.rotation.y=back?Math.PI/2:0;
-    if(at<CLIPS.yawn.duration&&bedPlace!==place) poseClip('yawn',at);
-    else {
-      bedPlace=place;sleepOnBack=back;
-      if(bed){
-        inFurniture=true;
-        patch.position.set(hammock.x,groundHeight(hammock.x,hammock.z)+(back?hammock.backPose:hammock.sidePose),hammock.z+hammock.sleepOffsetZ);
-      } else if(back)patch.position.y-=CLIPS['sleep-lay'].lift;
-      if(back) poseClip('sleep-lay',at%CLIPS['sleep-lay'].duration);
-      else {
-        const still=15*CLIPS.sleep.duration,k=at%(still+CLIPS['sleep-roll'].duration);
-        if(k<still) poseClip('sleep',k%CLIPS.sleep.duration);
-        else poseClip('sleep-roll',k-still);
-      }
+  if(sleeping){
+    if(place==='hammock'){
+      patch.rotation.y=0;
+      patch.position.set(hammock.x,groundHeight(hammock.x,hammock.z)+hammock.sidePose,hammock.z+hammock.sleepOffsetZ);
+    } else {
+      patch.rotation.y=0;
+      patch.position.set(goal[0],groundHeight(...goal),goal[1]);
     }
+    const beat=beats.plan.at(elapsed);
+    poseClip(beat.clip,beat.time);
   } else if(seat&&!arriving&&!descent){
     // On a seat he settles onto it facing its way; at the coconut computer he reaches for the keys, types, and sits back near the end.
     const sitTime=Number.isFinite(elapsed)?Math.max(0,elapsed):t;
@@ -614,7 +609,11 @@ if(leavingPond){
     inFurniture=true;
     // The approach ends on clear ground. Sitting aligns the pose to the furniture.
     patch.position.x+=(seat.x-patch.position.x)*Math.min(1,dt*6);patch.position.z+=(seat.z-patch.position.z)*Math.min(1,dt*6);face(seat.heading,dt);
-    if(place==='computer'){const at=Number.isFinite(elapsed)?Math.max(0,elapsed):t%30,left=Number.isFinite(Date.parse(until))?(Date.parse(until)-Date.now()-serverOffset)/1000:60,desk=deskClip(action,at,left,{'sit-to-type':CLIPS['sit-to-type'].duration,'type-to-sit':CLIPS['type-to-sit'].duration,typing:CLIPS.typing.duration});poseClip(desk.clip,desk.time);}
+    if(place==='computer'){
+      const left=(Date.parse(until)-serverNow)/1000,desk=deskClip(action,sitTime,left,beats.plan);
+      seatShift=(CLIPS[desk.clip].seat??CLIPS.sit.seat)-CLIPS.sit.seat;
+      poseClip(desk.clip,desk.time);
+    }
     else{
       // He lowers himself onto the seat, then follows the seat's beats. Each clip is slid so his hips stay on it.
       const down=CLIPS['stand-to-sit'].duration,since=sitTime-satAt,beat=since<down||!beats?{clip:'stand-to-sit',time:Math.min(since,down-1e-3)}:beats.plan.at(sitTime);
