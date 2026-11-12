@@ -1,9 +1,9 @@
-import { places, shoreFraction, pondFraction, streamInfo } from './terrain.js';
+import { places, shoreFraction, pondFraction, streamInfo, nearPondStairs, nearWaterfallVine } from './terrain.js';
 import { trees } from './world-state.js';
 const rand=n=>{const v=Math.sin(n*127.1+311.7)*43758.5453123;return v-Math.floor(v);};
 export function isReserved(x,z){
  const stream=streamInfo(x,z);
- return Object.entries(places).some(([id,[a,b]])=>Math.hypot(x-a,z-b)<({hammock:20,meadow:48,beach:32,lookout:20,cave:18}[id]||11))||pondFraction(x,z)<1.25||stream.distance<stream.width+4;
+ return Object.entries(places).some(([id,[a,b]])=>Math.hypot(x-a,z-b)<({hammock:20,meadow:48,beach:32,lookout:20,cave:18}[id]||11))||nearWaterfallVine(x,z,3)||nearPondStairs(x,z,2)||pondFraction(x,z)<1.25||stream.distance<stream.width+4;
 }
 export function forestTrees(){
  const result=[];

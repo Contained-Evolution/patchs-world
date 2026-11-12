@@ -124,7 +124,7 @@ dialog::backdrop { background:#08241dbb; }
 .gauge-fill { stroke:url(#gauge-grad); transition:stroke-dasharray .6s; }
 .gauge-icon { position:relative; font-size:20px; line-height:1; margin-top:-2px; }
 .gauge-defs { position:absolute; }
-#return-to-walk, #mouse-lock {
+#return-to-walk, #mouse-lock, #climb-vines {
   border:1px solid #ffffff9c; border-radius:12px; background:#173f38ed; color:white;
 }
 .island-movement {
@@ -137,6 +137,7 @@ dialog::backdrop { background:#08241dbb; }
   margin:8px auto 0; padding:0; place-items:center; border-radius:50%;
   pointer-events:auto; box-shadow:0 3px 12px #153f3b65;
 }
+#climb-vines { padding:8px 14px; pointer-events:auto; }
 #return-to-walk { display:grid; width:60px; height:60px; }
 #move-stick {
   display:none; position:relative; width:92px; height:92px;

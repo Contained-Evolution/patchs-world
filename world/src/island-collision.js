@@ -1,9 +1,10 @@
 import * as THREE from 'three';
+import { pondSwings } from './pond-swings.js';
 import { forest } from './forest.js';
 import { hammock, hammockSupports } from './hammock.js';
 import { CLIMB_WALLS } from './climbing.js';
 import { COMPUTER_DESK_DISTANCE, COMPUTER_TENT } from './furniture.js';
-import { groundHeight, ISLAND, places, pondFraction, shoreFraction, walkShoreLimit, streamInfo, TIDE_POOLS, tideWaterHeight } from './terrain.js';
+import { groundHeight, ISLAND, places, pondFraction, shoreFraction, walkShoreLimit, streamInfo, nearPondStairs, TIDE_POOLS, tideWaterHeight } from './terrain.js';
 
 export const WALK_RADIUS = .3;
 const CELL_SIZE = 8;
@@ -77,6 +78,11 @@ export function createIslandCollision() {
     const radius = trunkRadius(tree);
     solids.ellipse(tree.x, tree.z, radius, radius);
   }
+  for (const {x,z,dx,dz,model,radius} of pondSwings) {
+    // The palms lean toward the water. Only the low trunk occupies walking height.
+    const lean = model === 'palm' ? .5 : 0;
+    solids.log(x,z,x+dx*lean,z+dz*lean,radius);
+  }
   solids.ellipse(hammock.x, hammock.z, hammock.halfLength, hammock.halfWidth);
   for (const { x, z, baseRadius } of hammockSupports) solids.ellipse(x, z, baseRadius, baseRadius);
   for (const wall of CLIMB_WALLS) solids.wall(wall);
@@ -141,7 +147,10 @@ export function walkable(x, z, fromX, fromZ, solids = terrainSolids, swimming = 
   if (!dryGround(x, z, swimming) || solids.blocks(x, z, fromX, fromZ)) return false;
   if (fromX === undefined || swimming) return true;
   const distance = Math.hypot(x - fromX, z - fromZ);
-  return !distance || Math.abs(groundHeight(x, z) - groundHeight(fromX, fromZ)) <= 1.1 * distance;
+  const rise = Math.abs(groundHeight(x, z) - groundHeight(fromX, fromZ));
+  const stairs = nearPondStairs(x,z,.25);
+  return !distance || rise <= 1.1 * distance ||
+    (!!stairs && stairs === nearPondStairs(fromX,fromZ,.25) && rise <= .46);
 }
 
 export function clearGroundLine(from, to, solids, swimming = false) {
@@ -157,13 +166,28 @@ export function clearGroundLine(from, to, solids, swimming = false) {
   return true;
 }
 
-export function walkStep(x, z, dx, dz, solids) {
+function visitorWalkable(x,z,fromX,fromZ,solids) {
+  const wet = inPond(x,z), wasWet = inPond(fromX,fromZ);
+  if (wet || wasWet) {
+    if (!dryGround(x,z,wet) || solids.blocks(x,z,fromX,fromZ)) return false;
+    return wet || groundHeight(x,z) <= ISLAND.pondY+.48;
+  }
+  return walkable(x,z,fromX,fromZ,solids);
+}
+
+export function visitorEyeHeight(x,z) {
+  const ground = groundHeight(x,z);
+  return inPond(x,z) ? Math.max(ground+1.6,ISLAND.pondY+.55) : ground+1.6;
+}
+
+export function walkStep(x, z, dx, dz, solids = terrainSolids, visitor = false) {
+  const canStep = visitor ? visitorWalkable : walkable;
   const steps = Math.max(1, Math.ceil(Math.hypot(dx, dz) / (WALK_RADIUS / 2)));
   dx /= steps;
   dz /= steps;
   for (let i = 0; i < steps; i++) {
-    if (dx && walkable(x + dx, z, x, z, solids)) x += dx;
-    if (dz && walkable(x, z + dz, x, z, solids)) z += dz;
+    if (dx && canStep(x + dx, z, x, z, solids)) x += dx;
+    if (dz && canStep(x, z + dz, x, z, solids)) z += dz;
   }
   return [x, z];
 }

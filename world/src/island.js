@@ -1,11 +1,11 @@
 import * as THREE from 'three';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
-import { ISLAND, places, coastRadius, shoreFraction, groundHeight, pondOutline, RIVER, riverPoint, streamInfo, TIDE_POOLS, tideWaterHeight } from './terrain.js';
+import { ISLAND, places, coastRadius, shoreFraction, groundHeight, pondOutline, RIVER, riverPoint, streamInfo, nearPondStairs, TIDE_POOLS, tideWaterHeight } from './terrain.js';
 import { anchorFor, holdFor, ROPE_TREES, trees } from './world-state.js';
 import { forest, isReserved } from './forest.js';
 import { createTerrainTiles } from './terrain-mesh.js';
 import { addRiverWater, oceanGeometry } from './river-water.js';
-import { addPondScenery } from './pond-scenery.js';
+import { addPondScenery, createPondSteps, addWaterfallVines } from './pond-scenery.js';
 import { pondSwings } from './pond-swings.js';
 import { CLIMB_WALLS } from './climbing.js';
 import { createIslandCollision, bananaTrees, BANANA_TREE } from './island-collision.js';
@@ -58,16 +58,20 @@ vec3 grass=texture2D(grassDetail,xz*.18).rgb;
 float inland=1.0-smoothstep(.78,.95,length(xz/vec2(320.0,360.0)));
 diffuseColor.rgb*=mix(vec3(1.0),grass*1.55,inland*.8);
 if(islandBank.x>.001){
- vec3 rock=texture2D(bankStone,xz*.34+vec2(islandGround.y*.15,0.0)).rgb;
+ vec3 stoneX=texture2D(bankStone,islandGround.zy*.42).rgb;
+ vec3 stoneZ=texture2D(bankStone,islandGround.xy*.42).rgb;
+ float axis=abs(dFdx(islandGround.x))+abs(dFdy(islandGround.x));
+ float crossAxis=abs(dFdx(islandGround.z))+abs(dFdy(islandGround.z));
+ vec3 rock=mix(stoneX,stoneZ,axis/max(.001,axis+crossAxis));
  float grit=dot(texture2D(bankStone,xz*1.7).rgb,vec3(.29,.58,.13));
  float variation=dot(texture2D(bankStone,xz*.027).rgb,vec3(.29,.58,.13));
- float seam=sin(islandGround.y*8.4+xz.x*.32+xz.y*.49+variation*15.0);
+ float seam=sin(islandGround.y*3.1+xz.x*.29+xz.y*.38+variation*19.0);
  vec3 mud=mix(vec3(.19,.118,.072),vec3(.23,.139,.081),islandBank.y)*(.77+variation*.95);
  vec3 gravel=vec3(.38,.29,.20)*(.66+grit*1.4);
  vec3 slate=vec3(.21,.22,.22)*(.70+rock*1.4)*(.67+.33*smoothstep(-.65,-.22,seam));
  float stones=smoothstep(.055,.21,variation)*mix(.93,.58,islandBank.y);
- float ledge=smoothstep(.035,.23,groundSlope+variation*.42);
- vec3 soil=mix(mix(mud,gravel,stones),slate,ledge*.86);
+ float ledge=smoothstep(.065,.22,groundSlope)*islandBank.y;
+ vec3 soil=mix(mix(mud,gravel,stones),slate,ledge);
  diffuseColor.rgb=mix(diffuseColor.rgb,soil,smoothstep(0.0,.83,islandBank.x));
 }`);
  };
@@ -76,7 +80,7 @@ if(islandBank.x>.001){
  const foliage=material(0xc1d9ae,{map:leafMap,alphaTest:.35,side:THREE.DoubleSide,roughness:.9,emissive:0x334b29,emissiveMap:leafMap,emissiveIntensity:.35});
  const rockMap=new THREE.TextureLoader().load(new URL('./assets/volcanic-rock.png',document.baseURI).href);rockMap.colorSpace=THREE.SRGBColorSpace;rockMap.wrapS=rockMap.wrapT=THREE.RepeatWrapping;rockMap.anisotropy=4;const rock=material(0xbab9ad,{map:rockMap});
  const sand=material(0xd8c592),wood=material(0x725039),rope=material(0xd1c7a0);
- const pondScenery=addPondScenery(scene,rope,walkSolids);
+ const pondScenery=addPondScenery(scene,rope);
  const wet=material(0x67836b,{roughness:.55});
  const add=(geo,mat,x=0,y=0,z=0)=>{const o=new THREE.Mesh(geo,mat);o.position.set(x,y,z);scene.add(o);return o;};
  const beam=(mat,a,b,r1,r2=r1)=>{const av=new THREE.Vector3(...a),bv=new THREE.Vector3(...b),d=bv.clone().sub(av);const o=add(new THREE.CylinderGeometry(r2,r1,d.length(),8),mat);o.position.copy(av).add(bv).multiplyScalar(.5);o.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize());return o;};
@@ -84,6 +88,8 @@ if(islandBank.x>.001){
  const boulder=rockGeometry(),blade=leafGeometry();
  // Heightfield follows the exact same coast and ground query as movement and Patch.
  for(const geometry of createTerrainTiles())add(geometry,groundMat);
+ scene.add(...createPondSteps(rock));
+ addWaterfallVines(scene,blade,foliage);
  // Transparent, sunlit moving water uses the same shader idea as Tenari's valley.
  const waterTime={value:0},waterLight={value:1},waterRain={value:0};
  const water=material(0x317d87,{roughness:.25,metalness:.16,transparent:true,opacity:.83,depthWrite:false,side:THREE.DoubleSide});
@@ -182,7 +188,7 @@ if (trackingPatch) {
   const z=ISLAND.pondZ+Math.sin(angle)*ISLAND.pondRZ*edge*.94;
   const channel=streamInfo(x,z);
   if(Math.abs(Math.sin(angle))<.36||channel.distance<channel.width+4||pondSwings.some(s=>Math.hypot(x-s.x,z-s.z)<4))continue;
-  if(i%3!==0)stone(x,z,.9+rand(i)*1.6,.55+rand(i+40)*1.1,.8+rand(i+90)*1.4);
+  if(i%3!==0&&!nearPondStairs(x,z,2))stone(x,z,.9+rand(i)*1.6,.55+rand(i+40)*1.1,.8+rand(i+90)*1.4);
   if(i%4===0)for(let j=0;j<4;j++)reedData.push({x:x+j*.2,y:groundHeight(x+j*.2,z),z,h:.8+rand(i+j)*.8});
  }
  const reeds=new THREE.InstancedMesh(new THREE.CylinderGeometry(.01,.025,1,5),material(0x567343),reedData.length);
@@ -195,7 +201,7 @@ if (trackingPatch) {
   const x=ISLAND.pondX+Math.cos(angle)*ISLAND.pondRX*edge;
   const z=ISLAND.pondZ+Math.sin(angle)*ISLAND.pondRZ*edge;
   const y=groundHeight(x,z),stream=streamInfo(x,z);
-  if(y<ISLAND.pondY-.12||stream.distance<stream.width+2)continue;
+  if(y<ISLAND.pondY-.12||nearPondStairs(x,z,.2)||stream.distance<stream.width+2)continue;
   const slab=i%9===0,size=slab?.28+rand(i+2100)*.49:.052+rand(i+6300)*.15;
   pose.position.set(x,y+.018,z);
   pose.rotation.set(.1,rand(i+8600)*Math.PI*2,.13);

@@ -2,7 +2,7 @@ import { ISLAND, groundHeight, pondOutline } from './terrain.js';
 
 const models={
  fig:{bottom:-.453369,tie:[.247803,-.044678,.008057],tilt:0,radius:1.7},
- palm:{bottom:-.429443,tie:[0,-.047,0],tilt:.29,radius:1.15}
+ palm:{bottom:-.429443,tie:[0,-.047,0],tilt:.29,radius:.91}
 };
 const startAngle=-.08, releaseAngle=.79, swingSeconds=1.65, gravity=9.81;
 const reach=1.8;
@@ -19,8 +19,13 @@ function makeSwing(model,degrees,scale,shore) {
  const forward=(tie[0]*Math.cos(tilt)+localY*Math.sin(tilt))*scale;
  const cross=tie[2]*scale;
  const anchor=[x+dx*forward-dz*cross,y+(localY*Math.cos(tilt)-tie[0]*Math.sin(tilt))*scale,z+dz*forward+dx*cross];
- const standingHeight=groundHeight(anchor[0],anchor[2]);
- const length=(anchor[1]-standingHeight-reach)/Math.cos(startAngle);
+ // Size the rope for its actual mount point, not the lower ground under the anchor.
+ let length=(anchor[1]-groundHeight(anchor[0],anchor[2])-reach)/Math.cos(startAngle);
+ for(let i=0;i<5;i++){
+  const offset=length*Math.sin(startAngle);
+  const height=groundHeight(anchor[0]+dx*offset,anchor[2]+dz*offset);
+  length=(anchor[1]-height-reach)/Math.cos(startAngle);
+ }
  const swing={model,x,y,z,heading,scale,bottom,tilt,radius,anchor,length,dx,dz};
  const start=gripAt(swing,startAngle);
  return {...swing,mount:[start[0],start[2]],start};

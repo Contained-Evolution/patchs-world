@@ -108,9 +108,43 @@ function baseGroundHeight(x,z) {
  }
  return basin;
 }
+// Each staircase is cut along the fall line, with the treads built into the bank.
+export const pondStairs = [
+ { x:65, z:72, dx:-1, dz:0, count:37, run:.4, width:3.6 },
+ { x:103.5, z:36, dx:0, dz:-1, count:35, run:.33, width:3.6 }
+];
+
+export function stairPoint(stair, along, side=0) {
+ return [stair.x+stair.dx*along-stair.dz*side, stair.z+stair.dz*along+stair.dx*side];
+}
+
+function stairCoordinates(stair,x,z) {
+ const dx=x-stair.x,dz=z-stair.z;
+ return [dx*stair.dx+dz*stair.dz,dz*stair.dx-dx*stair.dz];
+}
+
+export function nearPondStairs(x,z,margin=0) {
+ return pondStairs.find(stair=>{
+  const [along,side]=stairCoordinates(stair,x,z);
+  return along>=-margin&&along<stair.count*stair.run+margin&&Math.abs(side)<=stair.width/2+margin;
+ });
+}
+
+export function stairTread(stair,index) {
+ return baseGroundHeight(...stairPoint(stair,(index+.5)*stair.run))+.04;
+}
+
 export const TIDE_POOLS=[[227,-190,6.8,5.0],[212,-204,5.8,4.3],[243,-177,6.0,4.2]];
 export function tideWaterHeight(pool){return baseGroundHeight(pool[0],pool[1])-.24;}
-export function terrainElevation(x,z){let h=baseGroundHeight(x,z);for(const pool of TIDE_POOLS){const d=Math.hypot((x-pool[0])/pool[2],(z-pool[1])/pool[3]),mask=1-smooth(.65,1.25,d);h-=2.5*mask;}return h;}
+export function terrainElevation(x,z){let h=baseGroundHeight(x,z);for(const pool of TIDE_POOLS){const d=Math.hypot((x-pool[0])/pool[2],(z-pool[1])/pool[3]),mask=1-smooth(.65,1.25,d);h-=2.5*mask;}const stair=nearPondStairs(x,z,3);
+ if(stair){
+  const [along,side]=stairCoordinates(stair,x,z);
+  const length=stair.count*stair.run;
+  const cut=(1-smooth(stair.width/2,stair.width/2+2.6,Math.abs(side)))
+   *smooth(-.5,1.4,along)*(1-smooth(length-1.4,length+.5,along));
+  h=mix(h,Math.min(h,baseGroundHeight(...stairPoint(stair,along))-.47),cut);
+ }
+ return h;}
 export function terrainVertex(ring,slice){const a=slice/TERRAIN_SLICES*Math.PI*2,q=ring/TERRAIN_RINGS,r=coastRadius(a)*q,x=Math.cos(a)*ISLAND.radiusX*r,z=Math.sin(a)*ISLAND.radiusZ*r;return [x,terrainElevation(x,z),z];}
 const heightVertices = Array.from({length:TERRAIN_RINGS+1},()=>[]);
 function heightVertex(ring,slice){
@@ -118,11 +152,29 @@ function heightVertex(ring,slice){
 }
 function triangleHeight(x,z,a,b,c){const det=(b[2]-c[2])*(a[0]-c[0])+(c[0]-b[0])*(a[2]-c[2]);if(Math.abs(det)<1e-10)return null;const u=((b[2]-c[2])*(x-c[0])+(c[0]-b[0])*(z-c[2]))/det,v=((c[2]-a[2])*(x-c[0])+(a[0]-c[0])*(z-c[2]))/det,w=1-u-v;return u>=-1e-7&&v>=-1e-7&&w>=-1e-7?u*a[1]+v*b[1]+w*c[1]:null;}
 // This samples the exact triangles sent to WebGL, so feet, water and camera meet the visible surface.
-export function groundHeight(x,z){
+function meshHeight(x,z){
  const q=shoreFraction(x,z);if(q>=1||q<1e-8)return terrainElevation(x,z);
  let angle=Math.atan2(z/ISLAND.radiusZ,x/ISLAND.radiusX);if(angle<0)angle+=Math.PI*2;
  const i=Math.min(TERRAIN_SLICES-1,Math.floor(angle/(Math.PI*2)*TERRAIN_SLICES)),guess=Math.floor(q*TERRAIN_RINGS);
  for(const delta of [0,-1,1,-2,2]){const j=guess+delta;if(j<0||j>=TERRAIN_RINGS)continue;const a=heightVertex(j,i),b=heightVertex(j,i+1),c=heightVertex(j+1,i),d=heightVertex(j+1,i+1);let h=triangleHeight(x,z,a,b,c);if(h!==null)return h;h=triangleHeight(x,z,b,d,c);if(h!==null)return h;}
  return terrainElevation(x,z);
 }
+export function groundHeight(x,z){
+ const stair=nearPondStairs(x,z);
+ if(!stair)return meshHeight(x,z);
+ const [along]=stairCoordinates(stair,x,z);
+ return Math.max(meshHeight(x,z),stairTread(stair,Math.floor(along/stair.run)));
+}
 export const walkShoreLimit=.985;
+
+// A climb on the dry flank of the falls, with room to stand at either end.
+export const waterfallVine = { x:151, z:62, length:14 };
+export function vinePoint(progress, side=0) {
+ const x=waterfallVine.x+waterfallVine.length*progress;
+ const z=waterfallVine.z+side;
+ return [x,groundHeight(x,z),z];
+}
+export function nearWaterfallVine(x,z,margin) {
+ return x>=waterfallVine.x-margin&&x<=waterfallVine.x+waterfallVine.length+margin&&
+  Math.abs(z-waterfallVine.z)<=margin;
+}

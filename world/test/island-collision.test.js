@@ -4,13 +4,13 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { hammock, hammockSupports } from '../src/hammock.js';
 import { createIsland } from '../src/island.js';
-import { BANANA_TREE, bananaTrees, clearGroundLine, nearestWalkable, pondAccess, walkable, walkStep } from '../src/island-collision.js';
+import { BANANA_TREE, bananaTrees, clearGroundLine, nearestWalkable, pondAccess, inPond, visitorEyeHeight, walkable, walkStep } from '../src/island-collision.js';
 import { COMPUTER_TENT } from '../src/furniture.js';
 import { forest } from '../src/forest.js';
 import { createFoodProps } from '../src/food-props.js';
 import { FOOD_STORE, forageTrees } from '../src/foraging.js';
 import { patchRoute } from '../src/patch-motion.js';
-import { ISLAND, STREAM, TIDE_POOLS, places } from '../src/terrain.js';
+import { ISLAND, STREAM, TIDE_POOLS, places, pondStairs, stairPoint, vinePoint } from '../src/terrain.js';
 import { walkRoute } from '../src/world-state.js';
 
 test('rendered island solids block both walkers and all fruit trees have a reachable picking spot', t => {
@@ -62,6 +62,23 @@ test('rendered island solids block both walkers and all fruit trees have a reach
     assert.ok(exit);
     assert.ok(walkable(...exit.bank,undefined,undefined,solids));
     assert.ok(clearGroundLine(lap,exit.bank,solids,true));
+  }
+
+  // The visitor can swim in and out without changing controls. Patch's ground routes stay dry.
+  const swimStart = [65,66];
+  const swimEnd = walkStep(...swimStart,40,0,solids,true);
+  assert.ok(inPond(...swimEnd));
+  assert.equal(visitorEyeHeight(...swimEnd),ISLAND.pondY+.55);
+  const swimReturn = walkStep(...swimEnd,-40,0,solids,true);
+  assert.ok(Math.abs(swimReturn[0]-swimStart[0])<.2);
+  for(const stair of pondStairs){
+    const low=stairPoint(stair,.1),high=stairPoint(stair,stair.count*stair.run-.1);
+    assert.ok(clearGroundLine(low,high,solids),'blocked stone staircase');
+    assert.ok(clearGroundLine(high,low,solids),'blocked descent');
+  }
+  for(let i=0;i<=40;i++){
+    const [x,,z]=vinePoint(i/40);
+    assert.ok(walkable(x,z,undefined,undefined,solids),'obstructed vine route');
   }
 
   for (const [from,start] of Object.entries(places)) {
