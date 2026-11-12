@@ -29,7 +29,10 @@ export async function enqueueSocial(storage, sources) {
   const added = await storage.transaction(async txn => {
     let count = 0;
     for (const source of sources) {
-      if (!/^(journal|activity)-\d+$/.test(source.id) || await txn.get('source:' + source.id)) continue;
+      if (!/^(journal|activity)-\d+$/.test(source.id)) continue;
+      const seen = await txn.get('source:' + source.id);
+      const existing = seen && await txn.get('queue:' + source.id);
+      if (seen && (!source.requested || typeof seen === 'string' || existing?.source.requested)) continue;
       await txn.put('source:' + source.id, true);
       await txn.put('queue:' + source.id, { source, attempts: 0 });
       count++;
@@ -62,7 +65,7 @@ async function compose(env, storage, source, revision) {
   const mind = await storage.get('social:mind-budget') || {};
   if (!env.OPENROUTER_API_KEY || overBudget(mind, now)) throw new Error('Patch’s writing service is unavailable.');
   const { reply, cost } = await think(env, [
-    { role: 'system', content: PERSONA + '\nYou are texting Contained Evolution, your reality show host. Decide if this public island event is worth a social post. Use only the facts provided. Camera photos show the island around capture time, never claim they show the event. Host revision feedback is about the draft. Return JSON {share:boolean,message:string,x:string,facebook:string,instagram:string}; empty strings omit a platform. Keep X under 240 characters. Captions in your own voice, no invented facts, links or hashtags. A revision should reply to the host and provide revised captions.' },
+    { role: 'system', content: PERSONA + '\nYou are texting Contained Evolution, your reality show host. Decide if this public island event is worth a social post. Use only the facts provided. Camera photos show the island around capture time, never claim they show the event. Host revision feedback is about the draft. Return JSON {share:boolean,message:string,x:string,facebook:string,instagram:string}; empty strings omit a platform. Keep X under 240 characters. Captions in your own voice, no invented facts, links or hashtags. When source.requested is true the host asked you for a draft, so share must be true and you must provide a message and captions. A revision should reply to the host and provide revised captions.' },
     { role: 'user', content: JSON.stringify({ source, revision }) },
   ], 'everyday', 850);
   spend(mind, cost, now);
@@ -120,7 +123,10 @@ export async function processSocial(storage, env, notify) {
       };
       await storage.transaction(async txn => {
         await txn.put(key(id), draft);
-        if (!previous) await txn.put(countKey, count + 1);
+        if (!previous) {
+          await txn.put(countKey, count + 1);
+          await txn.put('source:' + source.id, id);
+        }
         await txn.delete(jobKey);
       });
       try { await notify(id, Boolean(previous)); } catch (error) { console.warn('Social approval alert failed', error.message); }

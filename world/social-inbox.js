@@ -141,11 +141,11 @@ async function refresh() {
     list.replaceChildren(...ordered.map(draft => conversation(draft, connections)));
     if (!drafts.length) {
       element('p', 'Patch hasn’t sent a new draft yet.', list);
-      button(list, 'Ask Patch about his latest journal entry', async event => {
+      button(list, 'Ask Patch for a journal draft', async event => {
         event.currentTarget.disabled = true;
         try {
           await api('journal-draft', {});
-          status.textContent = 'Patch is considering his latest journal entry.';
+          status.textContent = 'Patch is considering a journal entry.';
           setTimeout(refresh, 12000);
         } catch (error) { status.textContent = error.message; }
       });

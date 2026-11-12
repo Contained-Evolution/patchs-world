@@ -67,3 +67,45 @@ test('publishing retains success, reserves uncertain outcomes, and releases phot
   await publishReviewed(storage, {}, draft);
   assert.equal(calls.length, 1);
 });
+
+test('Patch can send and revise a camera draft without making a social API write', async t => {
+  const storage = new Storage();
+  const now = Date.now();
+  await enqueueSocial(storage, [{
+    id: 'journal-' + now, kind: 'journal', at: now, place: 'pond',
+    title: 'At the pond', text: 'I found a round stone by the water.',
+  }]);
+  const replies = [
+    { share: true, message: 'Can we show the pond?', facebook: 'I found a round stone!', instagram: 'Here is the pond.' },
+    { share: true, message: 'I made it shorter.', facebook: 'A stone at the pond.', instagram: 'My pond.' },
+  ];
+  t.mock.method(globalThis, 'fetch', async url => {
+    assert.match(url, /^https:\/\/openrouter\.ai\//);
+    return Response.json({ choices: [{ message: { content: JSON.stringify(replies.shift()) } }], usage: { cost: 0.001 } });
+  });
+  const image = new Uint8Array(2000);
+  image.set([255, 216]);
+  const env = { OPENROUTER_API_KEY: 'test', PATCH_SOCIAL_CAMERA: 'true', BROWSER: {
+    async quickAction(action, options) {
+      assert.equal(action, 'screenshot');
+      assert.match(options.url, /social-camera=3$/);
+      return new Response(image);
+    },
+  } };
+  const alerts = [];
+  await processSocial(storage, env, (id, revised) => alerts.push({ id, revised }));
+  const [{ id }] = alerts;
+  let draft = await storage.get('conversation:' + id);
+  assert.equal(draft.photo.camera, 3);
+  assert.equal(draft.revision, 1);
+  assert.equal(await socialPhoto(storage, id, null, false), null);
+  assert.equal((await socialPhoto(storage, id, null, true)).byteLength, 2000);
+  assert.equal((await reviewDraft(storage, env, id, { action: 'revise', revision: 1, feedback: 'Make it shorter.' })).status, 200);
+  await processSocial(storage, env, (id, revised) => alerts.push({ id, revised }));
+  draft = await storage.get('conversation:' + id);
+  assert.deepEqual(alerts, [{ id, revised: false }, { id, revised: true }]);
+  assert.equal(draft.revision, 2);
+  assert.equal(draft.thread.length, 3);
+  assert.equal(draft.captions.facebook, 'A stone at the pond.');
+  assert.equal((await storage.list({ prefix: 'publish:' })).size, 0);
+});

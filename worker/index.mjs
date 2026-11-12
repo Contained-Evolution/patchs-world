@@ -577,7 +577,7 @@ async function visitorApi(request, env, url, path) {
     if (path === '/api/social/inbox' && request.method === 'GET') return json(await publisher.conversations());
     if (path === '/api/social/journal-draft' && request.method === 'POST') {
       const { diary } = await patch.journal();
-      const entry = diary.find(item => item.title && item.text && item.at);
+      const entry = diary.find(item => item.title && item.text && item.at && !/crab cloud|crab zooms/i.test(item.title));
       if (!entry) return json({ error: 'Patch’s journal is empty.' }, 404);
       const live = await patch.state();
       const [source] = socialSources([{ ...entry, at: Date.parse(entry.at) }], { activity: { place: live.patch.place } }, Date.now());
