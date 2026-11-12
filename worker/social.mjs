@@ -51,7 +51,7 @@ export async function authorizeX(storage, env, owner) {
 }
 
 async function api(url, init) {
-  const response = await fetch(url, { ...init, redirect: 'error', signal: AbortSignal.timeout(12000) });
+  const response = await fetch(url, { ...init, redirect: 'manual', signal: AbortSignal.timeout(12000) });
   if (!response.ok) throw new Error(`Platform API returned HTTP ${response.status}.`);
   return response.json();
 }
