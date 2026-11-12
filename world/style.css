@@ -133,14 +133,16 @@ dialog::backdrop { background:#08241dbb; }
   pointer-events:none;
 }
 #explore-hint { margin:10px 0 0; color:#d4e8d9; font-size:13px; }
-#move-stick, #return-to-walk {
-  margin:8px auto 0; padding:0; place-items:center; border-radius:50%;
+.move-stick, #return-to-walk {
+  padding:0; place-items:center; border-radius:50%;
   pointer-events:auto; box-shadow:0 3px 12px #153f3b65;
 }
 #climb-vines { padding:8px 14px; pointer-events:auto; }
 #return-to-walk { display:grid; width:60px; height:60px; }
-#move-stick {
-  display:none; position:relative; width:92px; height:92px;
+#move-stick, #return-to-walk { margin:8px auto 0; }
+#move-stick { display:none; }
+.move-stick {
+  position:relative; width:92px; height:92px;
   border:1px solid #ffffff9c; background:#173f38bf;
   touch-action:none; user-select:none; -webkit-touch-callout:none;
 }
@@ -150,7 +152,7 @@ dialog::backdrop { background:#08241dbb; }
   transform:translate(var(--stick-x, 0px), var(--stick-y, 0px));
   pointer-events:none;
 }
-#move-stick[data-active] .move-stick-thumb { background:#f0c47e; }
+.move-stick[data-active] .move-stick-thumb { background:#f0c47e; }
 button:focus-visible { outline:3px solid #ffdc91; outline-offset:3px; }
 @media (any-pointer:coarse) {
   #move-stick { display:grid; }
@@ -294,17 +296,18 @@ nav button[hidden]{display:none}
 .camera-audio-muted { display:none; stroke:#ff5f59; }
 #camera-audio[aria-pressed="false"] .camera-audio-waves { display:none; }
 #camera-audio[aria-pressed="false"] .camera-audio-muted { display:inline; }
-.camera-pad { display:flex; gap:5px; }
-.camera-pad button { width:clamp(44px, 12vw, 56px); aspect-ratio:1; font:24px/1 system-ui,sans-serif; }
-#camera-move { grid-area:2 / 1; flex-direction:column; justify-self:start; }
+#camera-drone svg { width:84%; height:auto; }
+.camera-stick { display:grid; cursor:grab; }
+.camera-stick[data-active] { cursor:grabbing; }
+.camera-stick:focus-visible { outline:3px solid #ffdc91; outline-offset:3px; }
+#camera-move { grid-area:2 / 1; justify-self:start; }
 #camera-rotate { grid-area:2 / 3; justify-self:end; }
 @media (max-height:460px) {
   #cameras-panel { grid-template-rows:minmax(0,1fr) auto auto; gap:5px; }
   .camera-controls { padding:0; }
   #camera-drone { width:44px; }
-  #camera-drone svg { width:28px; height:28px; }
-  #camera-move { flex-direction:row; }
-  .camera-pad button { width:44px; }
+  .camera-stick { width:58px; height:58px; }
+  .camera-stick .move-stick-thumb { width:28px; height:28px; }
   .camera-tile { width:48px; }
 }
 @media (max-height:460px) and (min-width:450px) {
