@@ -42,7 +42,8 @@ const newId = now => `${now.toString(36)}${crypto.getRandomValues(new Uint32Arra
 
 export class SocialPublisher extends DurableObject {
   async socialReceipt(platform) {
-    if (platform === 'facebook' && this.env.PATCH_CRAB_FACEBOOK_PUBLISHED === 'true') return { state: 'published' };
+    if ((platform === 'facebook' && this.env.PATCH_CRAB_FACEBOOK_PUBLISHED === 'true') ||
+        (platform === 'instagram' && this.env.PATCH_CRAB_INSTAGRAM_PUBLISHED === 'true')) return { state: 'published' };
     return this.ctx.storage.get(receiptKey(platform));
   }
 
@@ -517,7 +518,7 @@ async function visitorApi(request, env, url, path) {
         state: url.searchParams.get('state'), code: url.searchParams.get('code'),
       });
       const query = result.error ? '?social=' + encodeURIComponent(result.error) : '';
-      return Response.redirect(SITE + '/journal.html' + query + '#social-drafts', 303);
+      return Response.redirect(SITE + '/social-review.html' + query + '#social-drafts', 303);
     }
     return json({ error: 'Not found.' }, 404);
   }

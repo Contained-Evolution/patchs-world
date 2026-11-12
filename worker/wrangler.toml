@@ -15,6 +15,7 @@ html_handling = "none"
 # Web Push public key. Its private half is the VAPID_PRIVATE_KEY secret.
 [vars]
 PATCH_CRAB_FACEBOOK_PUBLISHED = "true"
+PATCH_CRAB_INSTAGRAM_PUBLISHED = "true"
 PATCH_X_CLIENT_ID = "VDB2RW5rZEd3UTBLazRkZ2hwNlM6MTpjaQ"
 VAPID_PUBLIC_KEY = "BNgbQ0CDOxGp2lu2AYN_pCj9Cate9SuCI8gLBP8pJUAlfQzHEDZ-M2h-oZMPhqBzGgo7_UgoQ5P2DPab4sLqJFU"
 
