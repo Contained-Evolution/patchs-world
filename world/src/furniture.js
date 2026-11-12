@@ -12,14 +12,14 @@ export const SEATS = {
 // The camp bench serves the rope shelves too.
 SEATS.shelves = SEATS.hammock;
 
-// The coconut computer: a palm in front of the chair holds the screen, with the desk between them.
-const forward = heading => [Math.sin(heading), Math.cos(heading)];
-const [fx, fz] = forward(SEATS.computer.heading);
-export const COMPUTER = {
- desk: [SEATS.computer.x + fx * .5, SEATS.computer.z + fz * .5],
- palm: [SEATS.computer.x + fx * 1.15, SEATS.computer.z + fz * 1.15],
- heading: SEATS.computer.heading,
-};
+export function computerActivity(action, place, target, secondsLeft) {
+ if (place !== 'computer' || target) return 'Inbox';
+ if (action === 'research') return 'Searching the web';
+ if (action === 'write') return 'Writing';
+ if (action === 'computer') return secondsLeft <= 1 ? 'Reading' : 'Messaging';
+ if (action === 'sit' || action === 'think' || action === 'idle') return 'Reading';
+ return 'Inbox';
+}
 
 const DESK = new Set(['computer', 'research', 'write']);
 // Seated activities only use a seat where one stands. At the coconut computer he sits for desk work.

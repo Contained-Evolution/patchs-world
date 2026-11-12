@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SEATS, COMPUTER, seatFor, usesTablet, deskClip } from '../src/furniture.js';
+import { SEATS, computerActivity, seatFor, usesTablet, deskClip } from '../src/furniture.js';
 import { places, groundHeight } from '../src/terrain.js';
 import { statusText } from '../src/world-state.js';
 import { roamPlan, seedFrom } from '../src/patch-motion.js';
@@ -19,12 +19,19 @@ test('he only sits on a seat where one stands; elsewhere he sits on the ground',
   assert.equal(seatFor('walk', 'computer'), null);
 });
 
-test('the coconut computer stands at its place, palm beyond the desk, on flat camp ground', () => {
+test('the coconut computer stands at its place on flat camp ground', () => {
   assert.deepEqual([SEATS.computer.x, SEATS.computer.z], places.computer);
-  const dist = ([x, z]) => Math.hypot(x - SEATS.computer.x, z - SEATS.computer.z);
-  assert.ok(dist(COMPUTER.desk) < dist(COMPUTER.palm));
   for (const seat of Object.values(SEATS)) assert.ok(Number.isFinite(groundHeight(seat.x, seat.z)));
   assert.ok(Math.abs(groundHeight(...places.computer) - groundHeight(0, 0)) < .3);
+});
+
+test('the screen shows what Patch is doing when he is at his desk', () => {
+  assert.equal(computerActivity('computer', 'computer', null, 60), 'Messaging');
+  assert.equal(computerActivity('computer', 'computer', null, .5), 'Reading');
+  assert.equal(computerActivity('research', 'computer'), 'Searching the web');
+  assert.equal(computerActivity('write', 'computer'), 'Writing');
+  assert.equal(computerActivity('research', 'beach'), 'Inbox');
+  assert.equal(computerActivity('walk', 'computer', 'beach'), 'Inbox');
 });
 
 test('the tablet is for research and writing away from the computer', () => {

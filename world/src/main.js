@@ -399,7 +399,7 @@ const walked = controls.update(dt) || 0;
 findPatch.disabled = followPatch.disabled = !state;
 if (!state) { sound.update(controls.camera,{daylight:1,weather:'clear',walked}); patch.visible=false; scene.background=skyDay; rain.visible=false; scenery.update(reducedMotion.matches?0:dt,1); renderIsland(now); return; }
 patch.visible=true;previousPatchPosition.copy(patch.position);
-const {action,place,target,since,until,speech}=state.patch,mail=Number(state.patch.mail)||0;scenery.setMail(mail);
+const {action,place,target,since,until,speech}=state.patch,mail=Number(state.patch.mail)||0;scenery.setComputer(mail,action,place,target,(Date.parse(until)-Date.now()-serverOffset)/1000);
 $('#status').textContent = statusText(state.patch)+(mail&&!(place==='computer'&&!target)?` ✉ ${mail} letter${mail===1?'':'s'} waiting at his coconut computer.`:'');
 foodPose=null;scenery.resetRopes();let heldRope=null, heldGrip=null;fishingRod.visible=action==='fish'&&!target;
 const climbKey=`${action}|${place}|${since||''}`;
