@@ -149,7 +149,7 @@ function next(state, time) {
     state.queued = null;
     if (queued.place && queued.place !== place) return travel(state, place, queued.place, time, random, { ...queued, place: null });
     state.recent = [queued.action, ...(state.recent || [])].slice(0, 3);
-    return start(queued.action, place, time, queued.minutes, { effects: queued.effects });
+    return start(queued.action, place, time, queued.minutes, { effects: queued.effects, food: queued.food });
   }
   // His mind is deciding: once what he chose is done, he waits and thinks until it wakes and chooses again.
   if (mindLed(state, time)) return start('think', place, time, 5, { effects: EFFECTS.think, waiting: true });
@@ -189,17 +189,18 @@ export function choose(state, plan, now) {
   const packed = action === 'eat' && !WHERE.eat.includes(place) ? (state.carrying || []).findIndex(thing => FOOD.includes(thing.item)) : -1;
   if (WHERE[action] && !WHERE[action].includes(place) && packed < 0) return `You can only ${action} at: ${WHERE[action].join(', ')}${action === 'eat' ? ', or anywhere if you carry food' : ''}.`;
   // Food he brought with him is eaten up; it lasts about ten minutes.
-  if (packed >= 0) { state.carrying.splice(packed, 1); plan = { ...plan, minutes: Math.min(10, Number(plan.minutes) || 10) }; }
+  const food = packed >= 0 ? state.carrying.splice(packed, 1)[0].item : undefined;
+  if (food) plan = { ...plan, minutes: Math.min(10, Number(plan.minutes) || 10) };
   const [low, high] = action === 'sleep' ? [10, 600] : [3, 120];
   const minutes = Math.max(low, Math.min(high, Math.round(Number(plan.minutes)) || 20));
-  const queued = { action, minutes, effects: EFFECTS[action] };
+  const queued = { action, minutes, effects: EFFECTS[action], food };
   const { activity } = state;
   if (activity.target) { state.queued = { ...queued, place }; return null; }
   state.needs = applyMinutes(state.needs, activity, Math.max(0, now - activity.start) / MINUTE);
   state.queued = null;
   state.recent = [action, ...(state.recent || [])].slice(0, 3);
   state.activity = place === activity.place
-    ? start(action, place, now, minutes, { effects: EFFECTS[action] })
+    ? start(action, place, now, minutes, { effects: EFFECTS[action], food })
     : travel(state, activity.place, place, now, rng(state.seed + Math.floor(now / MINUTE)), queued, plan.how);
   const { action: a, place: p, target } = state.activity;
   state.log = [...(state.log || []), { action: a, place: p, target, at: now }].slice(-40);
@@ -306,6 +307,7 @@ export function view(state, now, mail = 0) {
       mood: activity.action === 'sleep' ? 'asleep' : mood(needs),
       spirit: spirit(state.needs, activity),
       activityWeather: weatherAt(activity.start),
+      ...(activity.action === 'eat' ? { food: activity.food || 'banana' } : {}),
       // Spoken words come from the mind, not from canned body activity lines.
       says: activity.says && Number.isFinite(activity.saysAt) && now >= activity.saysAt && now - activity.saysAt < 8000 ? activity.says : null,
       speechUntil: activity.says && Number.isFinite(activity.saysAt) && now >= activity.saysAt && now - activity.saysAt < 8000 ? new Date(activity.saysAt + 8000).toISOString() : null,

@@ -195,6 +195,12 @@ test('food he carries can be eaten anywhere, once', () => {
   assert.equal(body.activity.action, 'eat');
   assert.equal(body.activity.end - body.activity.start, 10 * 60000);
   assert.deepEqual(body.carrying, []);
+  assert.equal(view(body, MORNING).patch.food, 'banana');
+  body.carrying = [{ item: 'coconut' }];
+  assert.equal(choose(body, { do: 'eat', where: 'cave', minutes: 5 }, MORNING), null);
+  const arrived = body.activity.end;
+  advance(body, arrived);
+  assert.equal(view(body, arrived).patch.food, 'coconut');
 });
 
 test('rain makes him uncomfortable outside, but not in the cave', () => {

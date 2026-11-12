@@ -113,10 +113,6 @@ export const BEATS = {
     beat('sit-cheer',        0,   3,   0,   0,   40),
     beat('sit-scared',       0,   0,   0,   2,   90),
   ] },
-  'fish@seat': { postures: ['seat'], holding: 'rod', base: 'seat-idle', gap: [14, 38],
-    moodGap: { happy: .8, tired: 1.4, grumpy: .9 }, weatherGap: { storm: 1.3 }, breaks: [
-    beat('sit',              1,   1,   1,   1,    0, { hold: [3, 5], again: true }),
-  ] },
   // He strings dances together, keeping the beat between them.
   dance: { postures: ['stand'], base: 'dance-swing-2', gap: [2.5, 7.5], breaks: [
     beat('dance-hip-hop',    4,   4,   3,   4,    0),
@@ -189,8 +185,8 @@ export function beatPlan(name, random, spirit = 'okay', weather = 'clear', room 
     while (time <= seconds) next();
     let lo = 0, hi = beats.length - 1;
     while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (beats[mid].t0 <= seconds) lo = mid; else hi = mid - 1; }
-    const { clip, t0 } = beats[lo];
-    return { clip, time: (seconds - t0) % CLIPS[clip].duration, elapsed: seconds - t0, base: clip === table.base, index: lo };
+    const { clip, t0, t1 } = beats[lo];
+    return { clip, time: (seconds - t0) % CLIPS[clip].duration, elapsed: seconds - t0, duration: t1 - t0, base: clip === table.base, index: lo };
   } };
 }
 

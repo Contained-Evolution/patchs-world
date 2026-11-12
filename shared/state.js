@@ -1,5 +1,6 @@
 // The world state the Worker publishes and the browser draws.
 // GET /api/state returns { patch, clock }; the browser polls it every few seconds.
+// Eating activities also include the food Patch is holding.
 
 // Places on the island. The world side owns their positions; the Worker only uses the IDs.
 // hammock, shelves and computer (the coconut computer in its tent) together are his camp.
@@ -25,6 +26,7 @@ export const sampleState = {
     mood: 'curious',
     spirit: 'okay', // how he carries himself through this activity: okay | happy | tired | grumpy
     activityWeather: 'clear', // weather when the activity began
+    food: 'banana',
     says: null, // a short line he says out loud, or null
     speechUntil: null, // expiry for the spoken line
     speech: null, // the line being said or about to start: { text, at, until, voice } (voice: recording id, or null)
