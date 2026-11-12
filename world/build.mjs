@@ -7,7 +7,8 @@ await mkdir('dist', { recursive: true });
 await build({ entryPoints: ['src/main.js'], bundle: true, format: 'esm', minify: true, outfile: 'dist/main.js', sourcemap: true });
 await build({ entryPoints: ['src/community-page.js'], bundle: true, format: 'esm', outfile: 'dist/community-page.js' });
 await build({ entryPoints: ['src/memory-galaxy.js'], bundle: true, format: 'esm', minify: true, outfile: 'dist/memory-galaxy.js' });
-for (const name of ['journal.html', 'journal.js', 'social-inbox.js', 'gifts.html', 'gifts.js', 'visits.css', 'memory.html', 'memory.css', 'index.html', 'community.html', 'community.css', 'style.css', 'Pangolin-Regular.ttf', 'manifest.webmanifest']) await copyFile(name, `dist/${name}`);
+await build({ entryPoints: ['src/valley/world-setup.js'], bundle: true, format: 'esm', minify: true, outfile: 'dist/valley.js' });
+for (const name of ['valley.html', 'valley.css', 'journal.html', 'journal.js', 'social-inbox.js', 'gifts.html', 'gifts.js', 'visits.css', 'memory.html', 'memory.css', 'index.html', 'community.html', 'community.css', 'style.css', 'Pangolin-Regular.ttf', 'manifest.webmanifest']) await copyFile(name, `dist/${name}`);
 let socialReview = await readFile('journal.html', 'utf8');
 for (const filename of ['journal.js', 'social-inbox.js', 'visits.css']) {
   const content = await readFile(filename);

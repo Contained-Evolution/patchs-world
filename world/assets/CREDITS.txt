@@ -3,8 +3,11 @@ The viewer combines procedural materials with the newly generated artwork listed
 Tropical leaf artwork was newly generated for this project.
 Rainforest canopy artwork was newly generated for this project.
 Volcanic rock texture was newly generated for this project.
-Tropical grass and bark textures were newly generated for this project.
+Tropical bark texture was newly generated for this project.
 Wildflower artwork was newly generated for this project.
-Waterfall artwork was newly generated for this project.
 Camp hammock, palm and banana tree models: supplied by the Patch's World project owner.
 Swimming hole fig and palm tree models: supplied by the Patch's World project owner.
+Valley fir and boulder models: Contained Evolution Tenari scenery.
+Valley grass: ambientCG Ground013 (CC0), https://ambientcg.com/a/Ground013
+Valley rock: Poly Haven rock_boulder_dry (CC0), https://polyhaven.com/a/rock_boulder_dry
+Valley gravel: Poly Haven gravel_floor_02 (CC0), https://polyhaven.com/a/gravel_floor_02

@@ -23,7 +23,7 @@ test('the drone descends over open grass and stops above a tree crown', () => {
   drone.reset();
   const { camera } = drone;
   const [meadowX, meadowZ] = places.meadow;
-  const tree = forest.find(item => item.broad && !item.swing);
+  const tree = forest.find(item => item.broad && !item.swing && Math.abs(groundHeight(item.x,item.z)-groundHeight(item.x,item.z+9)) < .3);
   for (const [x, z, height] of [
     [meadowX, meadowZ, groundHeight(meadowX, meadowZ) + 1.8],
     [tree.x, tree.z, groundHeight(tree.x, tree.z) + tree.h + 6]
@@ -42,11 +42,13 @@ test('the drone cannot enter a crown horizontally until it climbs above it', () 
   const drone = createDrone();
   drone.reset();
   const { camera } = drone;
-  const tree = forest.find(item => item.broad && !item.swing);
+  const tree = forest.find(item => item.broad && !item.swing &&
+    forest.every(other => other === item || Math.hypot(other.x-item.x, other.z-item.z-9) > 9) &&
+    groundHeight(item.x,item.z+9) + 2 < groundHeight(item.x,item.z) + item.h);
   camera.position.set(tree.x, groundHeight(tree.x, tree.z + 9) + 2, tree.z + 9);
   assert.equal(drone.steer(0, 0, 1, 0, .1), 0);
   assert.equal(camera.position.z, tree.z + 9);
-  camera.position.y = 100;
+  camera.position.y = groundHeight(tree.x, tree.z) + tree.h + 25;
   assert.equal(drone.steer(0, 0, 1, 0, .1), 1);
   assert(camera.position.z < tree.z + 9);
 });

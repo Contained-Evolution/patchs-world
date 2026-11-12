@@ -2,14 +2,11 @@ import * as THREE from 'three';
 import { groundHeight } from './world-state.js';
 import { inPond, nearestWalkable, visitorEyeHeight, walkStep } from './island-collision.js';
 import { COMPUTER_TENT, insideComputerTent } from './furniture.js';
-import { shoreFraction, walkShoreLimit, vinePoint } from './terrain.js';
+import { MAP_BOUNDS } from './valley/companion-layout.js';
 
 export { walkable, walkStep } from './island-collision.js';
 
 export function createVisitorControls(camera, canvas, isModalOpen, scene, walkSolids) {
-  const vineButton = document.querySelector('#climb-vines');
-  const vineEnds = [vinePoint(0), vinePoint(1)];
-  let climb = null;
   const moveStick = document.querySelector('#move-stick');
   const jumpToPatch = document.querySelector('#jump-to-patch');
   const returnToWalk = document.querySelector('#return-to-walk');
@@ -86,7 +83,6 @@ export function createVisitorControls(camera, canvas, isModalOpen, scene, walkSo
   function setMode(value) {
     pause();
     mode = value;
-    vineButton.hidden = true;
     follow.checked = value === 'follow';
     updateLook();
   }
@@ -117,8 +113,8 @@ export function createVisitorControls(camera, canvas, isModalOpen, scene, walkSo
   }
 
   function safeLanding(x, z) {
-    const scale = shoreFraction(x, z) / walkShoreLimit;
-    if (scale > 1) { x /= scale; z /= scale; }
+    x = THREE.MathUtils.clamp(x, MAP_BOUNDS.x0 + 4, MAP_BOUNDS.x1 - 4);
+    z = THREE.MathUtils.clamp(z, -271, MAP_BOUNDS.z1 - 4);
     return nearestWalkable(x, z, walkSolids, 60) || [9, 14];
   }
 
@@ -128,7 +124,6 @@ export function createVisitorControls(camera, canvas, isModalOpen, scene, walkSo
       ? safeLanding(tent.x + tent.halfLength + 1.4, tent.z)
       : safeLanding(position.x + 3, position.z + 4);
     setMode('walk');
-    climb = null;
     camera.position.set(x, visitorEyeHeight(x, z), z);
     pointAt(position.x, position.y + 1, position.z);
     canvas.focus({ preventScroll: true });
@@ -212,23 +207,6 @@ export function createVisitorControls(camera, canvas, isModalOpen, scene, walkSo
     patchView.lookAt(target);
   }
 
-  function vineEntrance() {
-    return vineEnds.findIndex(([x,,z]) => Math.hypot(camera.position.x-x,camera.position.z-z)<1.15);
-  }
-
-  function startVine() {
-    const end = vineEntrance();
-    if (!canWalk() || climb || end < 0) return;
-    keys.clear();
-    resetStick();
-    const [x,,z] = vineEnds[1-end];
-    pointAt(x,visitorEyeHeight(x,z)-.7,z);
-    climb = { end, elapsed:0, start:camera.position.clone() };
-    vineButton.hidden = true;
-    canvas.focus({ preventScroll:true });
-  }
-
-  vineButton.onclick = startVine;
   const canWalk = () => mode === 'walk' && !isModalOpen();
   moveStick.addEventListener('contextmenu', event => event.preventDefault());
   moveStick.addEventListener('pointerdown', event => {
@@ -258,7 +236,6 @@ export function createVisitorControls(camera, canvas, isModalOpen, scene, walkSo
   const allowed = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight']);
   addEventListener('keydown', e => {
     if (e.key === 'Escape' && document.pointerLockElement === canvas) { document.exitPointerLock(); return; }
-    if (e.code === 'KeyE' && !e.repeat && canWalk() && vineEntrance() >= 0) { e.preventDefault(); startVine(); return; }
     if (!canWalk() || !allowed.has(e.code) || e.altKey || e.metaKey || e.ctrlKey ||
         ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON', 'A'].includes(document.activeElement?.tagName)) return;
     e.preventDefault();
@@ -321,21 +298,6 @@ export function createVisitorControls(camera, canvas, isModalOpen, scene, walkSo
     },
     update(dt) {
       if (!canWalk()) return;
-      const end = vineEntrance();
-      vineButton.hidden = end < 0 || !!climb;
-      if (!vineButton.hidden) {
-        const label = end === 0 ? 'Climb vines' : 'Descend vines';
-        if (vineButton.textContent !== label) vineButton.textContent = label;
-      }
-      if (climb) {
-        climb.elapsed += dt;
-        const t = Math.min(1,Math.max(0,(climb.elapsed-.35)/6));
-        const [x,,z] = vinePoint(climb.end ? 1-t : t);
-        destination.set(x,visitorEyeHeight(x,z),z);
-        camera.position.copy(climb.start).lerp(destination,Math.min(1,climb.elapsed/.35));
-        if (t === 1) climb = null;
-        return;
-      }
       const has = (...codes) => codes.some(code => keys.has(code));
       const keyForward = Number(has('KeyW', 'ArrowUp')) - Number(has('KeyS', 'ArrowDown'));
       const keySide = Number(has('KeyD', 'ArrowRight')) - Number(has('KeyA', 'ArrowLeft'));

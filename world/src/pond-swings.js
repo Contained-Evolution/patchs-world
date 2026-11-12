@@ -32,11 +32,11 @@ function makeSwing(model,degrees,scale,shore) {
 }
 
 export const pondSwings=[
- makeSwing('palm',52,23,.98),
- makeSwing('palm',102,21,.98),
- makeSwing('fig',153,23,1.01),
- makeSwing('palm',239,20,.98),
- makeSwing('palm',304,22,.98)
+ makeSwing('palm',36,23,1.06),
+ makeSwing('palm',75,21,1.04),
+ makeSwing('fig',105,31,1.15),
+ makeSwing('palm',282,20,1.045),
+ makeSwing('palm',320,22,1.045)
 ];
 
 // Turn back along the bank at either end, where the waterfall separates the two sides.

@@ -1,10 +1,12 @@
 import * as THREE from 'three';
+import { LANDMARKS, SCENERY_RADIUS, valleyBoundary } from './valley/companion-layout.js';
+import { waterEdgeDistance } from './valley/valley-water-layout.js';
 import { pondSwings } from './pond-swings.js';
 import { forest } from './forest.js';
 import { hammock, hammockSupports } from './hammock.js';
 import { CLIMB_WALLS } from './climbing.js';
 import { COMPUTER_DESK_DISTANCE, COMPUTER_TENT } from './furniture.js';
-import { groundHeight, ISLAND, places, pondFraction, shoreFraction, walkShoreLimit, streamInfo, nearPondStairs, TIDE_POOLS, tideWaterHeight } from './terrain.js';
+import { groundHeight, ISLAND, places, pondFraction } from './terrain.js';
 
 export const WALK_RADIUS = .3;
 const CELL_SIZE = 8;
@@ -74,6 +76,10 @@ export function bananaPickingSpots(tree, origin, solids) {
 const trunkRadius = tree => tree.grove ? BANANA_TREE.trunkRadius : .7;
 export function createIslandCollision() {
   const solids = createWalkSolids();
+  for (const landmark of LANDMARKS) {
+    if (landmark.id === 'cabin') continue;
+    solids.box(landmark.x - 5.1, landmark.z - 4.1, landmark.x + 5.1, landmark.z + 4.1);
+  }
   for (const tree of forest) {
     const radius = trunkRadius(tree);
     solids.ellipse(tree.x, tree.z, radius, radius);
@@ -132,25 +138,23 @@ export function createIslandCollision() {
 const terrainSolids = createIslandCollision();
 
 export function dryGround(x, z, swimming = false) {
-  const shore = shoreFraction(x, z);
-  if (shore > walkShoreLimit || (shore > .88 && groundHeight(x, z) <= ISLAND.ocean)) return false;
-  if (!swimming && inPond(x, z)) return false;
-  const stream = streamInfo(x, z);
-  if (!swimming && stream.distance < stream.width*1.17 && groundHeight(x, z) < stream.level) return false;
-  return !TIDE_POOLS.some(pool => {
-    const [px, pz, rx, rz] = pool;
-    return Math.hypot((x - px) / rx, (z - pz) / rz) < .8 && groundHeight(x, z) < tideWaterHeight(pool);
+  return !valleyBoundary(x, z, WALK_RADIUS) && (swimming || waterEdgeDistance(x, z) >= WALK_RADIUS);
+}
+
+function blocksScenery(solids, x, z, fromX, fromZ) {
+  return solids.valley?.items.some(item => {
+    const radius = (item.type === 'tree' ? .6 : SCENERY_RADIUS.rock) + WALK_RADIUS;
+    const distance = Math.hypot(x - item.x, z - item.z);
+    return distance < radius && (fromX === undefined || distance < Math.hypot(fromX - item.x, fromZ - item.z));
   });
 }
 
 export function walkable(x, z, fromX, fromZ, solids = terrainSolids, swimming = false) {
-  if (!dryGround(x, z, swimming) || solids.blocks(x, z, fromX, fromZ)) return false;
+  if (!dryGround(x, z, swimming) || solids.blocks(x, z, fromX, fromZ) || blocksScenery(solids, x, z, fromX, fromZ)) return false;
   if (fromX === undefined || swimming) return true;
   const distance = Math.hypot(x - fromX, z - fromZ);
   const rise = Math.abs(groundHeight(x, z) - groundHeight(fromX, fromZ));
-  const stairs = nearPondStairs(x,z,.25);
-  return !distance || rise <= 1.1 * distance ||
-    (!!stairs && stairs === nearPondStairs(fromX,fromZ,.25) && rise <= .46);
+  return rise <= .04 + .85 * distance;
 }
 
 export function clearGroundLine(from, to, solids, swimming = false) {
@@ -168,9 +172,11 @@ export function clearGroundLine(from, to, solids, swimming = false) {
 
 function visitorWalkable(x,z,fromX,fromZ,solids) {
   const wet = inPond(x,z), wasWet = inPond(fromX,fromZ);
-  if (wet || wasWet) {
-    if (!dryGround(x,z,wet) || solids.blocks(x,z,fromX,fromZ)) return false;
-    return wet || groundHeight(x,z) <= ISLAND.pondY+.48;
+  const shore = pondFraction(x, z) < 1.02;
+  if (wet || wasWet || shore) {
+    if (!dryGround(x,z,true) || solids.blocks(x,z,fromX,fromZ) || blocksScenery(solids, x, z, fromX, fromZ)) return false;
+    return wet || groundHeight(x,z) <= ISLAND.pondY+.48 ||
+      Math.abs(groundHeight(x,z)-groundHeight(fromX,fromZ)) <= .04 + .85 * Math.hypot(x-fromX,z-fromZ);
   }
   return walkable(x,z,fromX,fromZ,solids);
 }

@@ -37,6 +37,21 @@ const $ = s => document.querySelector(s);
 const beachMeal = [places.beach[0] + 1.8, places.beach[1] + 1.7];
 const dialog = $('#map');
 const mapHome = $('#map-home');
+const editor = $('#valley-editor');
+const editorFrame = editor.querySelector('iframe');
+const editValley = $('#edit-valley');
+editValley.addEventListener('click', () => {
+  editorFrame.src = './valley.html';
+  editor.showModal();
+});
+editor.addEventListener('close', () => {
+  editorFrame.removeAttribute('src');
+  if (dialog.open) editValley.focus();
+});
+window.addEventListener('message', event => {
+  if (event.origin === location.origin && event.source === editorFrame.contentWindow &&
+      event.data === 'patch-valley-editor-close' && editor.open) editor.close();
+});
 $('#close-map').onclick = () => dialog.close();
 const community=setupCommunity(dialog);
 setupNotifications(dialog,community,registerApp());
@@ -78,7 +93,8 @@ function syncSoundShortcut() {
 soundSetting.addEventListener('change', syncSoundShortcut);
 syncSoundShortcut();
 const cameraFeeds = setupIslandCameras(renderer, scene);
-const controls = createVisitorControls(camera, renderer.domElement, () => dialog.open, scene, solids);
+const controls = createVisitorControls(camera, renderer.domElement, () => dialog.open || editor.open, scene, solids);
+let mapLayoutRevision = -1;
 const updateMap = setupIslandMap(renderer, $('#mini-chart canvas'), $('#full-chart canvas'), $('#map-landmarks'), renderAerial);
 
 const healthButton = $('#open-health'), healthDrop = $('#health-drop');
@@ -290,10 +306,9 @@ function followRiver(dt) {
  const s=Math.min(RIVER.length,riverRide.station+dt*riverSpeed(riverRide.station));
  riverRide.station=s;
  const current=riverPoint(s,.08*Math.sin((s-RIVER.entry)*.32));
- const falling=s>=RIVER.lip&&s<RIVER.foot;
- patch.position.set(current.x,current.y+(falling?.18:-.35),current.z);
+ patch.position.set(current.x,Math.max(groundHeight(current.x,current.z),current.y-.35),current.z);
  face(current.heading,dt);
- playClip(falling?'fall':'swim');
+ playClip('swim');
  if(s===RIVER.length)riverRide=null;
 }
 function approachGround(goal, dt) {
@@ -530,6 +545,10 @@ if (captureFrame) {
   document.body.append(captureFrame);
 }
 function renderIsland(now) {
+  if (mapLayoutRevision !== scenery.valley.revision) {
+    mapLayoutRevision = scenery.valley.revision;
+    updateMap.invalidate();
+  }
   updateMap(now, camera.position, patch.visible ? patch.position : null, dialog.open && !mapHome.hidden);
   const renderView = view => {
     if (rain.visible) rain.position.set(view.position.x, view.position.y, view.position.z);
@@ -843,6 +862,6 @@ sound.update(cameraFeeds.camera || controls.camera, {
 const rainAmount = weather==='storm' ? 1 : weather==='rain' ? .58 : 0;
 rainStrength.value = rainAmount;
 if (rain.visible && !reducedMotion.matches) rainTime.value += dt*(10+rainAmount*7);
-scenery.update(reducedMotion.matches?0:dt,daylight,rainAmount);
+scenery.update(reducedMotion.matches?0:dt,daylight,rainAmount,sunLight.position);
 renderIsland(now);}
 requestAnimationFrame(frame);addEventListener('resize',()=>{controls.resize(innerWidth/innerHeight);renderer.setSize(innerWidth,innerHeight);});

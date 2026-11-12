@@ -1,5 +1,6 @@
 // Where Patch's feet go. Every choice is seeded from the activity's start time,
 // so each visitor sees the same Patch making the same choices.
+import { walkwayRoute } from './valley/companion-walkways.js';
 import { CLIPS } from './patch-clips.js';
 import { ISLAND, groundHeight, places } from './terrain.js';
 import { clearGroundLine, nearestWalkable, walkable } from './island-collision.js';
@@ -14,6 +15,14 @@ export function patchRoute(from,to,seed,remembered=[],solids){
  const start=nearestWalkable(...from,solids),goal=nearestWalkable(...to,solids);
  if(!start||!goal)return [from];
  const clear=(a,b)=>clearGroundLine(a,b,solids);
+ const walkways = solids?.valley?.walkways;
+ if (walkways?.size) {
+  const tiles = walkwayRoute(walkways, { x: start[0], z: start[1] }, { x: goal[0], z: goal[1] });
+  if (tiles) {
+   const route = [start, ...tiles.map(tile => [tile.x, tile.z]), goal];
+   if (route.every((point, index) => index === 0 || clear(route[index - 1], point))) return route;
+  }
+ }
  if(clear(start,goal))return [start,goal];
 
  const startInside=insideComputerTent(...start),goalInside=insideComputerTent(...goal);
@@ -59,7 +68,7 @@ function searchRoute(from,to,solids,seed){
  const heuristic=point=>1.65*distance(point,to)/GRID;
  const initial=Math.ceil(heuristic(from));
  // Use integer costs as priority buckets, with a small allowance for detours.
- const limit=initial+Math.max(32,Math.ceil(initial*.25)),buckets=Array.from({length:limit+1},()=>[]);
+ const limit=initial+Math.max(64,Math.ceil(initial*.65)),buckets=Array.from({length:limit+1},()=>[]);
  const start={x:0,z:0,point:from,cost:0,parent:null},visited=new Map([['0,0',start]]);
  buckets[initial].push(start);
  let expanded=0;
@@ -68,7 +77,7 @@ function searchRoute(from,to,solids,seed){
   while(bucket.length){
    const node=bucket.pop();
    if(visited.get(node.x+','+node.z)!==node)continue;
-   if(++expanded>8000)return null;
+   if(++expanded>20000)return null;
    if(distance(node.point,to)<GRID*2&&clearGroundLine(node.point,to,solids)){
     const path=[to];
     for(let n=node;n;n=n.parent)path.push(n.point);

@@ -1,14 +1,17 @@
 import { OrthographicCamera, Vector3, Vector4 } from 'three';
 import { ISLAND, groundHeight, places } from './terrain.js';
+import { LANDMARKS, MAP_BOUNDS } from './valley/companion-layout.js';
 
 const landmarks = [
   ['Lookout', places.lookout, 100], ['Cave', places.cave, 76],
   ['Tall trees', places['tall-trees'], 110], ['Tide pools', places['tide-pools'], 112],
   ['Meadow', places.meadow, 124], ['Camp & coconut computer', places.hammock, 75],
   ['Banana grove', places['banana-grove'], 105], ['Pond', [ISLAND.pondX, ISLAND.pondZ], 102],
-  ['Beach', places.beach, 135]
+  ['Lakeshore', places.beach, 135],
+  ...LANDMARKS.map(({ name, x, z }) => [name, [x, z], 75])
 ];
-const overviewSpan = ISLAND.radiusZ * 2.5;
+const overviewSpan = MAP_BOUNDS.z1 - MAP_BOUNDS.z0 + 160;
+const mapCenter = [0, (MAP_BOUNDS.z0 + MAP_BOUNDS.z1) / 2];
 const minZoom = .65, maxZoom = 6;
 const visitorColor = '#78e6ff', patchColor = '#ffcb70';
 
@@ -54,7 +57,8 @@ export function setupIslandMap(renderer, mini, full, key, renderAerial) {
   const viewName = document.getElementById('map-view-name');
   const chart = document.getElementById('full-chart');
   const zoomIn = document.getElementById('map-zoom-in'), zoomOut = document.getElementById('map-zoom-out');
-  let x = 0, z = 0, zoom = 1, selected = -1, dirty = true;
+  let [x, z] = mapCenter;
+  let zoom = 1, selected = -1, dirty = true;
   let nextOverview = -Infinity, nextDetail = -Infinity, nextDraw = -Infinity, wasShown = false;
   let overviewReady = false;
 
@@ -143,7 +147,7 @@ export function setupIslandMap(renderer, mini, full, key, renderAerial) {
 
   function chooseView(index) {
     selected = index;
-    const [name, center] = landmarks[index] ?? ['Island overview', [0, 0]];
+    const [name, center] = landmarks[index] ?? ['Valley overview', mapCenter];
     [x, z] = center;
     viewName.textContent = name;
     chart.setAttribute('aria-label', index < 0 ? 'Aerial view of Patch’s island' : `Angled aerial view of ${name}`);
@@ -182,8 +186,8 @@ export function setupIslandMap(renderer, mini, full, key, renderAerial) {
     full.addEventListener(type, event => pointers.delete(event.pointerId));
   }
 
-  mapCamera(overview.camera, mini, 0, 0, overviewSpan, false);
-  return (now, visitor, patch, showFull) => {
+  mapCamera(overview.camera, mini, ...mapCenter, overviewSpan, false);
+  const draw = (now, visitor, patch, showFull) => {
     if (!showFull) wasShown = false;
     if (now < nextDraw) return;
     nextDraw = now + 85;
@@ -203,4 +207,9 @@ export function setupIslandMap(renderer, mini, full, key, renderAerial) {
     wasShown = true;
     paint(detail, visitor, patch, false);
   };
+  draw.invalidate = () => {
+    dirty = true;
+    nextOverview = nextDetail = nextDraw = -Infinity;
+  };
+  return draw;
 }

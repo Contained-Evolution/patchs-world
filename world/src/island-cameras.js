@@ -6,20 +6,20 @@ import { createDrone } from './drone-flight.js';
 import { groundHeight, places, RIVER, riverPoint } from './terrain.js';
 
 // Each mount is an offset from the landmark it watches.
-const waterfall = riverPoint(RIVER.lip);
+const riverBend = riverPoint(RIVER.lip);
 const upperRiver = riverPoint(RIVER.entry - 38);
 const mounts = [
   ['Camp', places.hammock, [10, 5, 12]],
   ['Banana grove', places['banana-grove'], [-14, 7, 12]],
   ['Tall trees', places['tall-trees'], [23, 14, 19], 8],
   ['Pond', places.pond, [25, 9, 24]],
-  ['Beach', places.beach, [-21, 8, 18]],
+  ['Lakeshore', places.beach, [-21, 8, 18]],
   ['Lookout', places.lookout, [24, 13, 18], 5],
   ['Meadow', places.meadow, [-23, 10, 22]],
   ['Cave', places.cave, [12, 5, 20]],
   ['Tide pools', places['tide-pools'], [18, 9, 23]],
-  ['Waterfall', [waterfall.x, waterfall.z], [-13, 8, -13], 0],
-  ['Upper River', [upperRiver.x, upperRiver.z], [10, 7, -13], 0],
+  ['River bend', [riverBend.x, riverBend.z], [-13, 8, -13], 0],
+  ['River inlet', [upperRiver.x, upperRiver.z], [10, 7, -13], 0],
   ['Coconut Computer', places.computer, [-9, 5, 9]]
 ];
 const directions = {

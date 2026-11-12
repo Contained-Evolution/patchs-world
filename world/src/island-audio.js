@@ -1,5 +1,5 @@
 import { ACTIONS, GIFT_SOUND_DURATION } from '../../shared/state.js';
-import { ISLAND, places, pondFraction, shoreFraction, streamInfo, TIDE_POOLS } from './terrain.js';
+import { ISLAND, places, pondFraction, streamInfo } from './terrain.js';
 
 const steps = new Set(['walk', 'run', 'happy-walk', 'walk-texting', 'carry-walk', 'carry-jog', 'carry-run']);
 const sleep = new Set(['sleep', 'sleep-lay', 'sleep-roll']);
@@ -27,7 +27,6 @@ const repeats = {
 // Each burst describes a filtered noise band and its envelope.
 const effects = {
   grass: [[.16, 1550, .28], [.08, 190, .34]],
-  sand: [[.19, 650, .32], [.1, 210, .22]],
   stone: [[.07, 1850, .34], [.1, 330, .35]],
   wet: [[.18, 1250, .48], [.13, 430, .25]],
   breath: [[.38, 520, .12]],
@@ -61,21 +60,18 @@ export function giftSoundAt(gift, now) {
 }
 
 export function ambienceAt(x, z, daylight, weather) {
-  const coast = shoreFraction(x, z);
   const stream = streamInfo(x, z).distance;
   const pond = pondFraction(x, z);
-  const tide = Math.min(...TIDE_POOLS.map(([px, pz]) => Math.hypot(x - px, z - pz)));
   const [cx, cz] = places.cave;
   const sheltered = Math.abs(x - cx) < 5 && z < cz - 3 && z > cz - 16;
   const rain = weather === 'storm' ? 1 : weather === 'rain' ? .64 : 0;
-  const water = Math.max(clamp((1.18 - pond) * 2), clamp(1 - stream / 23), clamp(1 - tide / 19) * .65);
+  const water = Math.max(clamp((1.18 - pond) * 2), clamp(1 - stream / 23));
   return {
     wind: (sheltered ? .12 : 1) * (.42 + rain * .55),
     rain: rain * (sheltered ? .18 : 1),
-    surf: clamp((coast - .82) / .18),
     water,
     birds: !sheltered && daylight > .25 && rain < .8,
-    surface: stream < 2.1 ? 'wet' : coast > .88 ? 'sand' : sheltered ? 'stone' : 'grass'
+    surface: stream < 2.1 || pond < 1 ? 'wet' : sheltered ? 'stone' : 'grass'
   };
 }
 
@@ -125,7 +121,7 @@ export function createIslandAudio(button, footsteps) {
       motor.start();
       rotor = { motor, gain: gain.gain, air: layer(560) };
       layers = {
-        wind: layer(380), rain: layer(3000), surf: layer(245), water: layer(1170)
+        wind: layer(380), rain: layer(3000), water: layer(1170)
       };
     }
     context.resume().catch(() => {});
@@ -277,7 +273,6 @@ export function createIslandAudio(button, footsteps) {
         const mix = state.silent ? 0 : 1;
         layers.wind.setTargetAtTime(mix * environment.wind * (.39 + .13 * Math.sin(time * 1.1)), time, .32);
         layers.rain.setTargetAtTime(mix * environment.rain * .33, time, .32);
-        layers.surf.setTargetAtTime(mix * environment.surf * (.18 + .12 * Math.sin(time * 1.15)), time, .4);
         layers.water.setTargetAtTime(mix * environment.water * .27, time, .32);
         lastMix = time;
       }

@@ -74,3 +74,13 @@ test('eating in the grove picks fruit facing a banana tree within reach',()=>{
     assert.ok(Math.hypot(tree.x-pose.x,tree.z-pose.z)<1.3);assert.ok(Math.abs(Math.atan2(Math.sin(pose.heading-Math.atan2(tree.x-pose.x,tree.z-pose.z)),Math.cos(pose.heading-Math.atan2(tree.x-pose.x,tree.z-pose.z))))<.05);}
   assert.ok(picks>0);
 });
+
+test('a continuous walkway guides Patch only while its connecting segments are clear', () => {
+ const tiles = [[24,20],[28,20],[28,24],[28,28],[24,28]];
+ const walkways = new Map(tiles.map(([x,z])=>[x+','+z,{x,z,material:'stone'}]));
+ const solids = { valley: {items:[],walkways}, blocks:()=>false };
+ const start=tiles[0], end=tiles.at(-1);
+ assert.deepEqual(patchRoute(start,end,0,[],solids).slice(1,-1),tiles);
+ solids.valley.items.push({x:28,z:24,type:'rock'});
+ assert.deepEqual(patchRoute(start,end,0,[],solids),[start,end]);
+});

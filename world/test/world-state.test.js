@@ -27,14 +27,14 @@ test('every place pair connects through nearby real tree anchors', () => {
 });
 
 
-test('all shared places have connected walking paths and lookout is highest', async () => {
+test('all shared places have connected walking paths on the valley heightfield', async () => {
   const { PLACES, ACTIONS } = await import('../../shared/state.js');
   assert.deepEqual(Object.keys(places).sort(), [...PLACES].sort());
   for (const from of PLACES) for (const to of PLACES) {
     assert.deepEqual(paths[from].at(-1), places[from]);
     assert.deepEqual(walkRoute(from,to).at(-1), places[to]);
   }
-  for (const id of PLACES.filter(id => id !== 'lookout')) assert.ok(groundHeight(...places.lookout) > groundHeight(...places[id]));
+  for (const id of PLACES) assert.ok(Number.isFinite(groundHeight(...places[id])));
   assert.ok(ACTIONS.includes('explore') && ACTIONS.includes('watch-sky'));
   assert.equal(statusText({action:'explore',place:'cave'}), 'Patch is exploring the cave.');
 });

@@ -1,12 +1,11 @@
 import * as THREE from 'three';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
-import { ISLAND, places, coastRadius, shoreFraction, groundHeight, pondOutline, RIVER, riverPoint, streamInfo, nearPondStairs, TIDE_POOLS, tideWaterHeight } from './terrain.js';
+import { places, shoreFraction, groundHeight } from './terrain.js';
 import { anchorFor, holdFor, ROPE_TREES, trees } from './world-state.js';
 import { forest, isReserved } from './forest.js';
-import { createTerrainTiles } from './terrain-mesh.js';
-import { addRiverWater, oceanGeometry } from './river-water.js';
-import { addPondScenery, createPondSteps, addWaterfallVines } from './pond-scenery.js';
-import { pondSwings } from './pond-swings.js';
+import { createOutsideTerrain } from './valley/outside-terrain.js';
+import { addValleyLayout } from './valley/valley-layout.js';
+import { addPondScenery } from './pond-scenery.js';
 import { CLIMB_WALLS } from './climbing.js';
 import { createIslandCollision, bananaTrees, BANANA_TREE } from './island-collision.js';
 import { hammock } from './hammock.js';
@@ -14,11 +13,6 @@ import { addCampHammock } from './camp-hammock.js';
 import { addCampRulesSign } from './camp-rules-sign.js';
 import { createFurniture } from './camp-furniture.js';
 const rand=n=>{const v=Math.sin(n*127.1+311.7)*43758.5453123;return v-Math.floor(v);};
-function surfaceTexture(base, strokes, seed=1){
- const c=document.createElement('canvas');c.width=c.height=512;const g=c.getContext('2d');g.fillStyle=base;g.fillRect(0,0,512,512);
- for(let i=0;i<3800;i++){const x=rand(i+seed)*512,y=rand(i+seed+4000)*512,r=.5+rand(i+seed+8000)*3;g.globalAlpha=.05+rand(i+20000)*.15;g.fillStyle=strokes[i%strokes.length];g.beginPath();g.ellipse(x,y,r*2,r,rand(i+10)*Math.PI,0,Math.PI*2);g.fill();}
- g.globalAlpha=1;const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(100,110);t.anisotropy=4;return t;
-}
 function leafGeometry(){
  // Curved lanceolate blade, tapered at both ends, with a central ridge.
  const p=[],uv=[],idx=[],n=3;
@@ -27,76 +21,24 @@ function leafGeometry(){
  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));g.setIndex(idx);g.computeVertexNormals();return g;
 }
 function rockGeometry(){let g=mergeVertices(new THREE.IcosahedronGeometry(1,2));const p=g.attributes.position;for(let i=0;i<p.count;i++){let x=p.getX(i),y=p.getY(i),z=p.getZ(i);let f=1+.16*Math.sin(x*7+z*4)*Math.cos(y*9-z*2);p.setXYZ(i,x*f,y*f,z*f);}g.computeVertexNormals();return g;}
+const valleySun = new THREE.Vector3(-80, 120, 55);
 export function createIsland(scene){
  const walkSolids = createIslandCollision();
  const block = walkSolids.mesh;
  const material=(color,extra={})=>new THREE.MeshStandardMaterial({color,roughness:1,...extra});
- const groundMat=material(0xffffff,{vertexColors:true,map:surfaceTexture('#dfdfdf',['#898989','#ffffff','#bbbbbb'])});
- const grassDetail=new THREE.TextureLoader().load(new URL('./assets/tropical-grass.png',document.baseURI).href);grassDetail.colorSpace=THREE.SRGBColorSpace;grassDetail.wrapS=grassDetail.wrapT=THREE.RepeatWrapping;grassDetail.anisotropy=4;
- groundMat.onBeforeCompile=shader=>{
-  shader.uniforms.grassDetail={value:grassDetail};
-  shader.uniforms.bankStone={value:rockMap};
-  shader.vertexShader=shader.vertexShader
-   .replace('#include <common>',`#include <common>
-attribute vec2 bank;
-varying vec2 islandBank;
-varying vec3 islandGround;
-varying float groundSlope;`)
-   .replace('#include <begin_vertex>',`#include <begin_vertex>
-islandGround=position;
-islandBank=bank;
-groundSlope=1.0-normal.y;`);
-  shader.fragmentShader=shader.fragmentShader
-   .replace('#include <common>',`#include <common>
-varying vec3 islandGround;
-varying vec2 islandBank;
-varying float groundSlope;
-uniform sampler2D grassDetail;
-uniform sampler2D bankStone;`)
-   .replace('#include <color_fragment>',`#include <color_fragment>
-vec2 xz=islandGround.xz;
-vec3 grass=texture2D(grassDetail,xz*.18).rgb;
-float inland=1.0-smoothstep(.78,.95,length(xz/vec2(320.0,360.0)));
-diffuseColor.rgb*=mix(vec3(1.0),grass*1.55,inland*.8);
-if(islandBank.x>.001){
- vec3 stoneX=texture2D(bankStone,islandGround.zy*.42).rgb;
- vec3 stoneZ=texture2D(bankStone,islandGround.xy*.42).rgb;
- float axis=abs(dFdx(islandGround.x))+abs(dFdy(islandGround.x));
- float crossAxis=abs(dFdx(islandGround.z))+abs(dFdy(islandGround.z));
- vec3 rock=mix(stoneX,stoneZ,axis/max(.001,axis+crossAxis));
- float grit=dot(texture2D(bankStone,xz*1.7).rgb,vec3(.29,.58,.13));
- float variation=dot(texture2D(bankStone,xz*.027).rgb,vec3(.29,.58,.13));
- float seam=sin(islandGround.y*3.1+xz.x*.29+xz.y*.38+variation*19.0);
- vec3 mud=mix(vec3(.19,.118,.072),vec3(.23,.139,.081),islandBank.y)*(.77+variation*.95);
- vec3 gravel=vec3(.38,.29,.20)*(.66+grit*1.4);
- vec3 slate=vec3(.21,.22,.22)*(.70+rock*1.4)*(.67+.33*smoothstep(-.65,-.22,seam));
- float stones=smoothstep(.055,.21,variation)*mix(.93,.58,islandBank.y);
- float ledge=smoothstep(.065,.22,groundSlope)*islandBank.y;
- vec3 soil=mix(mix(mud,gravel,stones),slate,ledge);
- diffuseColor.rgb=mix(diffuseColor.rgb,soil,smoothstep(0.0,.83,islandBank.x));
-}`);
- };
  const barkMap=new THREE.TextureLoader().load(new URL('./assets/tropical-bark.png',document.baseURI).href);barkMap.colorSpace=THREE.SRGBColorSpace;barkMap.wrapS=barkMap.wrapT=THREE.RepeatWrapping;barkMap.repeat.set(1,3);barkMap.anisotropy=4;const bark=material(0xc4b3a0,{map:barkMap});
  const leafMap=new THREE.TextureLoader().load(new URL('./assets/tropical-leaf.png',document.baseURI).href);leafMap.colorSpace=THREE.SRGBColorSpace;leafMap.anisotropy=4;
  const foliage=material(0xc1d9ae,{map:leafMap,alphaTest:.35,side:THREE.DoubleSide,roughness:.9,emissive:0x334b29,emissiveMap:leafMap,emissiveIntensity:.35});
  const rockMap=new THREE.TextureLoader().load(new URL('./assets/volcanic-rock.png',document.baseURI).href);rockMap.colorSpace=THREE.SRGBColorSpace;rockMap.wrapS=rockMap.wrapT=THREE.RepeatWrapping;rockMap.anisotropy=4;const rock=material(0xbab9ad,{map:rockMap});
- const sand=material(0xd8c592),wood=material(0x725039),rope=material(0xd1c7a0);
+ const wood=material(0x725039),rope=material(0xd1c7a0);
  const pondScenery=addPondScenery(scene,rope);
- const wet=material(0x67836b,{roughness:.55});
  const add=(geo,mat,x=0,y=0,z=0)=>{const o=new THREE.Mesh(geo,mat);o.position.set(x,y,z);scene.add(o);return o;};
  const beam=(mat,a,b,r1,r2=r1)=>{const av=new THREE.Vector3(...a),bv=new THREE.Vector3(...b),d=bv.clone().sub(av);const o=add(new THREE.CylinderGeometry(r2,r1,d.length(),8),mat);o.position.copy(av).add(bv).multiplyScalar(.5);o.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize());return o;};
  const stones=[];const stone=(x,z,sx,sy,sz)=>{stones.push({x,z,sx,sy,sz});};
  const boulder=rockGeometry(),blade=leafGeometry();
- // Heightfield follows the exact same coast and ground query as movement and Patch.
- for(const geometry of createTerrainTiles())add(geometry,groundMat);
- scene.add(...createPondSteps(rock));
- addWaterfallVines(scene,blade,foliage);
- // Transparent, sunlit moving water uses the same shader idea as Tenari's valley.
- const waterTime={value:0},waterLight={value:1},waterRain={value:0};
- const water=material(0x317d87,{roughness:.25,metalness:.16,transparent:true,opacity:.83,depthWrite:false,side:THREE.DoubleSide});
- water.onBeforeCompile=shader=>{shader.uniforms.waterTime=waterTime;shader.uniforms.waterLight=waterLight;shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nvarying vec2 wavePosition;').replace('#include <begin_vertex>','#include <begin_vertex>\nwavePosition = (modelMatrix * vec4(position,1.0)).xz;');shader.fragmentShader=shader.fragmentShader.replace('#include <common>','#include <common>\nvarying vec2 wavePosition; uniform float waterTime; uniform float waterLight;').replace('#include <normal_fragment_maps>',`#include <normal_fragment_maps>\nfloat a=sin(wavePosition.x*.24+wavePosition.y*.14+waterTime*.7); float b=sin(wavePosition.x*-.12+wavePosition.y*.34-waterTime*.5); float waveFade=1.0-smoothstep(1.0,5.0,length(fwidth(wavePosition))); a*=waveFade; b*=waveFade; normal=normalize(normal+vec3(a*.09,b*.09,0.0)); diffuseColor.rgb*=.9+.06*a+.04*b;`).replace('#include <opaque_fragment>',`float fresnel=pow(1.0-abs(dot(normal,normalize(vViewPosition))),3.0); outgoingLight=mix(outgoingLight,vec3(.45,.65,.68),fresnel*.5); float shine=pow(max(0.0,sin(wavePosition.x*.12+wavePosition.y*.08+waterTime)*sin(wavePosition.y*.16-wavePosition.x*.03-waterTime*.8)),20.0); outgoingLight+=vec3(.8,.88,.76)*shine*waveFade*waterLight*.08;\n#include <opaque_fragment>`);};
- add(oceanGeometry(),water);
- addRiverWater(add,waterTime,waterLight,waterRain);
+ const terrain = createOutsideTerrain(scene);
+ const valley = addValleyLayout(scene, terrain.mesh);
+ walkSolids.valley = valley;
  // Deterministic irregular tropical growth; activity spaces stay clear.
  const trunkGeo=new THREE.CylinderGeometry(.06,.5,1,8),trunks=forest,rocks=[];
  const reserved=isReserved;
@@ -181,79 +123,6 @@ if (trackingPatch) {
  const basketRim=add(new THREE.TorusGeometry(.65,.045,6,24),rope,6,hy+.68,-1);basketRim.rotation.x=Math.PI/2;
  for(let i=0;i<4;i++){const fruit=add(new THREE.TorusGeometry(.23,.065,6,12,Math.PI*1.25),material(0xd7bc58),5.7+i*.19,hy+.75,-1);fruit.rotation.set(.4,i*.8,.25);}
  for(const [x,z] of [[-5,5],[-7,4],[8,-4]]){let y=groundHeight(x,z);walkSolids.log(x-1,z,x+1,z+.35,.12);beam(wood,[x-1,y+.12,z],[x+1,y+.2,z+.35],.12,.08);}
- // Boulders and reeds frame the pool, leaving open banks and the river mouth.
- const reedData=[];
- for(let i=0;i<40;i++){
-  const angle=i*Math.PI*2/40,edge=pondOutline(angle);
-  const x=ISLAND.pondX+Math.cos(angle)*ISLAND.pondRX*edge*.94;
-  const z=ISLAND.pondZ+Math.sin(angle)*ISLAND.pondRZ*edge*.94;
-  const channel=streamInfo(x,z);
-  if(Math.abs(Math.sin(angle))<.36||channel.distance<channel.width+4||pondSwings.some(s=>Math.hypot(x-s.x,z-s.z)<4))continue;
-  if(i%3!==0&&!nearPondStairs(x,z,2))stone(x,z,.9+rand(i)*1.6,.55+rand(i+40)*1.1,.8+rand(i+90)*1.4);
-  if(i%4===0)for(let j=0;j<4;j++)reedData.push({x:x+j*.2,y:groundHeight(x+j*.2,z),z,h:.8+rand(i+j)*.8});
- }
- const reeds=new THREE.InstancedMesh(new THREE.CylinderGeometry(.01,.025,1,5),material(0x567343),reedData.length);
- reedData.forEach((p,i)=>{pose.position.set(p.x,p.y+p.h/2,p.z);pose.rotation.set(0,0,-.1);pose.scale.set(1,p.h,1);pose.updateMatrix();reeds.setMatrixAt(i,pose.matrix);});
- reeds.instanceMatrix.needsUpdate=true;reeds.computeBoundingSphere();scene.add(reeds);
- const shoreStones=new THREE.InstancedMesh(boulder,rock,420);
- shoreStones.count=0;
- for(let i=0;i<420;i++){
-  const angle=rand(i+8400)*Math.PI*2,edge=pondOutline(angle)*(.83+rand(i+9200)*.31);
-  const x=ISLAND.pondX+Math.cos(angle)*ISLAND.pondRX*edge;
-  const z=ISLAND.pondZ+Math.sin(angle)*ISLAND.pondRZ*edge;
-  const y=groundHeight(x,z),stream=streamInfo(x,z);
-  if(y<ISLAND.pondY-.12||nearPondStairs(x,z,.2)||stream.distance<stream.width+2)continue;
-  const slab=i%9===0,size=slab?.28+rand(i+2100)*.49:.052+rand(i+6300)*.15;
-  pose.position.set(x,y+.018,z);
-  pose.rotation.set(.1,rand(i+8600)*Math.PI*2,.13);
-  pose.scale.set(size,slab?size*.19:size*.51,size*.74);
-  pose.updateMatrix();
-  shoreStones.setMatrixAt(shoreStones.count++,pose.matrix);
- }
- shoreStones.instanceMatrix.needsUpdate=true;shoreStones.computeBoundingSphere();scene.add(shoreStones);
- // Flat bedrock, loose gravel and low ferns frame the inland reach above the falls.
- const bedStones=new THREE.InstancedMesh(boulder,rock,360);
- const riverFerns=new THREE.InstancedMesh(blade,foliage,240);
- bedStones.count=0;
- riverFerns.count=0;
- for(let i=0;i<360;i++){
-  const station=THREE.MathUtils.lerp(RIVER.entry+2,RIVER.lip-3,rand(i+4400));
-  const side=i%2===0?-1:1;
-  const slab=i%11===0;
-  const point=riverPoint(station,side*(slab?.54+rand(i+4500)*.57:.24+rand(i+4500)*.88));
-  const height=groundHeight(point.x,point.z);
-  const size=slab?.45+rand(i+4600)*1.1:.045+rand(i+4600)**2*.26;
-  pose.position.set(point.x,height+(slab?.015:.035),point.z);
-  pose.rotation.set(.08,point.heading+rand(i+4700)*1.6,.10);
-  pose.scale.set(size,slab?size*.14:size*.48,size*(slab?1.38:.79));
-  pose.updateMatrix();
-  bedStones.setMatrixAt(bedStones.count++,pose.matrix);
-  if(i%12!==0)continue;
-  const bank=riverPoint(station,(i%24===0?-1:1)*(1.14+rand(i+4800)*.37));
-  const bankHeight=groundHeight(bank.x,bank.z);
-  if(bankHeight<bank.y+.22)continue;
-  for(let leaf=0;leaf<8;leaf++){
-   pose.position.set(bank.x,bankHeight+.08,bank.z);
-   pose.rotation.set(-.32-leaf%3*.14,leaf*Math.PI/4+rand(i+4900),0);
-   pose.scale.setScalar(.25+rand(i+leaf+5100)*.29);
-   pose.updateMatrix();
-   riverFerns.setMatrixAt(riverFerns.count++,pose.matrix);
-  }
- }
- for(const mesh of [bedStones,riverFerns]){
-  mesh.instanceMatrix.needsUpdate=true;
-  mesh.computeBoundingSphere();
-  scene.add(mesh);
- }
- for(let s=RIVER.entry+8;s<RIVER.foot+4;s+=4){
-  for(const side of [-1,1]){
-   const falls=s>RIVER.lip-8;
-   const point=riverPoint(s,side*(falls?1.10:1.02+rand(s+side)*.17));
-   const size=falls?2.9+rand(s+side)*1.6:1+rand(s+side)*1.6;
-   stone(point.x,point.z,size,falls?size*.92:size*.56,size*.85);
-  }
- }
-
  // Curved sheltered cave: separate wall stones and roof leave a real opening.
  const [cx,cz]=places.cave,cy=groundHeight(cx,cz),caveVertices=[],caveUV=[],caveIndex=[],caveLong=20,caveArch=36;
  // A continuous arched rock shell gives the cave an actual interior.
@@ -269,14 +138,9 @@ if (trackingPatch) {
  // Climbing rocks keep their front exactly flat for Patch's braced feet; only the sides, back and top are rough.
  for(const w of CLIMB_WALLS){const height=w.top-w.bottom,geo=new THREE.BoxGeometry(w.width,height,w.depth,14,8,6),p=geo.attributes.position;for(let i=0;i<p.count;i++){const x=p.getX(i),y=p.getY(i),z=p.getZ(i),behind=Math.max(0,Math.min(1,(w.depth/2-z)/.35)),bump=(Math.sin(x*3.1+y*2.3)*Math.cos(z*4.7-x)*.12+Math.sin(y*5.3+z*2.9)*.05)*behind;p.setXYZ(i,x*(1+bump*.25),y+(y>height/2-.01?bump*.6-.12*behind:0),z+bump);}geo.computeVertexNormals();const face=add(geo,rock,w.x-w.normal[0]*w.depth/2,w.bottom+height/2,w.z-w.normal[1]*w.depth/2);face.rotation.y=Math.atan2(w.normal[0],w.normal[1]);const lip=add(new THREE.BoxGeometry(w.width-.5,.09,.14),rock,w.x+w.normal[0]*.07,w.ledges[0]-.045,w.z+w.normal[1]*.07);lip.rotation.y=face.rotation.y;}
  for(const [x,z] of [[278,32],[268,41],[285,9]]){const y=groundHeight(x,z);walkSolids.log(x-2.2,z,x+2,z+1,.24);beam(wood,[x-2.2,y+.2,z],[x+2,y+.4,z+1],.24,.14);}
- // Coastal outcrops sit beyond the walking boundary and break up the sand rim.
- const coastal=[];for(let i=0;i<62;i++){const band=i<35?-.72:-2.05,a=band+(rand(i+72000)-.5)*.75,q=1.015+rand(i+73000)*.055,r=coastRadius(a)*q,x=Math.cos(a)*ISLAND.radiusX*r,z=Math.sin(a)*ISLAND.radiusZ*r;coastal.push({x,z,s:2+rand(i+74000)*4,a});}
- const coastalMesh=new THREE.InstancedMesh(boulder,rock,coastal.length);coastal.forEach((p,i)=>{pose.position.set(p.x,groundHeight(p.x,p.z)+.4,p.z);pose.rotation.set(.1,rand(i+75000)*6,.12);pose.scale.set(p.s*1.4,p.s*.65,p.s);pose.updateMatrix();coastalMesh.setMatrixAt(i,pose.matrix);walkSolids.rock(p.x,p.z,boulder,pose.matrix);});coastalMesh.instanceMatrix.needsUpdate=true;coastalMesh.computeBoundingSphere();scene.add(coastalMesh);
- // Tidal basins are carved into the same heightfield used by visitors.
- for(const pool of TIDE_POOLS){const [x,z,rx,rz]=pool,p=add(new THREE.CircleGeometry(1,32),water,x,tideWaterHeight(pool),z);p.rotation.x=-Math.PI/2;p.scale.set(rx*.8,rz*.8,1);for(let i=0;i<7;i++){const a=i*6.28/7,px=x+Math.cos(a)*rx*1.2,pz=z+Math.sin(a)*rz*1.2;stone(px,pz,1,.6,.8);}}
  const boulderMesh=new THREE.InstancedMesh(boulder,rock,stones.length);stones.forEach((p,i)=>{pose.position.set(p.x,groundHeight(p.x,p.z)+p.sy*.10,p.z);pose.rotation.set(rand(p.x+p.z)*.4,rand(p.x-p.z)*6,.1);pose.scale.set(p.sx,p.sy,p.sz);pose.updateMatrix();boulderMesh.setMatrixAt(i,pose.matrix);walkSolids.rock(p.x,p.z,boulder,pose.matrix);});boulderMesh.instanceMatrix.needsUpdate=true;boulderMesh.computeBoundingSphere();scene.add(boulderMesh);
  // Chairs, the camp table and the coconut computer.
  const furniture=createFurniture(scene,{bark,wood},block);
  addCampRulesSign(scene, walkSolids, { bark, wood, rope, foliage }, blade);
- return { walkSolids, block, setRope, pondScenery, setTrackingTarget, setComputer:furniture.setComputer, resetRopes(){for(const i of ROPE_TREES)setRope(i,null);}, update(dt,daylight,rain=0){waterRain.value=rain;pondScenery.update(dt);furniture.update(dt,daylight);waterTime.value+=dt;waterLight.value=daylight;foliage.emissiveIntensity=.05+daylight*.3;} };
+ return { walkSolids, valley, block, setRope, pondScenery, setTrackingTarget, setComputer:furniture.setComputer, resetRopes(){for(const i of ROPE_TREES)setRope(i,null);}, update(dt,daylight,rain=0,sunDirection=valleySun){terrain.update(dt, sunDirection, daylight);pondScenery.update(dt);furniture.update(dt,daylight);foliage.emissiveIntensity=.05+daylight*.3;} };
 }

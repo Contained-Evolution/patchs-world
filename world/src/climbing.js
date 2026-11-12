@@ -15,7 +15,7 @@ function climbingRock(x,z,angle,width,depth){
  const base=groundHeight(x+normal[0]*.43,z+normal[1]*.43);
  return {x,z,normal,tangent,width,depth,base,ledges:[base+1.5,base+1.5+HOP_RISE],top:base+1.5+HOP_RISE,bottom:base-1.2};
 }
-export const CLIMB_WALLS=[climbingRock(-142.6,-211.6,332*Math.PI/180,6,2.6)];
+export const CLIMB_WALLS=[climbingRock(149,-85,332*Math.PI/180,6,2.6)];
 
 // Cast a level ray and return the flat face it meets, if any.
 export function faceHit(x,y,z,dx,dz){

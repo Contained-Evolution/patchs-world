@@ -1,7 +1,6 @@
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { ISLAND, pondStairs, stairPoint, stairTread, vinePoint } from './terrain.js';
+import { ISLAND } from './terrain.js';
 import { pondSwings } from './pond-swings.js';
 
 export function addPondScenery(scene, ropeMaterial) {
@@ -78,40 +77,4 @@ export function addPondScenery(scene, ropeMaterial) {
    splash.visible=splashAge<1.4;
   }
  };
-}
-
-export function createPondSteps(stoneMaterial) {
- return pondStairs.map(stair=>{
-  const depth=1.3;
-  const angle=Math.atan2(stair.dx,stair.dz);
-  const treads=Array.from({length:stair.count},(_,index)=>{
-   const [x,z]=stairPoint(stair,(index+.5)*stair.run);
-   return new THREE.BoxGeometry(stair.width,depth,stair.run)
-    .rotateY(angle).translate(x,stairTread(stair,index)-depth/2,z);
-  });
-  const geometry=mergeGeometries(treads);
-  for(const tread of treads)tread.dispose();
-  return new THREE.Mesh(geometry,stoneMaterial);
- });
-}
-
-export function addWaterfallVines(scene, leafGeometry, leafMaterial) {
- const stems=new THREE.MeshStandardMaterial({color:0x506132,roughness:1});
- const leaves=new THREE.InstancedMesh(leafGeometry,leafMaterial,87);
- const pose=new THREE.Object3D();
- for(let vine=0;vine<3;vine++){
-  const points=Array.from({length:29},(_,i)=>{
-   const t=i/28;
-   const [x,y,z]=vinePoint(t,(vine-1)*.51+Math.sin(i*.51+vine)*.14);
-   pose.position.set(x,y+.25,z);
-   pose.rotation.set(-.25,i*2.39+vine,(i%2-.5)*.9);
-   pose.scale.setScalar(.29+.11*Math.sin(i*7.2)**2);
-   pose.updateMatrix();
-   leaves.setMatrixAt(vine*29+i,pose.matrix);
-   return new THREE.Vector3(x,y+.13,z);
-  });
-  const curve=new THREE.CatmullRomCurve3(points);
-  scene.add(new THREE.Mesh(new THREE.TubeGeometry(curve,56,.065,6,false),stems));
- }
- scene.add(leaves);
 }

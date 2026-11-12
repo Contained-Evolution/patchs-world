@@ -10,16 +10,21 @@ import { forest } from '../src/forest.js';
 import { createFoodProps } from '../src/food-props.js';
 import { FOOD_STORE, forageTrees } from '../src/foraging.js';
 import { patchRoute } from '../src/patch-motion.js';
-import { ISLAND, STREAM, TIDE_POOLS, places, pondStairs, stairPoint, vinePoint } from '../src/terrain.js';
+import { ISLAND, STREAM, places } from '../src/terrain.js';
 import { walkRoute } from '../src/world-state.js';
 
 test('rendered island solids block both walkers and all fruit trees have a reachable picking spot', t => {
   const gradient = { addColorStop() {} };
+  const pattern = { setTransform() {} };
+  const previousMatrix = globalThis.DOMMatrix;
+  globalThis.DOMMatrix = class { scale() { return this; } };
+  t.after(() => { globalThis.DOMMatrix = previousMatrix; });
   const canvas = {};
   const context = new Proxy({ canvas }, {
     get: (target, name) => name in target ? target[name]
       : name === 'measureText' ? text => ({ width: text.length * 23 })
       : name === 'getImageData' ? () => ({ data: new Uint8ClampedArray(512*512*4) })
+      : name === 'createPattern' ? () => pattern
       : String(name).endsWith('Gradient') ? () => gradient : () => {}
   });
   const previous = globalThis.document;
@@ -41,10 +46,10 @@ test('rendered island solids block both walkers and all fruit trees have a reach
   assert.ok(sign);
   assert.ok(solids.blocks(sign.position.x, sign.position.z));
 
-  for (const [x,z] of [[6,-1], [hammock.x, hammock.z], ...hammockSupports.map(({ x, z }) => [x, z]), [5.2,2], [278,32], [-145,-205], [FOOD_STORE[0],FOOD_STORE[1]+1.15]]) {
+  for (const [x,z] of [[6,-1], [hammock.x, hammock.z], ...hammockSupports.map(({ x, z }) => [x, z]), [5.2,2], [278,32], [149,-85], [FOOD_STORE[0],FOOD_STORE[1]+1.15]]) {
     assert.ok(solids.blocks(x,z), `missing solid at ${x},${z}`);
   }
-  for (const [x,z] of [[ISLAND.pondX,ISLAND.pondZ], STREAM[2], ...TIDE_POOLS]) {
+  for (const [x,z] of [[ISLAND.pondX,ISLAND.pondZ], STREAM.at(-3)]) {
     assert.equal(walkable(x,z,undefined,undefined,solids),false);
   }
   assert.equal(walkable(ISLAND.pondX,ISLAND.pondZ,undefined,undefined,solids,true),true);
@@ -78,22 +83,12 @@ test('rendered island solids block both walkers and all fruit trees have a reach
   }
 
   // The visitor can swim in and out without changing controls. Patch's ground routes stay dry.
-  const swimStart = [65,66];
-  const swimEnd = walkStep(...swimStart,40,0,solids,true);
+  const swimStart = [ISLAND.pondX + ISLAND.pondRX + 1, ISLAND.pondZ];
+  const swimEnd = walkStep(...swimStart,-40,0,solids,true);
   assert.ok(inPond(...swimEnd));
   assert.equal(visitorEyeHeight(...swimEnd),ISLAND.pondY+.55);
-  const swimReturn = walkStep(...swimEnd,-40,0,solids,true);
+  const swimReturn = walkStep(...swimEnd,40,0,solids,true);
   assert.ok(Math.abs(swimReturn[0]-swimStart[0])<.2);
-  for(const stair of pondStairs){
-    const low=stairPoint(stair,.1),high=stairPoint(stair,stair.count*stair.run-.1);
-    assert.ok(clearGroundLine(low,high,solids),'blocked stone staircase');
-    assert.ok(clearGroundLine(high,low,solids),'blocked descent');
-  }
-  for(let i=0;i<=40;i++){
-    const [x,,z]=vinePoint(i/40);
-    assert.ok(walkable(x,z,undefined,undefined,solids),'obstructed vine route');
-  }
-
   for (const [from,start] of Object.entries(places)) {
     for (const [to,end] of Object.entries(places)) {
       if (from===to)continue;

@@ -4,7 +4,7 @@ import { places, paths, groundHeight } from './terrain.js';
 export const trees = [];
 // Connected living trees supply the swing route; their trunks are rendered by the island.
 for(let row=0;row<6;row++) for(let col=0;col<8;col++) {
- const x=85+col*4.4+(row%2)*.9+Math.sin(row*7+col*3)*.35, z=-119+row*4.5+Math.cos(row*4+col*8)*.35;
+ const x=85+col*4.4+(row%2)*.9+Math.sin(row*7+col*3)*.35, z=-84+row*4.5+Math.cos(row*4+col*8)*.35;
  trees.push([x,z,10+((row*8+col)%5)*.5]);
 }
 // Four outward-facing branch shapes share the same reachable height.

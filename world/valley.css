@@ -1,0 +1,56 @@
+@font-face { font-family: Pangolin; src: url(/Pangolin-Regular.ttf); font-display: swap; }
+* { box-sizing: border-box; }
+:root {
+  color-scheme: dark;
+  font: 500 15px/1.4 Pangolin, sans-serif;
+  color: #f6f8fc;
+  background: #12151c;
+}
+body { margin: 0; }
+main { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; height: 100dvh; min-height: 390px; }
+.toolbar, .controls { background: #151922; padding: 8px 14px; }
+.toolbar { display: flex; justify-content: space-between; align-items: center; z-index: 2; border-bottom: 1px solid #343e50; }
+h1 { font-size: 1.1rem; margin: 0; font-weight: 700; }
+button, summary {
+  font: inherit;
+  color: inherit;
+  background: #222937;
+  border: 1px solid #495469;
+  border-radius: 8px;
+  min-height: 42px;
+  padding: 6px 11px;
+  cursor: pointer;
+}
+button[aria-pressed="true"] { color: #122038; background: #a9d6ff; border-color: #a9d6ff; }
+button:disabled { opacity: .4; cursor: default; }
+button:focus-visible, canvas:focus-visible, summary:focus-visible { outline: 2px solid #8ecbff; outline-offset: -3px; }
+details { position: relative; }
+summary { display: grid; place-items: center; list-style: none; }
+summary::-webkit-details-marker { display: none; }
+.layout-actions {
+  position: absolute; top: calc(100% + 6px); right: 0; min-width: max-content;
+  display: grid; gap: 6px; padding: 6px; background: #151922; border: 1px solid #495469; border-radius: 8px;
+}
+.map { position: relative; overflow: hidden; background: #9fbeaf; }
+canvas { display: block; width: 100%; height: 100%; position: absolute; touch-action: none; cursor: grab; }
+canvas:active { cursor: grabbing; }
+#status {
+  position: absolute; left: 12px; bottom: 10px; max-width: calc(100% - 78px);
+  margin: 0; padding: 7px 10px; border-radius: 8px; background: #151922; pointer-events: none;
+}
+#status:empty { display: none; }
+.views, .zoom { position: absolute; display: flex; gap: 6px; }
+.views { top: 10px; left: 12px; }
+.zoom { right: 12px; bottom: 10px; flex-direction: column; }
+.zoom button { min-width: 44px; font-size: 1.25rem; }
+.controls { display: flex; align-items: center; gap: 8px 14px; flex-wrap: wrap; border-top: 1px solid #343e50; }
+.tools { display: flex; gap: 4px; }
+.hint { margin: 0; color: #bbc6d6; font-size: .8rem; }
+@media (max-width: 600px) {
+  .controls { gap: 6px 12px; padding: 7px 8px max(8px, env(safe-area-inset-bottom)); }
+  .controls button { padding-inline: 8px; }
+  .hint { flex-basis: 100%; }
+}
+[hidden] { display: none !important; }
+
+#walkway-tool { min-height: 42px; font: inherit; }

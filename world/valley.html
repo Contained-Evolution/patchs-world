@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Valley editor</title>
+  <link rel="stylesheet" href="/valley.css">
+</head>
+<body>
+  <main data-view="edit">
+    <header class="toolbar">
+      <button type="button" id="back-view" aria-label="Back to map">‹</button>
+      <h1 id="view-title" tabindex="-1">World editor</h1>
+      <details>
+        <summary>Layout</summary>
+        <div class="layout-actions">
+          <button type="button" id="clear">Clear ground</button>
+          <button type="button" id="starter">Restore starter layout</button>
+          <button type="button" id="export">Export layout</button>
+        </div>
+      </details>
+    </header>
+    <section class="map" aria-label="Patch’s valley">
+      <canvas id="valley" aria-label="Interactive 3D valley" tabindex="0"></canvas>
+      <p id="status" role="status">Loading valley…</p>
+      <div class="views" aria-label="Camera presets">
+        <button type="button" id="overview">Whole map</button>
+        <button type="button" id="village">Village</button>
+      </div>
+      <div class="zoom" aria-label="Map zoom">
+        <button type="button" id="zoom-in" aria-label="Zoom in">+</button>
+        <button type="button" id="zoom-out" aria-label="Zoom out">−</button>
+      </div>
+    </section>
+    <footer class="controls">
+      <div class="tools" aria-label="Camera tools">
+        <button type="button" data-camera="orbit" aria-pressed="true">Orbit</button>
+        <button type="button" data-camera="pan" aria-pressed="false">Pan</button>
+      </div>
+      <div class="tools" aria-label="Scenery tools">
+        <button type="button" data-tool="select" aria-pressed="true">Select</button>
+        <button type="button" data-tool="tree" aria-pressed="false">Tree</button>
+        <button type="button" data-tool="rock" aria-pressed="false">Rock</button>
+        <button type="button" id="remove" disabled>Remove</button>
+      </div>
+      <label class="walkway">Walkway
+        <select id="walkway-tool" aria-label="Walkway material">
+          <option value="">Choose material</option>
+          <option value="stone">Stone</option>
+          <option value="gravel">Gravel</option>
+          <option value="wood">Wood</option>
+          <option value="erase">Erase walkway</option>
+        </select>
+      </label>
+      <p class="hint">Choose a walkway material and drag over flat ground. Orbit or Pan returns to the camera.</p>
+    </footer>
+  </main>
+  <script type="module" src="/valley.js"></script>
+</body>
+</html>

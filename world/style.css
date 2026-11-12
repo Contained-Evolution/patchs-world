@@ -124,7 +124,7 @@ dialog::backdrop { background:#08241dbb; }
 .gauge-fill { stroke:url(#gauge-grad); transition:stroke-dasharray .6s; }
 .gauge-icon { position:relative; font-size:20px; line-height:1; margin-top:-2px; }
 .gauge-defs { position:absolute; }
-#return-to-walk, #mouse-lock, #climb-vines {
+#return-to-walk, #mouse-lock {
   border:1px solid #ffffff9c; border-radius:12px; background:#173f38ed; color:white;
 }
 .island-movement {
@@ -137,7 +137,6 @@ dialog::backdrop { background:#08241dbb; }
   padding:0; place-items:center; border-radius:50%;
   pointer-events:auto; box-shadow:0 3px 12px #153f3b65;
 }
-#climb-vines { padding:8px 14px; pointer-events:auto; }
 #return-to-walk { display:grid; width:60px; height:60px; }
 #move-stick, #return-to-walk { margin:8px auto 0; }
 #move-stick { display:none; }
@@ -363,3 +362,7 @@ nav button[hidden]{display:none}
 @media (max-height:480px) { .hud { left:max(108px, calc(env(safe-area-inset-left) + 104px)); } .stream { height:80px; } }
 
 #camp-rules { display:grid; gap:.8em; max-width:42ch; padding-inline-start:1.35em; line-height:1.45; }
+
+#valley-editor { position: fixed; inset: 0; width: 100%; height: 100%; max-width: none; max-height: none; padding: 0; border: 0; }
+#valley-editor iframe { display: block; width: 100%; height: 100%; border: 0; }
+#edit-valley { min-width: 42px; }
