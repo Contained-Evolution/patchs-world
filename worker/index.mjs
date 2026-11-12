@@ -12,7 +12,8 @@ import { concepts } from './memory-graph.mjs';
 import { cleanSubscription, addDevice, sendPush, gone, deliveries } from './push.mjs';
 import { canSpeak, voiceRoom, countVoice, record } from './voice.mjs';
 import { estimateMs, schedule, speechView } from '../shared/speech.js';
-import { drafts, configured, authorizeX, xHeaders, publish, receiptKey } from './social.mjs';
+import { drafts, configured, authorizeX, xHeaders, publish, receiptKey, verifyMeta } from './social.mjs';
+import { enqueueSocial, inbox, processSocial, reviewDraft, socialPhoto, socialSources } from './social-inbox.mjs';
 import { feedFrom } from '../shared/feed.js';
 
 const headers = {
@@ -41,6 +42,36 @@ const diaryKey = entry => { const m = localMinutes(entry.at); return `diary:${en
 const newId = now => `${now.toString(36)}${crypto.getRandomValues(new Uint32Array(1))[0].toString(36)}`;
 
 export class SocialPublisher extends DurableObject {
+  enqueue(sources) { return enqueueSocial(this.ctx.storage, sources); }
+
+  alarm() {
+    return processSocial(this.ctx.storage, this.env, (id, revised) => patchOf(this.env).socialNotify(id, revised));
+  }
+
+  async conversations() {
+    const x = await this.ctx.storage.get('social:x-token');
+    let meta = this.meta;
+    if (configured(this.env, 'facebook') && (!meta || meta.expires < Date.now())) {
+      try {
+        const ig = await verifyMeta(this.env, 'facebook');
+        meta = { facebook: true, instagram: ig?.username?.toLowerCase() === '_patches_world', expires: Date.now() + 60000 };
+      } catch {
+        meta = { facebook: false, instagram: false, expires: Date.now() + 15000 };
+      }
+      this.meta = meta;
+    }
+    return {
+      drafts: await inbox(this.ctx.storage),
+      connections: { x: Boolean(x?.refresh_token), facebook: Boolean(meta?.facebook), instagram: Boolean(meta?.instagram) },
+    };
+  }
+
+  connectX(owner) { return authorizeX(this.ctx.storage, this.env, owner, true); }
+
+  review(id, body) { return reviewDraft(this.ctx.storage, this.env, id, body); }
+
+  photo(id, ticket, owner) { return socialPhoto(this.ctx.storage, id, ticket, owner); }
+
   async socialReceipt(platform) {
     if ((platform === 'facebook' && this.env.PATCH_CRAB_FACEBOOK_PUBLISHED === 'true') ||
         (platform === 'instagram' && this.env.PATCH_CRAB_INSTAGRAM_PUBLISHED === 'true')) return { state: 'published' };
@@ -61,9 +92,11 @@ export class SocialPublisher extends DurableObject {
     const storage = this.ctx.storage;
     try {
       const receipt = await this.socialReceipt(platform);
-      if (receipt) return { status: 409, error: 'This draft already has a submission record.' };
+      if (receipt && !callback) return { status: 409, error: 'This draft already has a submission record.' };
       if (platform === 'x' && !callback) return { status: 200, authorize: await authorizeX(storage, this.env, owner) };
       const headers = platform === 'x' ? await xHeaders(storage, this.env, owner, callback.state, callback.code) : null;
+      if (callback && platform === 'x' && !headers) return { status: 200, connected: true };
+      if (receipt) return { status: 409, error: 'This draft already has a submission record.' };
       const result = await publish(storage, this.env, platform, headers);
       return { status: result.state === 'published' ? 200 : 502, ...result };
     } catch (error) {
@@ -206,6 +239,9 @@ export class PatchWorld extends DurableObject {
     await this.ctx.storage.setAlarm(nextWake(world.body, now));
     try { await this.speak(spoken, now); } catch (error) { console.error('Patch could not speak:', error); }
     try { await this.notify(replies, entries); } catch (error) { console.error('Patch could not send notifications:', error); }
+    try {
+      await publisherOf(this.env).enqueue(socialSources(entries, world.body, since));
+    } catch (error) { console.warn('Patch could not queue a social draft:', error.message); }
   }
 
   // Records what he says and his letter replies once, then queues them to be said in turn, out loud for everyone watching.
@@ -246,7 +282,7 @@ export class PatchWorld extends DurableObject {
   // This account's notification devices: { publicKey, devices: [{ endpoint, letters, journal }] }.
   async devices(who) {
     const devices = (await this.ctx.storage.get(`push:${who.id}`)) || [];
-    return { publicKey: this.env.VAPID_PUBLIC_KEY || null, devices: devices.map(({ endpoint, letters, journal }) => ({ endpoint, letters, journal })) };
+    return { publicKey: this.env.VAPID_PUBLIC_KEY || null, devices: devices.map(({ endpoint, letters, journal, social }) => ({ endpoint, letters, journal, social: Boolean(who.admin && social) })) };
   }
 
   async savePush(who, body) {
@@ -254,7 +290,8 @@ export class PatchWorld extends DurableObject {
     const subscription = cleanSubscription(body?.subscription);
     if (!subscription) return { status: 400, error: "This browser's notifications can't be used here." };
     const key = `push:${who.id}`;
-    await this.ctx.storage.put(key, addDevice(await this.ctx.storage.get(key), subscription, body, Date.now()));
+    await this.ctx.storage.put(key, addDevice(await this.ctx.storage.get(key), subscription, { ...body, social: who.admin && body.social }, Date.now()));
+    if (who.admin) await this.ctx.storage.put('social:owner', who.id);
     return { status: 200, ...(await this.devices(who)) };
   }
 
@@ -262,6 +299,28 @@ export class PatchWorld extends DurableObject {
     const key = `push:${who.id}`, devices = ((await this.ctx.storage.get(key)) || []).filter(device => device.endpoint !== endpoint);
     if (devices.length) await this.ctx.storage.put(key, devices); else await this.ctx.storage.delete(key);
     return { status: 200, ...(await this.devices(who)) };
+  }
+
+  async socialNotify(id, revised) {
+    const owner = await this.ctx.storage.get('social:owner');
+    if (!owner || !this.env.VAPID_PUBLIC_KEY || !this.env.VAPID_PRIVATE_KEY) return;
+    const key = `push:${owner}`;
+    const devices = (await this.ctx.storage.get(key)) || [];
+    const note = {
+      title: revised ? 'Patch revised a social draft' : 'Patch texted Contained Evolution',
+      body: 'Open Patch’s tablet conversation to review the post.',
+      url: '/social-review.html?draft=' + id + '#social-drafts',
+      tag: 'patch-social-' + id,
+    };
+    const results = await Promise.allSettled(devices.filter(device => device.social)
+      .map(async device => ({ endpoint: device.endpoint, status: await sendPush(this.env, device, note) })));
+    const stale = new Set(results.flatMap(result => result.status === 'fulfilled' && gone(result.value.status) ? [result.value.endpoint] : []));
+    if (stale.size) {
+      await this.ctx.storage.transaction(async txn => {
+        const latest = await txn.get(key) || [];
+        await txn.put(key, latest.filter(device => !stale.has(device.endpoint)));
+      });
+    }
   }
 
   async notify(replies, entries) {
@@ -494,6 +553,7 @@ function audioResponse(request, audio, base) {
   return new Response(audio.slice(start, end + 1), { status: 206, headers: { ...out, 'content-range': `bytes ${start}-${end}/${size}` } });
 }
 
+const publisherOf = env => env.SOCIAL_PUBLISHER.get(env.SOCIAL_PUBLISHER.idFromName('patch'));
 const patchOf = env => env.PATCH_WORLD.get(env.PATCH_WORLD.idFromName('patch'));
 
 // Letters, the message board and who's signed in.
@@ -504,11 +564,29 @@ async function visitorApi(request, env, url, path) {
   let who;
   try { who = await visitor(request, env); } catch { return json({ error: 'Account check is unavailable. Try again soon.' }, 503); }
   if (path === '/api/me' && request.method === 'GET') return json({ user: who && { name: who.name, admin: who.admin }, signIn: SIGN_IN });
+  const media = path.match(/^\/api\/social\/media\/([0-9a-f-]{36})$/);
+  if (media && request.method === 'GET') {
+    const bytes = await publisherOf(env).photo(media[1], url.searchParams.get('ticket'), Boolean(who?.admin));
+    return bytes ? new Response(bytes, { headers: { ...headers, 'content-type': 'image/jpeg', 'cache-control': 'no-store' } }) : json({ error: 'Photo not found.' }, 404);
+  }
   if (!who) return json({ error: 'Sign in to talk to Patch.', signIn: SIGN_IN }, 401);
   const send = ({ status, ...body }) => json(body, status);
   if (path.startsWith('/api/social/')) {
     if (!who.admin) return json({ error: 'Owner access required.' }, 403);
-    const publisher = env.SOCIAL_PUBLISHER.get(env.SOCIAL_PUBLISHER.idFromName('patch'));
+    const publisher = publisherOf(env);
+    if (path === '/api/social/inbox' && request.method === 'GET') return json(await publisher.conversations());
+    if (path === '/api/social/journal-draft' && request.method === 'POST') {
+      const { diary } = await patch.journal();
+      const entry = diary.find(item => item.title && item.text && item.at);
+      if (!entry) return json({ error: 'Patch’s journal is empty.' }, 404);
+      const live = await patch.state();
+      const [source] = socialSources([{ ...entry, at: Date.parse(entry.at) }], { activity: { place: live.patch.place } }, Date.now());
+      await publisher.enqueue([{ ...source, requested: true }]);
+      return json({ queued: true }, 202);
+    }
+    if (path === '/api/social/x/connect' && request.method === 'POST') return json({ authorize: await publisher.connectX(who.id) });
+    const conversation = path.match(/^\/api\/social\/inbox\/([0-9a-f-]{36})$/);
+    if (conversation && request.method === 'POST') return send(await publisher.review(conversation[1], await readJson(request)));
     if (path === '/api/social/drafts' && request.method === 'GET') return json(await publisher.socialDrafts());
     if (path === '/api/social/publish' && request.method === 'POST') {
       return send(await publisher.publishDraft(who.id, (await readJson(request))?.platform));

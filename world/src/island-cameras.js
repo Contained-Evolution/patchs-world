@@ -310,6 +310,12 @@ export function setupIslandCameras(renderer, scene) {
   }
 
   return {
+    capture(index, canvas, renderScene) {
+      const view = feeds[index];
+      if (!view) return false;
+      renderInto(view, canvas.getContext('2d'), canvas.width, canvas.height, renderScene);
+      return true;
+    },
     reset() {
       drone.reset();
       for (const view of feeds) {

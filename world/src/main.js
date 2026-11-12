@@ -44,7 +44,7 @@ setupInstall();
 // Chris's account sees an Animations button in the menu that opens Patch's clip locker.
 const animations=setupAnimationViewer();
 
-fetch('/api/me',{credentials:'same-origin',cache:'no-store'}).then(r=>r.ok?r.json():null).then(me=>{if(me?.user?.admin||isLocalPreview(location.hostname))$('#open-animations').hidden=false;}).catch(()=>{if(isLocalPreview(location.hostname))$('#open-animations').hidden=false;});
+fetch('/api/me',{credentials:'same-origin',cache:'no-store'}).then(r=>r.ok?r.json():null).then(me=>{if(me?.user?.admin)$('#open-social-inbox').hidden=false;if(me?.user?.admin||isLocalPreview(location.hostname))$('#open-animations').hidden=false;}).catch(()=>{if(isLocalPreview(location.hostname))$('#open-animations').hidden=false;});
 let renderer;
 try { renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' }); } catch { $('#error').hidden = false; throw new Error('WebGL unavailable'); }
 const basePixelRatio=Math.min(devicePixelRatio,1.5);renderer.setPixelRatio(basePixelRatio);
@@ -520,6 +520,15 @@ function renderAerial(view) {
     sunLight.color.copy(aerialSunColor);
   }
 }
+const captureChoice = new URLSearchParams(location.search).get('social-camera');
+const socialCamera = /^([0-9]|1[01])$/.test(captureChoice || '') ? Number(captureChoice) : null;
+const captureFrame = socialCamera === null ? null : Object.assign(document.createElement('canvas'), {
+  id: 'social-camera-frame', width: 720, height: 480,
+});
+if (captureFrame) {
+  captureFrame.style.cssText = 'position:fixed;inset:0;z-index:2147483647;width:100vw;height:100vh;background:#173c38';
+  document.body.append(captureFrame);
+}
 function renderIsland(now) {
   updateMap(now, camera.position, patch.visible ? patch.position : null, dialog.open && !mapHome.hidden);
   const renderView = view => {
@@ -527,6 +536,10 @@ function renderIsland(now) {
     scenery.setTrackingTarget(patch.visible && !cameraFeeds.open && followPatch.checked ? patch.position : null);
     renderer.render(scene, view);
   };
+  if (captureFrame && hasLiveState && patchModel) {
+    if (!captureFrame.dataset.ready && cameraFeeds.capture(socialCamera, captureFrame, renderView)) captureFrame.dataset.ready = 'true';
+    return;
+  }
   if (cameraFeeds.open) cameraFeeds.render(now, renderView);
   else renderView(controls.camera);
 }

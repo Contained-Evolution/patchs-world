@@ -18,9 +18,11 @@
   <nav id="entries-drawer" aria-label="Journal entries" inert><ol id="entries-list"></ol></nav>
   <main>
     <section id="social-drafts" hidden aria-labelledby="social-heading">
-      <h2 id="social-heading">Social drafts</h2>
+      <h2 id="social-heading">Patch’s tablet · Contained Evolution</h2>
       <p id="social-status" role="status"></p>
-      <div id="social-previews"></div>
+      <div id="social-accounts"></div>
+      <div id="social-conversations"></div>
+      <details><summary>Crab-cloud launch posts</summary><div id="social-previews"></div></details>
     </section>
     <p id="status" role="status">Opening Patch’s journal…</p>
     <div class="journal" id="journal" hidden>
@@ -32,5 +34,6 @@
     </div>
   </main>
   <script type="module" src="./journal.js"></script>
+  <script type="module" src="./social-inbox.js"></script>
 </body>
 </html>

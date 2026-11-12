@@ -48,3 +48,19 @@ button+button{background:transparent;color:#20554b;margin-top:6px}
 #social-previews article { padding: 1rem; border-radius: .75rem; background: #f6f4e8; color: #163833; }
 #social-previews p { white-space: pre-wrap; overflow-wrap: anywhere; }
 #social-previews img { display: block; width: min(100%,16rem); margin: 0 0 1rem; border-radius: .5rem; }
+
+#social-conversations { display: grid; gap: 1rem; margin: 1rem 0; }
+.host-conversation { padding: clamp(.8rem, 2vw, 1.4rem); border-radius: .9rem; background: #143b32; color: #fff7e5; }
+.host-conversation h3 { margin: 0 0 .6rem; }
+.host-conversation a { color: #ffe39d; }
+.host-conversation ol { display: grid; gap: .5rem; list-style: none; padding: 0; }
+.host-conversation li { padding: .7rem .9rem; background: #28594d; border-radius: .85rem .85rem .85rem .2rem; max-width: min(38rem, 92%); }
+.host-conversation li.host-message { justify-self: end; background: #e9d39b; color: #18362c; border-radius: .85rem .85rem .2rem .85rem; }
+.host-conversation li p { margin: .25rem 0; }
+.host-conversation time, .host-conversation small { font-size: .85rem; }
+.host-conversation figure { margin: .8rem 0; }
+.host-conversation img { width: min(100%, 35rem); border-radius: .6rem; }
+.host-conversation fieldset { min-width: 0; border: 1px solid #ffffff4d; border-radius: .5rem; margin: .75rem 0; }
+.host-conversation fieldset section + section { border-top: 1px solid #ffffff4d; margin-top: .75rem; padding-top: .75rem; }
+.host-conversation textarea { display: block; width: 100%; max-width: 35rem; margin: .3rem 0; }
+.host-conversation p { overflow-wrap: anywhere; white-space: pre-wrap; }
