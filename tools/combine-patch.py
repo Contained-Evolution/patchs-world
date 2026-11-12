@@ -1,5 +1,5 @@
 # Combine Patch.fbx (Meshy model, Mixamo-named rig) and the Mixamo clip FBXs into one GLB.
-# blender -b -P tools/combine-patch.py -- <folder with the FBX files> <output .glb>
+# blender -b -P tools/combine-patch.py -- art/animations world/assets/patch.glb
 import bpy, sys, os
 args = sys.argv[sys.argv.index('--')+1:]
 art, out = args[0], args[1]
