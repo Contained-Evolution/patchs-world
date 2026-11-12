@@ -223,11 +223,12 @@ nav button[hidden]{display:none}
   min-height:44px; padding:8px 16px; pointer-events:auto;
   border:1px solid #f0c47e; border-radius:12px; background:#f0c47e; color:#20382e;
 }
-dialog:has(#cameras-panel:not([hidden])) { width:min(96vw,1000px); }
+dialog:has(#cameras-panel:not([hidden])) { width:min(calc(100% - 16px),1000px); max-width:none; }
+dialog:has(#cameras-panel:not([hidden]))::backdrop { background:#102c26; }
 #cameras-panel { max-width:none; min-height:0; padding:0; }
 #cameras-title { font-size:clamp(17px,3vw,24px); margin:0 0 6px; }
 .camera-viewport {
-  position:relative; margin:0; height:min(48dvh, 480px);
+  position:relative; margin:0; height:min(48dvh, 480px, max(48px, calc(100dvh - 258px)));
   overflow:hidden; border-radius:10px; background:#0a1411;
 }
 #camera-feed { display:block; width:100%; height:100%; }
@@ -269,9 +270,12 @@ dialog:has(#cameras-panel:not([hidden])) { width:min(96vw,1000px); }
   background:#284b40; color:#fff7e3; touch-action:manipulation;
 }
 .camera-controls button:active { background:#375b49; }
+@media (max-width:360px) {
+  .camera-controls, #camera-direction { gap:3px; }
+}
 @media (max-height:480px) {
   dialog:has(#cameras-panel:not([hidden])) { padding:12px; }
-  .camera-viewport { height:clamp(64px, calc(100dvh - 245px), 43dvh); }
+  .camera-viewport { height:clamp(48px, calc(100dvh - 252px), 43dvh); }
   .camera-tile { width:48px; }
 }
 #letter-kind{display:block;font:inherit;max-width:100%;min-height:44px;margin:6px 0 14px;padding:6px 10px;color:#263d35;background:#fff3d6;border:1px solid #948065;border-radius:8px}

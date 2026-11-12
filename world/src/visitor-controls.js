@@ -123,7 +123,10 @@ export function createVisitorControls(camera, canvas, isModalOpen, scene, walkSo
   }
 
   function landNearPatch(position) {
-    const [x, z] = safeLanding(position.x + 3, position.z + 4);
+    const tent = COMPUTER_TENT;
+    const [x, z] = insideComputerTent(position.x, position.z)
+      ? safeLanding(tent.x + tent.halfLength + 1.4, tent.z)
+      : safeLanding(position.x + 3, position.z + 4);
     setMode('walk');
     climb = null;
     camera.position.set(x, visitorEyeHeight(x, z), z);
