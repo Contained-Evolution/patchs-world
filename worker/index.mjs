@@ -45,7 +45,7 @@ export class SocialPublisher extends DurableObject {
   enqueue(sources) { return enqueueSocial(this.ctx.storage, sources); }
 
   alarm() {
-    return processSocial(this.ctx.storage, this.env, (id, revised) => patchOf(this.env).socialNotify(id, revised));
+    return processSocial(this.ctx.storage, this.env, (id, revised, platforms) => patchOf(this.env).socialNotify(id, revised, platforms));
   }
 
   async conversations() {
@@ -282,7 +282,7 @@ export class PatchWorld extends DurableObject {
   // This account's notification devices: { publicKey, devices: [{ endpoint, letters, journal }] }.
   async devices(who) {
     const devices = (await this.ctx.storage.get(`push:${who.id}`)) || [];
-    return { publicKey: this.env.VAPID_PUBLIC_KEY || null, devices: devices.map(({ endpoint, letters, journal, social }) => ({ endpoint, letters, journal, social: Boolean(who.admin && social) })) };
+    return { publicKey: this.env.VAPID_PUBLIC_KEY || null, devices: devices.map(({ endpoint, letters, journal, social, socialPlatforms }) => ({ endpoint, letters, journal, social: Boolean(who.admin && social), socialPlatforms: who.admin ? socialPlatforms || [] : [] })) };
   }
 
   async savePush(who, body) {
@@ -290,7 +290,7 @@ export class PatchWorld extends DurableObject {
     const subscription = cleanSubscription(body?.subscription);
     if (!subscription) return { status: 400, error: "This browser's notifications can't be used here." };
     const key = `push:${who.id}`;
-    await this.ctx.storage.put(key, addDevice(await this.ctx.storage.get(key), subscription, { ...body, social: who.admin && body.social }, Date.now()));
+    await this.ctx.storage.put(key, addDevice(await this.ctx.storage.get(key), subscription, { ...body, social: who.admin && body.social, socialPlatforms: who.admin ? body.socialPlatforms : [] }, Date.now()));
     if (who.admin) await this.ctx.storage.put('social:owner', who.id);
     return { status: 200, ...(await this.devices(who)) };
   }
@@ -301,7 +301,7 @@ export class PatchWorld extends DurableObject {
     return { status: 200, ...(await this.devices(who)) };
   }
 
-  async socialNotify(id, revised) {
+  async socialNotify(id, revised, platforms) {
     const owner = await this.ctx.storage.get('social:owner');
     if (!owner || !this.env.VAPID_PUBLIC_KEY || !this.env.VAPID_PRIVATE_KEY) return;
     const key = `push:${owner}`;
@@ -309,12 +309,18 @@ export class PatchWorld extends DurableObject {
     const note = {
       title: revised ? 'Patch revised a social draft' : 'Patch texted Contained Evolution',
       body: 'Open Patch’s tablet conversation to review the post.',
-      url: '/tablet.html?draft=' + id + '#social-drafts',
+      url: '/tablet.html?draft=' + id + '#approvals',
       tag: 'patch-social-' + id,
     };
-    const results = await Promise.allSettled(devices.filter(device => device.social)
-      .map(async device => ({ endpoint: device.endpoint, status: await sendPush(this.env, device, note) })));
-    const stale = new Set(results.flatMap(result => result.status === 'fulfilled' && gone(result.value.status) ? [result.value.endpoint] : []));
+    const results = await Promise.allSettled(devices.map(async device => {
+      const selected = platforms.filter(platform => device.social || device.socialPlatforms?.includes(platform));
+      if (!selected.length) return null;
+      const names = selected.map(platform => ({ x: 'X', facebook: 'Facebook', instagram: 'Instagram' })[platform]);
+      return { endpoint: device.endpoint, status: await sendPush(this.env, device, {
+        ...note, body: 'Ready to review for ' + names.join(', ') + '.',
+      }) };
+    }));
+    const stale = new Set(results.flatMap(result => result.status === 'fulfilled' && result.value && gone(result.value.status) ? [result.value.endpoint] : []));
     if (stale.size) {
       await this.ctx.storage.transaction(async txn => {
         const latest = await txn.get(key) || [];
@@ -329,7 +335,7 @@ export class PatchWorld extends DurableObject {
     const sends = deliveries(owners, replies, entries).map(({ key, device, note }) => sendPush(this.env, device, note).then(status => ({ key, endpoint: device.endpoint, status })));
     const stale = new Map();
     for (const result of await Promise.allSettled(sends)) {
-      if (result.status === 'fulfilled' && gone(result.value.status)) stale.set(result.value.key, [...(stale.get(result.value.key) || []), result.value.endpoint]);
+      if (result.status === 'fulfilled' && result.value && gone(result.value.status)) stale.set(result.value.key, [...(stale.get(result.value.key) || []), result.value.endpoint]);
     }
     for (const [key, endpoints] of stale) {
       const devices = ((await this.ctx.storage.get(key)) || []).filter(device => !endpoints.includes(device.endpoint));
@@ -581,8 +587,8 @@ async function visitorApi(request, env, url, path) {
       if (!entry) return json({ error: 'Patch’s journal is empty.' }, 404);
       const live = await patch.state();
       const [source] = socialSources([{ ...entry, at: Date.parse(entry.at) }], { activity: { place: live.patch.place } }, Date.now());
-      await publisher.enqueue([{ ...source, requested: true }]);
-      return json({ queued: true }, 202);
+      const queued = await publisher.enqueue([{ ...source, requested: true }]);
+      return json({ queued: Boolean(queued) }, queued ? 202 : 200);
     }
     if (path === '/api/social/x/connect' && request.method === 'POST') return json({ authorize: await publisher.connectX(who.id) });
     const conversation = path.match(/^\/api\/social\/inbox\/([0-9a-f-]{36})$/);
@@ -596,7 +602,7 @@ async function visitorApi(request, env, url, path) {
         state: url.searchParams.get('state'), code: url.searchParams.get('code'),
       });
       const query = result.error ? '?social=' + encodeURIComponent(result.error) : '';
-      return Response.redirect('https://controller.containedevolution.com/' + query + '#social-drafts', 303);
+      return Response.redirect('https://containedevolution.com/controller/' + query + '#approvals', 303);
     }
     return json({ error: 'Not found.' }, 404);
   }
@@ -623,7 +629,7 @@ export default {
     }
     const path = url.pathname;
     if (path === '/tablet.html' || path === '/social-review.html') {
-      return Response.redirect('https://controller.containedevolution.com/' + url.search + '#social-drafts', 302);
+      return Response.redirect('https://containedevolution.com/controller/' + url.search + '#approvals', 302);
     }
 
     if (path === '/api/state' || path === '/api/journal' || path === '/api/memory') {

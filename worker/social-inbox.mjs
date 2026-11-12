@@ -25,7 +25,7 @@ export function socialSources(entries, body, since) {
 }
 
 export async function enqueueSocial(storage, sources) {
-  if (!sources.length) return;
+  if (!sources.length) return 0;
   const added = await storage.transaction(async txn => {
     let count = 0;
     for (const source of sources) {
@@ -40,6 +40,7 @@ export async function enqueueSocial(storage, sources) {
     return count;
   });
   if (added && !(await storage.getAlarm())) await storage.setAlarm(Date.now() + 1000);
+  return added;
 }
 
 async function capture(env, source) {
@@ -117,7 +118,7 @@ export async function processSocial(storage, env, notify) {
       }
       await storage.put(key(id), update);
       if (update.photo) {
-        try { await notify(id, true); } catch (error) { console.warn('Social approval alert failed', error.message); }
+        try { await notify(id, true, Object.keys(update.captions)); } catch (error) { console.warn('Social approval alert failed', error.message); }
       }
     }
     await storage.delete(jobKey);
@@ -162,7 +163,7 @@ export async function processSocial(storage, env, notify) {
         }
         await txn.delete(jobKey);
       });
-      try { await notify(id, Boolean(previous)); } catch (error) { console.warn('Social approval alert failed', error.message); }
+      try { await notify(id, Boolean(previous), Object.keys(draft.captions)); } catch (error) { console.warn('Social approval alert failed', error.message); }
     } catch (error) {
       console.warn('Social draft preparation failed', error.message);
       if (job.attempts >= 2) {

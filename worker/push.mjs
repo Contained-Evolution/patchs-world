@@ -84,8 +84,13 @@ export async function sendPush(env, subscription, note, fetcher = fetch) {
 export const gone = status => status === 404 || status === 410;
 
 // An account's devices with this one added or refreshed, newest last. Each device chooses reply and journal news.
-export function addDevice(devices = [], subscription, { letters, journal, social } = {}, now) {
-  return [...devices.filter(device => device.endpoint !== subscription.endpoint), { ...subscription, letters: letters === true, journal: journal === true, ...(social === true ? { social: true } : {}), at: now }].slice(-MAX_DEVICES);
+const socialPlatforms = ['x', 'facebook', 'instagram'];
+export const normalizeSocialPlatforms = value => Array.isArray(value)
+  ? socialPlatforms.filter(platform => value.includes(platform)) : [];
+
+export function addDevice(devices = [], subscription, { letters, journal, social, socialPlatforms } = {}, now) {
+  const selected = normalizeSocialPlatforms(socialPlatforms);
+  return [...devices.filter(device => device.endpoint !== subscription.endpoint), { ...subscription, letters: letters === true, journal: journal === true, ...(social === true ? { social: true } : {}), ...(selected.length ? { socialPlatforms: selected } : {}), at: now }].slice(-MAX_DEVICES);
 }
 
 const excerpt = value => { const line = String(value || '').replace(/\s+/g, ' ').trim(); return line.length > 140 ? `${line.slice(0, 139)}…` : line; };
