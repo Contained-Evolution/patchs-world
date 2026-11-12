@@ -113,13 +113,29 @@
     </figure>
     <div id="camera-strip" class="camera-strip" role="group" aria-label="Choose a camera"></div>
     <div class="camera-controls">
-      <div id="camera-direction" role="group" aria-label="Pan and tilt camera">
-        <button type="button" data-direction="left" aria-label="Pan left">←</button>
-        <button type="button" data-direction="up" aria-label="Tilt up">↑</button>
-        <button type="button" data-direction="down" aria-label="Tilt down">↓</button>
-        <button type="button" data-direction="right" aria-label="Pan right">→</button>
+      <button id="camera-drone" type="button" aria-label="Drone" title="Drone" aria-pressed="false">
+        <svg aria-hidden="true" width="34" height="34" viewBox="0 0 32 32" fill="currentColor">
+          <path d="M13 13c-3-4-3-9 0-11 3 0 4 6 3 10
+            4-3 9-3 12 0 0 3-6 4-10 3 3 4 3 9 0 12-3 0-4-6-3-10
+            -4 3-9 3-12 0 0-3 6-4 10-3z"/>
+          <circle cx="16" cy="15" r="2.1" fill="#284b40"/>
+        </svg>
+      </button>
+      <button id="camera-audio" type="button" aria-label="Feed audio" title="Feed audio" aria-pressed="true">
+        <svg aria-hidden="true" width="28" height="28" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 12h5l7-6v20l-7-6H4z" fill="currentColor"/>
+          <path class="camera-audio-waves" d="M21 11a7 7 0 0 1 0 10m4-14a13 13 0 0 1 0 18"/>
+          <path class="camera-audio-muted" d="m21 12 8 8m0-8-8 8"/>
+        </svg>
+      </button>
+      <div id="camera-move" class="camera-pad" role="group" aria-label="Camera tilt" data-flight-label="Drone movement">
+        <button type="button" data-direction="up" data-camera-label="Tilt up" data-flight-label="Fly forward" aria-label="Tilt up">↑</button>
+        <button type="button" data-direction="down" data-camera-label="Tilt down" data-flight-label="Fly backward" aria-label="Tilt down">↓</button>
       </div>
-      <button id="camera-audio" type="button" aria-label="Feed audio" aria-pressed="true">Audio On</button>
+      <div id="camera-rotate" class="camera-pad" role="group" aria-label="Camera rotation">
+        <button type="button" data-direction="left" data-camera-label="Pan left" data-flight-label="Rotate left" aria-label="Pan left">↶</button>
+        <button type="button" data-direction="right" data-camera-label="Pan right" data-flight-label="Rotate right" aria-label="Pan right">↷</button>
+      </div>
     </div>
   </section>
 <section class="community" id="letters-panel" aria-labelledby="letters-title" hidden>

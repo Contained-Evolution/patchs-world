@@ -84,10 +84,15 @@ function makeDrone() {
       pitch = MathUtils.clamp(pitch + dy * .005, -Math.PI / 2, -.2);
       camera.rotation.set(pitch, yaw, 0, 'YXZ');
     },
-    move(side, forward, elapsed) {
-      const distance = 34 * elapsed;
-      const x = camera.position.x + (Math.cos(yaw) * side - Math.sin(yaw) * forward) * distance;
-      const z = camera.position.z + (-Math.sin(yaw) * side - Math.cos(yaw) * forward) * distance;
+    steer(turn, forward, elapsed) {
+      if (turn) {
+        yaw -= turn * 1.2 * elapsed;
+        camera.rotation.y = yaw;
+        return;
+      }
+      const distance = 34 * forward * elapsed;
+      const x = camera.position.x - Math.sin(yaw) * distance;
+      const z = camera.position.z - Math.cos(yaw) * distance;
       if (shoreFraction(x, z) <= 1) camera.position.set(x, altitude, z);
     }
   };
@@ -101,7 +106,9 @@ export function setupIslandCameras(renderer, scene) {
   const label = document.querySelector('#camera-label');
   const feed = document.querySelector('#camera-feed');
   const feedContext = feed.getContext('2d');
-  const directionControls = document.querySelector('#camera-direction');
+  const pads = panel.querySelectorAll('.camera-pad');
+  const movement = document.querySelector('#camera-move');
+  const directionButtons = panel.querySelectorAll('[data-direction]');
   const audioButton = document.querySelector('#camera-audio');
   const createProp = cameraProps(scene);
   const drone = makeDrone();
@@ -150,17 +157,9 @@ export function setupIslandCameras(renderer, scene) {
     return view;
   });
 
-  const droneButton = makeButton('Drone');
-  droneButton.classList.add('camera-drone');
-  droneButton.innerHTML = `<svg aria-hidden="true" width="34" height="34" viewBox="0 0 32 32" fill="currentColor">
-    <path d="M13 13c-3-4-3-9 0-11 3 0 4 6 3 10
-      4-3 9-3 12 0 0 3-6 4-10 3 3 4 3 9 0 12-3 0-4-6-3-10
-      -4 3-9 3-12 0 0-3 6-4 10-3z"/>
-    <circle cx="16" cy="15" r="2.1" fill="#284b40"/>
-  </svg>`;
+  const droneButton = document.querySelector('#camera-drone');
   const flight = { camera: drone.camera, button: droneButton, label: 'Drone' };
   droneButton.onclick = () => select(flight);
-  feeds[6].button.before(droneButton);
 
   function syncLight() {
     const active = isOpen() && !document.hidden && selected?.prop ? selected : null;
@@ -182,12 +181,12 @@ export function setupIslandCameras(renderer, scene) {
     feed.setAttribute('aria-label', flying ? 'Live drone view. Use arrow keys to aim.' : `Live view · ${view.label}`);
     feed.tabIndex = flying ? 0 : -1;
     feed.toggleAttribute('data-flight', flying);
-    directionControls.setAttribute('aria-label', flying ? 'Fly drone' : 'Pan and tilt camera');
-    const actions = flying ? ['Fly left', 'Fly forward', 'Fly backward', 'Fly right'] :
-      ['Pan left', 'Tilt up', 'Tilt down', 'Pan right'];
-    Array.from(directionControls.children).forEach((button, index) => {
-      button.setAttribute('aria-label', actions[index]);
-    });
+    movement.setAttribute('aria-label', flying ? movement.dataset.flightLabel : 'Camera tilt');
+    for (const button of directionButtons) {
+      const action = flying ? button.dataset.flightLabel : button.dataset.cameraLabel;
+      button.setAttribute('aria-label', action);
+      button.title = action;
+    }
     syncLight();
   }
 
@@ -195,7 +194,7 @@ export function setupIslandCameras(renderer, scene) {
     if (!isOpen()) return;
     const [side, vertical] = directions[direction];
     if (selected === flight) {
-      drone.move(side, vertical, elapsed);
+      drone.steer(side, vertical, elapsed);
     } else {
       selected.pan = MathUtils.clamp(selected.pan - side * elapsed, -1.15, 1.15);
       selected.tilt = MathUtils.clamp(selected.tilt + vertical * elapsed, -.6, .7);
@@ -203,7 +202,7 @@ export function setupIslandCameras(renderer, scene) {
     }
   }
 
-  for (const button of directionControls.children) {
+  for (const button of directionButtons) {
     const direction = button.dataset.direction;
     button.onclick = () => steer(direction, .1);
     button.onpointerdown = event => {
@@ -214,13 +213,15 @@ export function setupIslandCameras(renderer, scene) {
     const release = event => { if (held?.id === event.pointerId) held = null; };
     button.onpointerup = button.onpointercancel = button.onlostpointercapture = release;
   }
-  directionControls.onkeydown = event => {
-    if (event.altKey || event.ctrlKey || event.metaKey || !event.key.startsWith('Arrow')) return;
-    const direction = event.key.slice(5).toLowerCase();
-    if (!(direction in directions)) return;
-    event.preventDefault();
-    steer(direction, .1);
-  };
+  for (const pad of pads) {
+    pad.onkeydown = event => {
+      if (event.altKey || event.ctrlKey || event.metaKey || !event.key.startsWith('Arrow')) return;
+      const direction = event.key.slice(5).toLowerCase();
+      if (!(direction in directions)) return;
+      event.preventDefault();
+      steer(direction, .1);
+    };
+  }
   feed.onkeydown = event => {
     if (selected !== flight || event.altKey || event.ctrlKey || event.metaKey || !event.key.startsWith('Arrow')) return;
     const direction = directions[event.key.slice(5).toLowerCase()];
@@ -248,7 +249,6 @@ export function setupIslandCameras(renderer, scene) {
   document.addEventListener('visibilitychange', () => { stopInput(); syncLight(); });
   audioButton.onclick = () => {
     audio = !audio;
-    audioButton.textContent = audio ? 'Audio On' : 'Audio Off';
     audioButton.setAttribute('aria-pressed', String(audio));
   };
 
