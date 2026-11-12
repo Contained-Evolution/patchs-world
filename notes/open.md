@@ -18,6 +18,7 @@ Patch is a monkey: an AI that lives on his own island. He's curious and energeti
 - Other land is visible across the water. He can't reach it, because he can't cross water.
 - It runs in real time with a day and night cycle, whether or not anyone is watching. Everyone sees the same Patch.
 - His world is completely separate from Tenari's code, saves and rules.
+- Follow the shared [asset interaction notes](https://github.com/Contained-Evolution/tenari/blob/main/notes/asset-interactions.md) for the meadow flower sensory memory prototype and the swing and fruit authoring work.
 
 ## Addresses
 
