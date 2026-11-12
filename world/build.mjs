@@ -8,17 +8,7 @@ await mkdir('dist', { recursive: true });
 await build({ entryPoints: ['src/main.js'], bundle: true, format: 'esm', minify: true, outfile: 'dist/main.js', sourcemap: true });
 await build({ entryPoints: ['src/community-page.js'], bundle: true, format: 'esm', outfile: 'dist/community-page.js' });
 await build({ entryPoints: ['src/memory-galaxy.js'], bundle: true, format: 'esm', minify: true, outfile: 'dist/memory-galaxy.js' });
-for (const name of ['journal.html', 'journal.js', 'social-inbox.js', 'gifts.html', 'gifts.js', 'visits.css', 'memory.html', 'memory.css', 'index.html', 'community.html', 'community.css', 'style.css', 'Pangolin-Regular.ttf', 'manifest.webmanifest']) await copyFile(name, `dist/${name}`);
-let socialReview = await readFile('journal.html', 'utf8');
-for (const filename of ['journal.js', 'social-inbox.js', 'visits.css']) {
-  const content = await readFile(filename);
-  const hash = createHash('sha256').update(content).digest('hex').slice(0, 12);
-  const versioned = 'social-' + hash + '-' + filename;
-  await writeFile('dist/' + versioned, content);
-  socialReview = socialReview.replace('./' + filename, './' + versioned);
-}
-await writeFile('dist/social-review.html', socialReview);
-await writeFile('dist/tablet.html', socialReview);
+for (const name of ['journal.html', 'journal.js', 'gifts.html', 'gifts.js', 'visits.css', 'memory.html', 'memory.css', 'index.html', 'community.html', 'community.css', 'style.css', 'Pangolin-Regular.ttf', 'manifest.webmanifest']) await copyFile(name, `dist/${name}`);
 const islandScript = await readFile('dist/main.js');
 const captureScript = 'camera-' + createHash('sha256').update(islandScript).digest('hex').slice(0, 12) + '.js';
 await writeFile('dist/' + captureScript, islandScript);

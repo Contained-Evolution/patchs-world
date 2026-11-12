@@ -596,7 +596,7 @@ async function visitorApi(request, env, url, path) {
         state: url.searchParams.get('state'), code: url.searchParams.get('code'),
       });
       const query = result.error ? '?social=' + encodeURIComponent(result.error) : '';
-      return Response.redirect(SITE + '/tablet.html' + query + '#social-drafts', 303);
+      return Response.redirect('https://controller.containedevolution.com/' + query + '#social-drafts', 303);
     }
     return json({ error: 'Not found.' }, 404);
   }
@@ -622,6 +622,9 @@ export default {
       return Response.redirect(`${SITE}${url.pathname.slice('/patch'.length) || '/'}${url.search}`, 301);
     }
     const path = url.pathname;
+    if (path === '/tablet.html' || path === '/social-review.html') {
+      return Response.redirect('https://controller.containedevolution.com/' + url.search + '#social-drafts', 302);
+    }
 
     if (path === '/api/state' || path === '/api/journal' || path === '/api/memory') {
       if (request.method !== 'GET') return json({ error: 'Method not allowed.' }, 405);

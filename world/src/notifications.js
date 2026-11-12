@@ -3,7 +3,7 @@ const key = value => Uint8Array.from(atob(value.replace(/-/g, '+').replace(/_/g,
 
 export function setupNotifications(dialog, community, app) {
   const $ = selector => dialog.querySelector(selector);
-  const form = $('#alerts-form'), choices = { letters: $('#alerts-letters'), journal: $('#alerts-journal'), social: $('#alerts-social') };
+  const form = $('#alerts-form'), choices = { letters: $('#alerts-letters'), journal: $('#alerts-journal') };
   // On iPhone and iPad, web notifications work only from an app on the Home Screen.
   const iosBrowser = (/iPhone|iPad|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1)) && !navigator.standalone;
 
@@ -23,7 +23,6 @@ export function setupNotifications(dialog, community, app) {
     if (!registration || !('PushManager' in window) || !('Notification' in window)) { notice("This browser can't show Patch's notifications."); return; }
     try {
       const { user } = await api('/me');
-      $('#alerts-social-label').hidden = !user?.admin;
       if (!user) { $('#alerts-signin').hidden = false; return; }
       const status = await api('/push');
       if (!status.publicKey) { notice('Notifications are not set up yet.'); return; }
@@ -36,13 +35,13 @@ export function setupNotifications(dialog, community, app) {
   }
 
   async function save() {
-    const wanted = { letters: choices.letters.checked, journal: choices.journal.checked, social: !$('#alerts-social-label').hidden && choices.social.checked };
+    const wanted = { letters: choices.letters.checked, journal: choices.journal.checked };
     Object.values(choices).forEach(box => { box.disabled = true; });
     notice('');
     try {
       const registration = await app;
       let subscription = await registration.pushManager.getSubscription();
-      if (!wanted.letters && !wanted.journal && !wanted.social) {
+      if (!wanted.letters && !wanted.journal) {
         if (subscription) { await api('/push/remove', { endpoint: subscription.endpoint }); await subscription.unsubscribe(); }
         notice('Notifications are off on this device.');
         return;
