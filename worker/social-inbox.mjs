@@ -50,7 +50,7 @@ async function capture(env, source) {
     url: origin + '/social-camera.html?social-camera=' + camera,
     selector: '#social-camera-frame',
     gotoOptions: { waitUntil: 'domcontentloaded', timeout: 20000 },
-    waitForSelector: '#social-camera-frame[data-ready="true"]',
+    waitForSelector: { selector: '#social-camera-frame[data-ready="true"]', timeout: 25000, visible: true },
     viewport: { width: 720, height: 480 },
     screenshotOptions: { type: 'jpeg', quality: 66 },
   });

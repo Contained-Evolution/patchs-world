@@ -89,6 +89,11 @@ test('Patch can send and revise a camera draft without making a social API write
     async quickAction(action, options) {
       assert.equal(action, 'screenshot');
       assert.match(options.url, /social-camera=3$/);
+      assert.deepEqual(options.waitForSelector, {
+        selector: '#social-camera-frame[data-ready="true"]',
+        timeout: 25000,
+        visible: true,
+      });
       return new Response(image);
     },
   } };
