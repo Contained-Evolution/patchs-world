@@ -6,4 +6,3 @@ Volcanic rock texture was newly generated for this project.
 Tropical grass and bark textures were newly generated for this project.
 Wildflower artwork was newly generated for this project.
 Waterfall artwork was newly generated for this project.
-Vegetation models and jungle-floor artwork: supplied by the Patch's World project owner.

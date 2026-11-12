@@ -7,7 +7,6 @@ import { createTerrainTiles } from './terrain-mesh.js';
 import { CLIMB_WALLS } from './climbing.js';
 import { createIslandCollision, bananaTrees, BANANA_TREE } from './island-collision.js';
 import { hammock, hammockHeight } from './hammock.js';
-import { loadIslandVegetation } from './vegetation.js';
 import { createFurniture } from './camp-furniture.js';
 const rand=n=>{const v=Math.sin(n*127.1+311.7)*43758.5453123;return v-Math.floor(v);};
 function surfaceTexture(base, strokes, seed=1){
@@ -29,14 +28,8 @@ export function createIsland(scene){
  const material=(color,extra={})=>new THREE.MeshStandardMaterial({color,roughness:1,...extra});
  const groundMat=material(0xffffff,{vertexColors:true,map:surfaceTexture('#dfdfdf',['#898989','#ffffff','#bbbbbb'])});
  const grassDetail=new THREE.TextureLoader().load(new URL('./assets/tropical-grass.png',document.baseURI).href);grassDetail.colorSpace=THREE.SRGBColorSpace;grassDetail.wrapS=grassDetail.wrapT=THREE.RepeatWrapping;grassDetail.anisotropy=4;
- const jungleFloor=new THREE.TextureLoader().load(new URL('./assets/vegetation/jungle-floor.webp',document.baseURI).href);jungleFloor.colorSpace=THREE.SRGBColorSpace;jungleFloor.wrapS=jungleFloor.wrapT=THREE.RepeatWrapping;jungleFloor.anisotropy=4;
- groundMat.onBeforeCompile=shader=>{shader.uniforms.grassDetail={value:grassDetail};shader.uniforms.jungleFloor={value:jungleFloor};shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nvarying vec2 islandGround;').replace('#include <begin_vertex>','#include <begin_vertex>\nislandGround = position.xz;');shader.fragmentShader=shader.fragmentShader.replace('#include <common>','#include <common>\nvarying vec2 islandGround; uniform sampler2D grassDetail; uniform sampler2D jungleFloor;').replace('#include <map_fragment>',`#include <map_fragment>
-vec3 detail=texture2D(grassDetail,islandGround*.18).rgb;float inland=1.0-smoothstep(.78,.95,length(islandGround/vec2(320.0,360.0)));float grove=1.0-smoothstep(.72,1.08,length((islandGround-vec2(-92.0,55.0))/vec2(66.0,55.0)));
-float forestFloor=1.0-smoothstep(.72,1.15,length((islandGround-vec2(72.0,-104.0))/vec2(102.0,95.0)));
-float cover=max(grove,forestFloor)*smoothstep(-.65,.45,sin(islandGround.x*.16)+.55*cos(islandGround.y*.21));
-vec3 litter=texture2D(jungleFloor,islandGround*.29).rgb;
-diffuseColor.rgb*=mix(mix(vec3(1.0),detail*1.55,inland*.8),litter*2.6,max(grove,forestFloor)*.32+cover*.48);
-diffuseColor.rgb*=mix(vec3(1.0),vec3(1.26,1.0,1.1),max(grove,forestFloor)*.55);`);};
+ groundMat.onBeforeCompile=shader=>{shader.uniforms.grassDetail={value:grassDetail};shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nvarying vec2 islandGround;').replace('#include <begin_vertex>','#include <begin_vertex>\nislandGround = position.xz;');shader.fragmentShader=shader.fragmentShader.replace('#include <common>','#include <common>\nvarying vec2 islandGround; uniform sampler2D grassDetail;').replace('#include <map_fragment>',`#include <map_fragment>
+vec3 detail=texture2D(grassDetail,islandGround*.18).rgb;float inland=1.0-smoothstep(.78,.95,length(islandGround/vec2(320.0,360.0)));diffuseColor.rgb*=mix(vec3(1.0),detail*1.55,inland*.8);`);};
  const barkMap=new THREE.TextureLoader().load(new URL('./assets/tropical-bark.png',document.baseURI).href);barkMap.colorSpace=THREE.SRGBColorSpace;barkMap.wrapS=barkMap.wrapT=THREE.RepeatWrapping;barkMap.repeat.set(1,3);barkMap.anisotropy=4;const bark=material(0xc4b3a0,{map:barkMap});
  const leafMap=new THREE.TextureLoader().load(new URL('./assets/tropical-leaf.png',document.baseURI).href);leafMap.colorSpace=THREE.SRGBColorSpace;leafMap.anisotropy=4;
  const foliage=material(0xc1d9ae,{map:leafMap,alphaTest:.35,side:THREE.DoubleSide,roughness:.9,emissive:0x334b29,emissiveMap:leafMap,emissiveIntensity:.35});const foliageDark=material(0x92b888,{map:leafMap,alphaTest:.35,side:THREE.DoubleSide,emissive:0x283e24,emissiveMap:leafMap,emissiveIntensity:.35});
@@ -96,8 +89,6 @@ if (trackingPatch) {
    trackingTarget.value.y += 1;
   }
  }
- const fallbackTrees = new THREE.Group();
- scene.add(fallbackTrees);
  // Independent chunks let the camera cull forests outside its field of view.
  for(const chunk of tiles.values()){
   const palms=chunk.filter(t=>!t.broad),broadTrees=chunk.filter(t=>t.broad),trunkMesh=new THREE.InstancedMesh(trunkGeo,bark,chunk.length),leafMesh=new THREE.InstancedMesh(blade,foliage,palms.length*7),canopyMesh=new THREE.InstancedMesh(canopyGeometry,canopyMaterial,broadTrees.length*3);
@@ -105,17 +96,8 @@ if (trackingPatch) {
   palms.forEach((tree,i)=>{const y=groundHeight(tree.x,tree.z);for(let j=0;j<7;j++){pose.position.set(tree.x,y+tree.h,tree.z);pose.rotation.set(-.25-(j%3)*.12,tree.angle+j*Math.PI*2/7,(j%2)*.08);let size=(tree.grove?1.25:1.05)+rand(i*9+j)*.5;pose.scale.set(size,size,size);pose.updateMatrix();leafMesh.setMatrixAt(i*7+j,pose.matrix);}});
   broadTrees.forEach((tree,i)=>{const y=groundHeight(tree.x,tree.z),w=9+rand(i+81)*5;for(let j=0;j<3;j++){pose.position.set(tree.x,y+tree.h+(tree.swing?3.5:.8),tree.z);if(tree.swing){pose.position.y-=.4+j*.08;pose.rotation.set(-Math.PI/2,0,tree.angle+j*Math.PI/3);pose.scale.set(w,w*.8,1);}else{pose.rotation.set(0,tree.angle+j*Math.PI/3,0);pose.scale.set(w,w*.48,1);}pose.updateMatrix();canopyMesh.setMatrixAt(i*3+j,pose.matrix);}});
   const branches=new THREE.InstancedMesh(branchGeometry,bark,broadTrees.length*2);broadTrees.forEach((tree,i)=>{const y=groundHeight(tree.x,tree.z),height=tree.h+(tree.swing?3.5:0);for(let j=0;j<2;j++){const angle=tree.angle+j*2.8,start=new THREE.Vector3(tree.x,y+height*.7,tree.z),end=new THREE.Vector3(tree.x+Math.cos(angle)*2.6,y+height+.4,tree.z+Math.sin(angle)*2.6),direction=end.clone().sub(start);pose.position.copy(start).add(end).multiplyScalar(.5);pose.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),direction.clone().normalize());pose.scale.set(1,direction.length(),1);pose.updateMatrix();branches.setMatrixAt(i*2+j,pose.matrix);}});
-  for(const mesh of [trunkMesh,leafMesh,canopyMesh,branches])if(mesh.count){mesh.instanceMatrix.needsUpdate=true;mesh.computeBoundingSphere();fallbackTrees.add(mesh);}
+  for(const mesh of [trunkMesh,leafMesh,canopyMesh,branches])if(mesh.count){mesh.instanceMatrix.needsUpdate=true;mesh.computeBoundingSphere();scene.add(mesh);}
  }
- loadIslandVegetation(scene, trunks, canopyMaterial.onBeforeCompile).then(() => {
-  fallbackTrees.removeFromParent();
-  fruit.removeFromParent();
-  fruit.dispose();
-  fruit.geometry.dispose();
-  fruitMat.dispose();
-  for (const mesh of fallbackTrees.children) mesh.dispose();
-  for (const resource of [trunkGeo, canopyGeometry, branchGeometry, canopyMaterial, canopyMap]) resource.dispose();
- }).catch(error => console.warn('Using island vegetation fallback:', error));
  // Layered understory turns the trunks into a living forest.
  const understory=[];for(let i=0;i<2200;i++){let x=(rand(i+31000)*2-1)*300,z=(rand(i+36000)*2-1)*335;if(shoreFraction(x,z)>.87||reserved(x,z)||rand(i+39000)>.45)continue;understory.push({x,z,size:.35+rand(i+42000)*.5,angle:rand(i+44000)*6});}
  const lowLeaves=new THREE.InstancedMesh(blade,foliage,understory.length*3);understory.forEach((p,i)=>{for(let k=0;k<3;k++){pose.position.set(p.x,groundHeight(p.x,p.z)+.12,p.z);pose.rotation.set(-.6,p.angle+k*2.1,0);pose.scale.setScalar(p.size);pose.updateMatrix();lowLeaves.setMatrixAt(i*3+k,pose.matrix);}});lowLeaves.instanceMatrix.needsUpdate=true;lowLeaves.computeBoundingSphere();scene.add(lowLeaves);
@@ -125,10 +107,10 @@ if (trackingPatch) {
  // The meadow remains open and is dotted with small flowers.
  const flowers=[];for(let i=0;i<500;i++){let a=rand(i+50000)*6.283,r=Math.sqrt(rand(i+51000))*45,x=places.meadow[0]+Math.cos(a)*r,z=places.meadow[1]+Math.sin(a)*r;if(shoreFraction(x,z)<.89)flowers.push([x,z,i]);}
  const flowerMap=new THREE.TextureLoader().load(new URL('./assets/wildflowers.png',document.baseURI).href);flowerMap.colorSpace=THREE.SRGBColorSpace;flowerMap.anisotropy=4;const flowerMat=material(0xffffff,{map:flowerMap,alphaTest:.65,side:THREE.DoubleSide}),flowerMesh=new THREE.InstancedMesh(new THREE.PlaneGeometry(1,1),flowerMat,flowers.length*2);flowers.forEach(([x,z,i],k)=>{for(let j=0;j<2;j++){const scale=.5+rand(i+52000)*.4;pose.position.set(x,groundHeight(x,z)+scale*.42,z);pose.rotation.set(0,rand(i+53000)*3+j*Math.PI/2,0);pose.scale.setScalar(scale);pose.updateMatrix();flowerMesh.setMatrixAt(k*2+j,pose.matrix);}});flowerMesh.instanceMatrix.needsUpdate=true;flowerMesh.computeBoundingSphere();scene.add(flowerMesh);
- // Keep the visible handholds on the trees Patch uses for traversal.
- const traversalTrees = forest.filter(tree => tree.swing);
- const handholds=new THREE.InstancedMesh(new THREE.CylinderGeometry(.09,.18,1,7),bark,traversalTrees.length);
- traversalTrees.forEach((tree,i)=>{const {x,z,h}=tree,a=new THREE.Vector3(...anchorFor([x,z,h])),start=new THREE.Vector3(x,a.y,z),d=a.clone().sub(start);pose.position.copy(start).add(a).multiplyScalar(.5);pose.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize());pose.scale.set(1,a.distanceTo(start),1);pose.updateMatrix();handholds.setMatrixAt(i,pose.matrix);});
+ // Every forest tree has an outward handhold. The traversal trees use the
+ // same anchor calculation, so their visible wood and Patch's grip coincide.
+ const handholds=new THREE.InstancedMesh(new THREE.CylinderGeometry(.09,.18,1,7),bark,forest.length);
+ forest.forEach((tree,i)=>{const {x,z,h}=tree,a=new THREE.Vector3(...anchorFor([x,z,h])),start=new THREE.Vector3(x,a.y,z),d=a.clone().sub(start);pose.position.copy(start).add(a).multiplyScalar(.5);pose.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize());pose.scale.set(1,a.distanceTo(start),1);pose.updateMatrix();handholds.setMatrixAt(i,pose.matrix);});
  handholds.instanceMatrix.needsUpdate=true;handholds.computeBoundingSphere();scene.add(handholds);
  // Rope trees have their own visible rope even when Patch is elsewhere.
  const ropes=new Map();for(const i of ROPE_TREES){const hold=holdFor(i),geometry=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(...hold.anchor),new THREE.Vector3(...hold.grip)]),line=new THREE.Line(geometry,new THREE.LineBasicMaterial({color:0xb39a6c}));scene.add(line);ropes.set(i,line);
