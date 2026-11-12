@@ -6,7 +6,8 @@ import { forest, isReserved } from './forest.js';
 import { createTerrainTiles } from './terrain-mesh.js';
 import { CLIMB_WALLS } from './climbing.js';
 import { createIslandCollision, bananaTrees, BANANA_TREE } from './island-collision.js';
-import { hammock, hammockHeight } from './hammock.js';
+import { hammock } from './hammock.js';
+import { addCampHammock } from './camp-hammock.js';
 import { createFurniture } from './camp-furniture.js';
 const rand=n=>{const v=Math.sin(n*127.1+311.7)*43758.5453123;return v-Math.floor(v);};
 function surfaceTexture(base, strokes, seed=1){
@@ -32,9 +33,9 @@ export function createIsland(scene){
 vec3 detail=texture2D(grassDetail,islandGround*.18).rgb;float inland=1.0-smoothstep(.78,.95,length(islandGround/vec2(320.0,360.0)));diffuseColor.rgb*=mix(vec3(1.0),detail*1.55,inland*.8);`);};
  const barkMap=new THREE.TextureLoader().load(new URL('./assets/tropical-bark.png',document.baseURI).href);barkMap.colorSpace=THREE.SRGBColorSpace;barkMap.wrapS=barkMap.wrapT=THREE.RepeatWrapping;barkMap.repeat.set(1,3);barkMap.anisotropy=4;const bark=material(0xc4b3a0,{map:barkMap});
  const leafMap=new THREE.TextureLoader().load(new URL('./assets/tropical-leaf.png',document.baseURI).href);leafMap.colorSpace=THREE.SRGBColorSpace;leafMap.anisotropy=4;
- const foliage=material(0xc1d9ae,{map:leafMap,alphaTest:.35,side:THREE.DoubleSide,roughness:.9,emissive:0x334b29,emissiveMap:leafMap,emissiveIntensity:.35});const foliageDark=material(0x92b888,{map:leafMap,alphaTest:.35,side:THREE.DoubleSide,emissive:0x283e24,emissiveMap:leafMap,emissiveIntensity:.35});
+ const foliage=material(0xc1d9ae,{map:leafMap,alphaTest:.35,side:THREE.DoubleSide,roughness:.9,emissive:0x334b29,emissiveMap:leafMap,emissiveIntensity:.35});
  const rockMap=new THREE.TextureLoader().load(new URL('./assets/volcanic-rock.png',document.baseURI).href);rockMap.colorSpace=THREE.SRGBColorSpace;rockMap.wrapS=rockMap.wrapT=THREE.RepeatWrapping;rockMap.anisotropy=4;const rock=material(0xbab9ad,{map:rockMap});
- const sand=material(0xd8c592),wood=material(0x725039),rope=material(0xd1c7a0),cloth=material(0xb36551,{side:THREE.DoubleSide,emissive:0x26150f});
+ const sand=material(0xd8c592),wood=material(0x725039),rope=material(0xd1c7a0);
  const wet=material(0x67836b,{roughness:.55});
  const add=(geo,mat,x=0,y=0,z=0)=>{const o=new THREE.Mesh(geo,mat);o.position.set(x,y,z);scene.add(o);return o;};
  const beam=(mat,a,b,r1,r2=r1)=>{const av=new THREE.Vector3(...a),bv=new THREE.Vector3(...b),d=bv.clone().sub(av);const o=add(new THREE.CylinderGeometry(r2,r1,d.length(),8),mat);o.position.copy(av).add(bv).multiplyScalar(.5);o.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize());return o;};
@@ -123,23 +124,8 @@ if (trackingPatch) {
  // Scrub, flowers and coastal stones are instanced rather than individual meshes.
  for(let i=0;i<600;i++){let x=(rand(i+16000)*2-1)*300,z=(rand(i+18000)*2-1)*340;if(shoreFraction(x,z)>.93||reserved(x,z)||rand(i+19000)<.5)continue;const s=.4+rand(i+20000)*2;rocks.push({x,z,s});}
  const rockMesh=new THREE.InstancedMesh(boulder,rock,rocks.length);rockMesh.count=0;rocks.forEach((r,i)=>{pose.position.set(r.x,groundHeight(r.x,r.z)+r.s*.25,r.z);pose.rotation.set(.1,rand(i+41)*6,.15);pose.scale.set(r.s*1.3,r.s*.55,r.s);pose.updateMatrix();if(walkSolids.rock(r.x,r.z,boulder,pose.matrix,true))rockMesh.setMatrixAt(rockMesh.count++,pose.matrix);});rockMesh.instanceMatrix.needsUpdate=true;rockMesh.computeBoundingSphere();scene.add(rockMesh);
- // Home: two living supports, hanging ropes and a curved cloth bed.
  const hy=groundHeight(hammock.x,hammock.z);
- for(const x of [-3.4,3.4]){
-  beam(bark,[x,hy,1],[x,hy+6,1],.38,.24);
-  walkSolids.ellipse(x,1,.38,.38);
-  for(let j=0;j<5;j++){let a=j*1.25;const f=add(blade,foliageDark,x,hy+5.8,1);f.rotation.set(-.3,a,0);f.scale.setScalar(1.1);}
- }
- const bedGeo=new THREE.PlaneGeometry(2,2,48,24);
- const bp=bedGeo.attributes.position;
- for(let i=0;i<bp.count;i++){
-  const u=bp.getX(i),v=bp.getY(i);
-  bp.setXYZ(i,u*hammock.halfLength,hammockHeight(u,v),v*hammock.halfWidth*Math.cos(u*Math.PI/2));
- }
- bedGeo.computeVertexNormals();
- add(bedGeo,cloth,hammock.x,hy,hammock.z);
- walkSolids.ellipse(hammock.x,hammock.z,hammock.halfLength,hammock.halfWidth);
- for(const x of [-1,1])beam(rope,[x*hammock.halfLength,hy+hammockHeight(1,0),1],[x*3.4,hy+4.2,1],.035);
+ addCampHammock(scene, rope).catch(error => console.error('Could not load the camp hammock:', error));
  for(const x of [4.2,6.2]){beam(wood,[x,hy,2],[x,hy+3.4,2],.07);walkSolids.ellipse(x,2,.07,.07);}for(const y of [hy+1.35,hy+2.5]){const shelf=add(new THREE.BoxGeometry(2.5,.13,.9),wood,5.2,y,2);shelf.rotation.y=.03;block(shelf);}
  // Simple useful objects make the clearing feel inhabited without moving Patch's anchors.
  const lamp=add(new THREE.SphereGeometry(.18,8,6),new THREE.MeshBasicMaterial({color:0xffd99c}),5,hy+2.74,2);
@@ -181,5 +167,5 @@ if (trackingPatch) {
  const boulderMesh=new THREE.InstancedMesh(boulder,rock,stones.length);stones.forEach((p,i)=>{pose.position.set(p.x,groundHeight(p.x,p.z)+p.sy*.10,p.z);pose.rotation.set(rand(p.x+p.z)*.4,rand(p.x-p.z)*6,.1);pose.scale.set(p.sx,p.sy,p.sz);pose.updateMatrix();boulderMesh.setMatrixAt(i,pose.matrix);walkSolids.rock(p.x,p.z,boulder,pose.matrix);});boulderMesh.instanceMatrix.needsUpdate=true;boulderMesh.computeBoundingSphere();scene.add(boulderMesh);
  // Chairs, the camp table and the coconut computer.
  const furniture=createFurniture(scene,{bark,wood},block);
- return { walkSolids, block, setRope, setTrackingTarget, setComputer:furniture.setComputer, resetRopes(){for(const i of ROPE_TREES)setRope(i,null);}, update(dt,daylight){furniture.update(dt,daylight);waterTime.value+=dt;waterLight.value=daylight;flowMap.offset.y-=dt*.7;foliage.emissiveIntensity=.05+daylight*.3;foliageDark.emissiveIntensity=.05+daylight*.3;} };
+ return { walkSolids, block, setRope, setTrackingTarget, setComputer:furniture.setComputer, resetRopes(){for(const i of ROPE_TREES)setRope(i,null);}, update(dt,daylight){furniture.update(dt,daylight);waterTime.value+=dt;waterLight.value=daylight;flowMap.offset.y-=dt*.7;foliage.emissiveIntensity=.05+daylight*.3;} };
 }

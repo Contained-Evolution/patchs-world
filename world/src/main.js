@@ -377,11 +377,12 @@ const cloudMap=cloudTexture(),clouds=[];for(let i=0;i<10;i++){const m=new THREE.
 const rainGeo=new THREE.BufferGeometry(),drops=[];for(let i=0;i<500;i++)drops.push((Math.random()-.5)*50,Math.random()*35,(Math.random()-.5)*50);rainGeo.setAttribute('position',new THREE.Float32BufferAttribute(drops,3));const rain=new THREE.Points(rainGeo,new THREE.PointsMaterial({color:0xd6edf2,size:.12,transparent:true,opacity:.7}));scene.add(rain);
 let last=performance.now();const spawn=nearestWalkable(0,0,solids);patch.position.set(spawn[0],groundHeight(...spawn),spawn[1]);
 const findPatch = $('#find-patch'), followPatch = $('#follow-patch');
+const sleepingInHammock = () => inFurniture && state?.patch.action === 'sleep' && state.patch.place === 'hammock';
 findPatch.onclick = () => {
-  if (state) controls.findPatch(patch.position);
+  if (state) controls.findPatch(patch.position, false, sleepingInHammock());
 };
 followPatch.onchange = () => {
-  if (followPatch.checked && state) controls.findPatch(patch.position, true);
+  if (followPatch.checked && state) controls.findPatch(patch.position, true, sleepingInHammock());
   else controls.stopFollowing();
 };
 
@@ -443,7 +444,7 @@ if(climb?.line.kind==='rope'&&(climb.key!==climbKey||target)&&wasAirborne&&!rope
 
 if(!ropeExit&&action==='climb'&&!target&&(place==='lookout'||place==='tall-trees')){if(climb?.key!==climbKey){climb=startClimb(place,climbKey,since,until);climbTime=0;}}else climb=null;
 const activityTime=(Date.now()+serverOffset-Date.parse(since))/1000,lap=action==='swim'&&place==='pond'&&!target?swimAt(activityTime):null;
-const seat=target?null:seatFor(action,place),dest=seat?[seat.x,seat.z]:climb?climb.start:lap?[lap.x,lap.z]:action==='sleep'&&place==='hammock'&&!target?[hammock.x,hammock.z]:action==='sleep'&&!target?[patch.position.x,patch.position.z]:places[target]||places[place];
+const seat=target?null:seatFor(action,place),dest=seat?[seat.x,seat.z]:climb?climb.start:lap?[lap.x,lap.z]:action==='sleep'&&place==='hammock'&&!target?hammock.approach:action==='sleep'&&!target?[patch.position.x,patch.position.z]:places[target]||places[place];
 const travel = !!(target && places[target] && ['walk','run','swing'].includes(action));
 const swinging = action === 'swing';
 const key = `${action}|${place}|${target||''}|${since||''}`;
@@ -553,7 +554,7 @@ if(leavingPond){
   if(enteringPond&&Math.hypot(here[0]-swimAccess.water[0],here[1]-swimAccess.water[1])<.25)enteringPond=false;
   const swimming=!!lap&&(inWater||enteringPond);
   // Travel to bed is a separate activity. Once asleep, he stays at the bed.
-  if(action==='sleep')inFurniture=true;
+  if(action==='sleep'&&place!=='hammock')inFurniture=true;
   const goal=pose?[pose.x,pose.z]:lap?(enteringPond?swimAccess.water:swimming?dest:swimAccess?.bank||here):nearestWalkable(...dest,solids)||here;
   const dx=goal[0]-here[0],dz=goal[1]-here[1],dist=Math.hypot(dx,dz);
   let arriving=!inFurniture&&dist>(swimming?SWIM_ARRIVAL_DISTANCE:GROUND_ARRIVAL_DISTANCE),moving=false;
@@ -581,12 +582,13 @@ if(leavingPond){
     const at=Number.isFinite(elapsed)?Math.max(0,elapsed):t,bed=place==='hammock';
     const back=bedPlace===place?sleepOnBack:seedFrom(roamKey)%2===0;
     if(bed)patch.rotation.y=back?Math.PI/2:0;
-    if(bed)patch.position.set(hammock.x,groundHeight(hammock.x,hammock.z),hammock.z);
     if(at<CLIPS.yawn.duration&&bedPlace!==place) poseClip('yawn',at);
     else {
       bedPlace=place;sleepOnBack=back;
-      if(bed)patch.position.set(hammock.x,groundHeight(hammock.x,hammock.z)+(back?hammock.backPose:hammock.sidePose),hammock.z);
-      else if(back)patch.position.y-=CLIPS['sleep-lay'].lift;
+      if(bed){
+        inFurniture=true;
+        patch.position.set(hammock.x,groundHeight(hammock.x,hammock.z)+(back?hammock.backPose:hammock.sidePose),hammock.z+hammock.sleepOffsetZ);
+      } else if(back)patch.position.y-=CLIPS['sleep-lay'].lift;
       if(back) poseClip('sleep-lay',at%CLIPS['sleep-lay'].duration);
       else {
         const still=15*CLIPS.sleep.duration,k=at%(still+CLIPS['sleep-roll'].duration);
@@ -653,7 +655,7 @@ if(action==='watch-sky' && headBone && (currentName==='sit-ground'||currentName=
 patchMouth?.update(speech,timing,serverNow,action==='sleep',dt);
 const caption=talking?captionAt(speech.text,timing,serverNow-Date.parse(speech.at)):'';$('#bubble').hidden=!caption;if($('#bubble').textContent!==caption)$('#bubble').textContent=caption;
 let day=Number.isFinite(state.clock.dayFraction)?state.clock.dayFraction:.5;let daylight=THREE.MathUtils.smoothstep(Math.sin((day-.25)*Math.PI*2),-.12,.2);let weather=state.clock.weather;let overcast=weather==='cloudy'||weather==='rain'||weather==='storm';sky.copy(skyNight).lerp(skyDay,daylight*(overcast?.65:1));updateSky(daylight);scene.background=skyTexture;scene.fog.color.copy(sky);hemi.intensity=1.25+daylight*(overcast?.4:1.15);sunLight.intensity=daylight*(overcast?.6:2.4)+(1-daylight)*.65;sunLight.color.copy(moonColor).lerp(sunColor,daylight);let angle=(day-.25)*Math.PI*2;sun.position.set(Math.cos(angle)*900,Math.sin(angle)*900,0);moon.position.copy(sun.position).multiplyScalar(-1);sunLight.position.copy(daylight>.05?sun.position:moon.position);stars.material.opacity=1-daylight;stars.visible=daylight<.98;clouds.forEach((c,i)=>{c.visible=overcast||i<5;c.position.x+=reducedMotion.matches?0:dt*.14;if(c.position.x>520)c.position.x=-520;});rain.visible=weather==='rain'||weather==='storm';
-controls.track(patch.position,dt);
+controls.track(patch.position,dt,sleepingInHammock());
 sound.update(cameraFeeds.camera || controls.camera, {
   daylight, weather, walked, patch: patch.position, previousPatch: previousPatchPosition,
   clip: currentName, clipTime: currentAction?.time, action, place, since, mail, target,

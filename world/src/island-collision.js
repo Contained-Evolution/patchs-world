@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { forest } from './forest.js';
+import { hammock, hammockSupports } from './hammock.js';
 import { CLIMB_WALLS } from './climbing.js';
 import { COMPUTER_DESK_DISTANCE, COMPUTER_TENT } from './furniture.js';
 import { groundHeight, ISLAND, places, pondFraction, shoreFraction, walkShoreLimit, streamInfo, streamHalfWidth, TIDE_POOLS, tideWaterHeight } from './terrain.js';
@@ -76,6 +77,8 @@ export function createIslandCollision() {
     const radius = trunkRadius(tree);
     solids.ellipse(tree.x, tree.z, radius, radius);
   }
+  solids.ellipse(hammock.x, hammock.z, hammock.halfLength, hammock.halfWidth);
+  for (const { x, z, baseRadius } of hammockSupports) solids.ellipse(x, z, baseRadius, baseRadius);
   for (const wall of CLIMB_WALLS) solids.wall(wall);
   const [x, z] = places.cave;
   solids.box(x - 7.3, z - 20, x - 5, z - 3);

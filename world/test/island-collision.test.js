@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { hammock, hammockSupports } from '../src/hammock.js';
 import { createIsland } from '../src/island.js';
 import { BANANA_TREE, bananaTrees, clearGroundLine, nearestWalkable, pondAccess, walkable, walkStep } from '../src/island-collision.js';
 import { COMPUTER_TENT } from '../src/furniture.js';
@@ -21,11 +23,12 @@ test('rendered island solids block both walkers and all fruit trees have a reach
   globalThis.document = { baseURI: 'http://localhost/patch/', createElement: () => ({ getContext: () => context }) };
   t.after(() => { globalThis.document = previous; });
   t.mock.method(THREE.TextureLoader.prototype, 'load', () => new THREE.Texture());
+  t.mock.method(GLTFLoader.prototype, 'load', () => {});
   const scene = new THREE.Scene();
   const { walkSolids: solids, block } = createIsland(scene);
   createFoodProps(scene, block);
 
-  for (const [x,z] of [[6,-1], [-3.4,1], [5.2,2], [278,32], [-145,-205], [FOOD_STORE[0],FOOD_STORE[1]+1.15]]) {
+  for (const [x,z] of [[6,-1], [hammock.x, hammock.z], ...hammockSupports.map(({ x, z }) => [x, z]), [5.2,2], [278,32], [-145,-205], [FOOD_STORE[0],FOOD_STORE[1]+1.15]]) {
     assert.ok(solids.blocks(x,z), `missing solid at ${x},${z}`);
   }
   for (const [x,z] of [[ISLAND.pondX,ISLAND.pondZ], STREAM[2], ...TIDE_POOLS]) {
@@ -33,6 +36,9 @@ test('rendered island solids block both walkers and all fruit trees have a reach
   }
   assert.equal(walkable(ISLAND.pondX,ISLAND.pondZ,undefined,undefined,solids,true),true);
   assert.ok(walkStep(6,-3,0,4,solids)[1] < -1.9);
+
+  assert.ok(clearGroundLine([-4, 1], [-2.1, 1], solids));
+  assert.ok(clearGroundLine([2.1, 1], [4, 1], solids));
 
   const tent = COMPUTER_TENT;
   for (const side of [-1, 1]) {

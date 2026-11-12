@@ -132,7 +132,14 @@ export function createVisitorControls(camera, canvas, isModalOpen, scene, walkSo
     return visible;
   }
 
-  function positionPatchView(position, dt, snap = false) {
+  function positionPatchView(position, dt, snap = false, inHammock = false) {
+    if (inHammock) {
+      // Look through the gap between the banana trees at the sleeping area.
+      destination.set(position.x + .4, groundHeight(position.x, position.z) + 2.8, position.z + 3.6);
+      patchView.position.copy(destination);
+      patchView.lookAt(position.x, groundHeight(position.x, position.z) + 1.32, position.z);
+      return;
+    }
     target.copy(position);
     target.y += 1;
     const inTent = insideComputerTent(position.x, position.z);
@@ -258,12 +265,12 @@ export function createVisitorControls(camera, canvas, isModalOpen, scene, walkSo
         view.updateProjectionMatrix();
       }
     },
-    findPatch(position, tracking = false) {
-      if (tracking || insideComputerTent(position.x, position.z) || position.y > groundHeight(position.x, position.z) + 3) {
+    findPatch(position, tracking = false, inHammock = false) {
+      if (tracking || inHammock || insideComputerTent(position.x, position.z) || position.y > groundHeight(position.x, position.z) + 3) {
         setMode(tracking ? 'follow' : 'watch');
         viewAngle = Math.PI / 4;
         viewOffset = viewOffsets[0];
-        positionPatchView(position, 0, true);
+        positionPatchView(position, 0, true, inHammock);
         return;
       }
       setMode('walk');
@@ -275,8 +282,8 @@ export function createVisitorControls(camera, canvas, isModalOpen, scene, walkSo
     stopFollowing() {
       setMode('walk');
     },
-    track(position, dt) {
-      if (mode === 'follow') positionPatchView(position, dt);
+    track(position, dt, inHammock = false) {
+      if (mode === 'follow') positionPatchView(position, dt, false, inHammock);
     },
     update(dt) {
       if (!canWalk()) return;
