@@ -92,6 +92,16 @@ function setHealthDrop(open) {
   healthButton.setAttribute('aria-expanded', String(open));
 }
 healthButton.onclick = () => setHealthDrop(healthDrop.hidden);
+const hudToggle = $('#toggle-hud'), hudPanel = $('#hud-panel');
+hudToggle.onclick = () => {
+  const expanded = hudPanel.inert;
+  hudPanel.inert = !expanded;
+  hudToggle.setAttribute('aria-expanded', String(expanded));
+  const label = expanded ? 'Collapse menu' : 'Expand menu';
+  hudToggle.setAttribute('aria-label', label);
+  hudToggle.title = label;
+  if (!expanded) setHealthDrop(false);
+};
 document.addEventListener('pointerdown', event => {
   if (!healthDrop.hidden && !healthDrop.contains(event.target) && !healthButton.contains(event.target)) setHealthDrop(false);
 });
