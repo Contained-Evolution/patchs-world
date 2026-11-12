@@ -52,7 +52,7 @@ varying vec2 islandBank;
 varying float groundSlope;
 uniform sampler2D grassDetail;
 uniform sampler2D bankStone;`)
-   .replace('#include <map_fragment>',`#include <map_fragment>
+   .replace('#include <color_fragment>',`#include <color_fragment>
 vec2 xz=islandGround.xz;
 vec3 grass=texture2D(grassDetail,xz*.18).rgb;
 float inland=1.0-smoothstep(.78,.95,length(xz/vec2(320.0,360.0)));
