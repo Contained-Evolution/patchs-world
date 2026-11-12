@@ -77,7 +77,7 @@ function syncSoundShortcut() {
 }
 soundSetting.addEventListener('change', syncSoundShortcut);
 syncSoundShortcut();
-const cameraFeeds = setupIslandCameras(renderer);
+const cameraFeeds = setupIslandCameras(renderer, scene);
 const controls = createVisitorControls(camera, renderer.domElement, () => dialog.open, scene, solids);
 const updateMap = setupIslandMap(renderer, $('#mini-chart canvas'), $('#full-chart canvas'), $('#map-landmarks'), renderAerial);
 
@@ -128,8 +128,8 @@ $('#open-map').onclick = () => openIslandMenu('map');
 $('#open-menu').onclick = () => openIslandMenu('more');
 soundShortcut.onclick = () => openIslandMenu('audio');
 $('#open-cameras').onclick = () => {
-  cameraFeeds.showGrid();
   openIslandMenu('cameras');
+  cameraFeeds.reset();
 };
 $('#back-to-map').onclick = () => {
   if (animations.isOpen()) animations.close();
@@ -483,6 +483,9 @@ const sleepingInHammock = () => inFurniture && state?.patch.action === 'sleep' &
 findPatch.onclick = () => {
   if (state) controls.findPatch(patch.position, false, sleepingInHammock());
 };
+$('#jump-to-patch').onclick = () => {
+  if (state && patch.visible) controls.jumpToPatch(patch.position);
+};
 followPatch.onchange = () => {
   if (followPatch.checked && state) controls.findPatch(patch.position, true, sleepingInHammock());
   else controls.stopFollowing();
@@ -527,12 +530,12 @@ function renderIsland(now) {
   if (cameraFeeds.open) cameraFeeds.render(now, renderView);
   else renderView(controls.camera);
 }
-function frame(now){requestAnimationFrame(frame);sound.pause(animations.isOpen());if(animations.isOpen()){last=now;return;}adaptiveTick?.(now);const dt=Math.min((now-last)/1000,.05);last=now;let t=(now-start)/1000;
+function frame(now){requestAnimationFrame(frame);sound.pause(animations.isOpen() || (cameraFeeds.open && !cameraFeeds.audio));cameraFeeds.update();if(animations.isOpen()){last=now;return;}adaptiveTick?.(now);const dt=Math.min((now-last)/1000,.05);last=now;let t=(now-start)/1000;
 if (demo) { let n=Math.floor(t/9); const mockAction=mockActions[n%mockActions.length];state={patch:{...sampleState.patch,mail:n%3,action:mockAction,place:mockAction==='computer'?'computer':ids[Math.floor(n/2)%ids.length],target:['walk','run','swing'].includes(mockActions[n%mockActions.length]) ? ids[(Math.floor(n/2)+1)%ids.length] : null,since:`n${n}n`,says:null},clock:{dayFraction:(.38+t/240)%1,weather:['clear','cloudy','rain','storm'][Math.floor(t/60)%4]}}; }
 if (demo) renderCare(state.patch);
 const walked = controls.update(dt) || 0;
 findPatch.disabled = followPatch.disabled = !state;
-if (!state) { sound.update(controls.camera,{daylight:1,weather:'clear',walked}); patch.visible=false; scene.background=skyDay; rain.visible=false; scenery.update(reducedMotion.matches?0:dt,1); renderIsland(now); return; }
+if (!state) { sound.update(cameraFeeds.camera || controls.camera,{daylight:1,weather:'clear',walked}); patch.visible=false; scene.background=skyDay; rain.visible=false; scenery.update(reducedMotion.matches?0:dt,1); renderIsland(now); return; }
 patch.visible=true;previousPatchPosition.copy(patch.position);
 const {action,place,target,since,until,speech}=state.patch,mail=Number(state.patch.mail)||0;scenery.setComputer(mail,action,place,target,(Date.parse(until)-Date.now()-serverOffset)/1000);
 $('#status').textContent = statusText(state.patch)+(mail&&!(place==='computer'&&!target)?` ✉ ${mail} letter${mail===1?'':'s'} waiting at his coconut computer.`:'');
@@ -822,8 +825,7 @@ controls.track(patch.position,dt,sleepingInHammock());
 sound.update(cameraFeeds.camera || controls.camera, {
   daylight, weather, walked, patch: patch.position, previousPatch: previousPatchPosition,
   clip: currentName, clipTime: currentAction?.time, action, place, since, mail, target,
-  carrying: state.patch.carrying, gift: state.patch.giftSound, speech, now: Date.now() + serverOffset,
-  silent: cameraFeeds.open && !cameraFeeds.camera
+  carrying: state.patch.carrying, gift: state.patch.giftSound, speech, now: Date.now() + serverOffset
 });
 const rainAmount = weather==='storm' ? 1 : weather==='rain' ? .58 : 0;
 rainStrength.value = rainAmount;

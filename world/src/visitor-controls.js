@@ -11,6 +11,7 @@ export function createVisitorControls(camera, canvas, isModalOpen, scene, walkSo
   const vineEnds = [vinePoint(0), vinePoint(1)];
   let climb = null;
   const moveStick = document.querySelector('#move-stick');
+  const jumpToPatch = document.querySelector('#jump-to-patch');
   const returnToWalk = document.querySelector('#return-to-walk');
   const follow = document.querySelector('#follow-patch');
   const mouseLock = document.querySelector('#mouse-lock');
@@ -68,7 +69,7 @@ export function createVisitorControls(camera, canvas, isModalOpen, scene, walkSo
 
   function updateLook() {
     const walking = mode === 'walk';
-    returnToWalk.hidden = walking;
+    returnToWalk.hidden = jumpToPatch.hidden = walking;
     mouseLock.hidden = !walking;
     mouseLock.setAttribute('aria-pressed', String(lockedLook));
     const label = lockedLook ? 'Mouse look on: click the island to look; Escape releases the mouse' : 'Mouse look off: drag to look';
@@ -119,6 +120,15 @@ export function createVisitorControls(camera, canvas, isModalOpen, scene, walkSo
     const scale = shoreFraction(x, z) / walkShoreLimit;
     if (scale > 1) { x /= scale; z /= scale; }
     return nearestWalkable(x, z, walkSolids, 60) || [9, 14];
+  }
+
+  function landNearPatch(position) {
+    const [x, z] = safeLanding(position.x + 3, position.z + 4);
+    setMode('walk');
+    climb = null;
+    camera.position.set(x, visitorEyeHeight(x, z), z);
+    pointAt(position.x, position.y + 1, position.z);
+    canvas.focus({ preventScroll: true });
   }
 
   function visibility(from) {
@@ -295,12 +305,10 @@ export function createVisitorControls(camera, canvas, isModalOpen, scene, walkSo
         positionPatchView(position, 0, true, inHammock);
         return;
       }
-      setMode('walk');
-      climb = null;
-      const [x, z] = safeLanding(position.x + 3, position.z + 4);
-      camera.position.set(x, groundHeight(x, z) + 1.6, z);
-      pointAt(position.x, position.y + 1, position.z);
-      canvas.focus({ preventScroll: true });
+      landNearPatch(position);
+    },
+    jumpToPatch(position) {
+      if (mode !== 'walk') landNearPatch(position);
     },
     stopFollowing() {
       setMode('walk');

@@ -219,23 +219,61 @@ nav button[hidden]{display:none}
 .alerts label{display:flex;align-items:center;gap:12px;padding:10px 0;cursor:pointer}.alerts input{width:22px;height:22px;accent-color:#f0c47e;flex:none}.alerts small{color:#c8dac9}
 
 
-.camera-toolbar { display:flex; align-items:center; gap:10px; margin-bottom:12px; }
-.camera-toolbar h2 { flex:1; margin:0; font-size:clamp(17px,3vw,28px); }
-.camera-toolbar button {
-  min-height:44px; border:1px solid #78948a; border-radius:8px;
-  color:#fff; background:#263f36; padding:0 10px;
+#jump-to-patch {
+  min-height:44px; padding:8px 16px; pointer-events:auto;
+  border:1px solid #f0c47e; border-radius:12px; background:#f0c47e; color:#20382e;
 }
-.camera-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
+dialog:has(#cameras-panel:not([hidden])) { width:min(96vw,1000px); }
+#cameras-panel { max-width:none; min-height:0; padding:0; }
+#cameras-title { font-size:clamp(17px,3vw,24px); margin:0 0 6px; }
+.camera-viewport {
+  position:relative; margin:0; height:min(48dvh, 480px);
+  overflow:hidden; border-radius:10px; background:#0a1411;
+}
+#camera-feed { display:block; width:100%; height:100%; }
+#camera-feed[data-flight] { cursor:grab; touch-action:none; }
+#camera-feed[data-flight]:active { cursor:grabbing; }
+#camera-feed:focus-visible { outline:3px solid #ffdc91; outline-offset:-3px; }
+#camera-label {
+  position:absolute; left:8px; bottom:8px; padding:4px 9px; border-radius:8px;
+  background:#122821e8; color:#fff7e3; pointer-events:none;
+}
+.camera-strip {
+  display:flex; align-items:center; gap:6px; padding:5px;
+  overflow-x:auto; overscroll-behavior-inline:contain; touch-action:pan-x;
+  scrollbar-width:thin;
+}
 .camera-tile {
-  min-width:0; padding:0; overflow:hidden; text-align:left;
-  border:1px solid #536f64; border-radius:8px; color:#fff; background:#20332b;
+  position:relative; flex:0 0 auto; width:clamp(54px,9vw,75px); aspect-ratio:1;
+  padding:0; overflow:hidden; border:2px solid #ffffff45; border-radius:8px;
+  background:#223f35; color:#fff7e3; cursor:pointer;
 }
-.camera-tile:hover { border-color:#f0c47e; }
-.camera-caption { display:flex; flex-wrap:wrap; align-items:baseline; gap:2px 8px; padding:6px 8px; }
-.camera-caption strong { color:#c5eed8; font:600 11px ui-monospace,monospace; }
-.camera-tile canvas, #camera-feed { width:100%; aspect-ratio:16/9; background:#0a1411; touch-action:auto; }
-#camera-feed { object-fit:contain; max-height:70dvh; }
-@media(max-width:650px) { .camera-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+.camera-tile[aria-pressed="true"] { border-color:#f0c47e; }
+.camera-tile canvas { display:block; width:100%; height:100%; background:#0a1411; }
+.camera-caption {
+  position:absolute; inset:auto 0 0; padding:3px; background:#10251eeb;
+  font:600 10px ui-monospace,monospace;
+}
+.camera-tile[data-live]::after {
+  content:""; position:absolute; top:5px; right:5px; width:8px; height:8px;
+  border-radius:50%; background:#62ff85; box-shadow:0 0 5px #62ff85;
+}
+.camera-drone {
+  display:grid; place-items:center; border-radius:50%; color:#e6fff5;
+  background:radial-gradient(circle at 34% 22%, #5c9889, #254d42 60%, #10271f);
+}
+.camera-controls { display:flex; justify-content:center; gap:8px; flex-wrap:wrap; }
+#camera-direction { display:flex; gap:4px; }
+.camera-controls button {
+  min-width:44px; min-height:44px; border:1px solid #ffffff45; border-radius:8px;
+  background:#284b40; color:#fff7e3; touch-action:manipulation;
+}
+.camera-controls button:active { background:#375b49; }
+@media (max-height:480px) {
+  dialog:has(#cameras-panel:not([hidden])) { padding:12px; }
+  .camera-viewport { height:clamp(64px, calc(100dvh - 245px), 43dvh); }
+  .camera-tile { width:48px; }
+}
 #letter-kind{display:block;font:inherit;max-width:100%;min-height:44px;margin:6px 0 14px;padding:6px 10px;color:#263d35;background:#fff3d6;border:1px solid #948065;border-radius:8px}
 .install-help{width:min(440px,92vw);text-align:center}.install-help h2{margin:4px 0 12px;font-size:26px}.install-help p{line-height:1.5;color:#e4f0dc}#install-steps{font-size:19px;color:#fff8e6}.install-help .primary{margin-top:8px;font-size:17px}
 .reply-voice{display:block;width:100%;margin:4px 0 8px}

@@ -51,6 +51,7 @@
   <div id="move-stick" role="group" aria-label="Movement joystick">
     <span class="move-stick-thumb" aria-hidden="true"></span>
   </div>
+  <button id="jump-to-patch" type="button" hidden>Jump here?</button>
   <button id="return-to-walk" type="button" aria-label="Return to walking" title="Return to walking" hidden>
     <svg aria-hidden="true" viewBox="0 0 32 32" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
       <circle cx="18" cy="5" r="2" fill="currentColor"/>
@@ -105,12 +106,21 @@
     <p id="explore-hint"></p>
   </section>
   <section class="community island-panel" id="cameras-panel" aria-labelledby="cameras-title" hidden>
-  <div class="camera-toolbar">
-    <button id="camera-back" type="button" hidden>All cameras</button>
     <h2 id="cameras-title" tabindex="-1">Island cameras</h2>
-  </div>
-  <div id="camera-grid" class="camera-grid"></div>
-  <canvas id="camera-feed" aria-label="Selected island camera feed" hidden></canvas>
+    <figure class="camera-viewport">
+      <canvas id="camera-feed" aria-label="Live island camera feed"></canvas>
+      <figcaption id="camera-label" role="status"></figcaption>
+    </figure>
+    <div id="camera-strip" class="camera-strip" role="group" aria-label="Choose a camera"></div>
+    <div class="camera-controls">
+      <div id="camera-direction" role="group" aria-label="Pan and tilt camera">
+        <button type="button" data-direction="left" aria-label="Pan left">←</button>
+        <button type="button" data-direction="up" aria-label="Tilt up">↑</button>
+        <button type="button" data-direction="down" aria-label="Tilt down">↓</button>
+        <button type="button" data-direction="right" aria-label="Pan right">→</button>
+      </div>
+      <button id="camera-audio" type="button" aria-label="Feed audio" aria-pressed="true">Audio On</button>
+    </div>
   </section>
 <section class="community" id="letters-panel" aria-labelledby="letters-title" hidden>
   <div class="panel-intro"><span class="panel-icon" aria-hidden="true">✉</span><div><p class="panel-kicker">A LITTLE NOTE FROM YOU</p><h3 id="letters-title" tabindex="-1">Letters to Patch</h3><p>Letters land on Patch's coconut computer. His tablet pings him, and he writes back when he sits down to type.</p></div></div>
