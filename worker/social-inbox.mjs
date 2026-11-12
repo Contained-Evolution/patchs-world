@@ -49,11 +49,16 @@ async function capture(env, source) {
   const response = await env.BROWSER.quickAction('screenshot', {
     url: origin + '/social-camera.html?social-camera=' + camera,
     selector: '#social-camera-frame',
+    gotoOptions: { waitUntil: 'domcontentloaded', timeout: 20000 },
     waitForSelector: '#social-camera-frame[data-ready="true"]',
     viewport: { width: 720, height: 480 },
     screenshotOptions: { type: 'jpeg', quality: 66 },
   });
-  if (!response.ok) throw new Error('Island camera unavailable.');
+  if (!response.ok) {
+    const detail = (await response.text()).slice(0, 240);
+    console.warn('Browser Run camera response', response.status, detail);
+    throw new Error('Island camera returned HTTP ' + response.status + '.');
+  }
   const bytes = await response.arrayBuffer();
   const jpeg = new Uint8Array(bytes);
   if (jpeg.length > 115000 || jpeg.length < 1000 || jpeg[0] !== 255 || jpeg[1] !== 216) throw new Error('Invalid camera image.');
@@ -87,6 +92,34 @@ export async function processSocial(storage, env, notify) {
     const [jobKey, id] = publication;
     const draft = await storage.get(key(id));
     if (draft?.state === 'publishing') await publishReviewed(storage, env, draft);
+    await storage.delete(jobKey);
+    await storage.setAlarm(Date.now() + 1000);
+    return;
+  }
+  const photos = await storage.list({ prefix: 'photo-job:', limit: 1 });
+  const photoJob = photos.entries().next().value;
+  if (photoJob) {
+    const [jobKey, id] = photoJob;
+    const draft = await storage.get(key(id));
+    if (draft?.state === 'capturing') {
+      const update = { ...draft, state: 'review' };
+      try {
+        const image = await capture(env, draft.source);
+        if (!image) throw new Error('Camera capture is unavailable.');
+        await storage.put('photo:' + id, image.bytes);
+        update.photo = { camera: image.camera, at: image.at };
+        update.revision++;
+        update.thread = [...draft.thread, { author: 'Patch', text: 'Here is a view from the island camera.', at: Date.now() }];
+        delete update.photoError;
+      } catch (error) {
+        update.photoError = error.message;
+        console.warn('Social camera retry failed', error.message);
+      }
+      await storage.put(key(id), update);
+      if (update.photo) {
+        try { await notify(id, true); } catch (error) { console.warn('Social approval alert failed', error.message); }
+      }
+    }
     await storage.delete(jobKey);
     await storage.setAlarm(Date.now() + 1000);
     return;
@@ -154,7 +187,7 @@ export async function reviewDraft(storage, env, id, body) {
   const action = body?.action;
   const feedback = clean(body?.feedback, 600);
   const targets = Array.isArray(body?.platforms) ? [...new Set(body.platforms)] : [];
-  if (!['approve', 'revise', 'hold'].includes(action) || (action === 'revise' && !feedback) ||
+  if (!['approve', 'revise', 'hold', 'camera'].includes(action) || (action === 'revise' && !feedback) ||
       (action === 'approve' && (!targets.length || targets.some(p => !platforms.includes(p))))) {
     return { status: 400, error: 'Choose a valid review action.' };
   }
@@ -172,13 +205,17 @@ export async function reviewDraft(storage, env, id, body) {
     if (action === 'approve' && targets.some(p => !draft.captions[p] || !configured(env, p) || (p === 'instagram' && !draft.photo))) {
       return { status: 400, error: 'A selected destination needs a caption, photo, or connection.' };
     }
-    const state = { approve: 'publishing', revise: 'revising', hold: 'held' }[action];
-    const text = { approve: 'Approved for ' + targets.join(', ') + '.', revise: feedback, hold: 'Hold this draft for now.' }[action];
+    if (action === 'camera' && (draft.photo || env.PATCH_SOCIAL_CAMERA !== 'true')) {
+      return { status: 409, error: 'A new camera photo is unavailable for this draft.' };
+    }
+    const state = { approve: 'publishing', revise: 'revising', hold: 'held', camera: 'capturing' }[action];
+    const text = { approve: 'Approved for ' + targets.join(', ') + '.', revise: feedback, hold: 'Hold this draft for now.', camera: 'Can you send a camera photo?' }[action];
     const updated = { ...draft, state, thread: [...draft.thread, { author: 'Contained Evolution', text, at: Date.now() }] };
     if (action === 'approve') {
       updated.selected = targets;
       await txn.put('publish:' + id, id);
     }
+    if (action === 'camera') await txn.put('photo-job:' + id, id);
     if (action === 'revise') await txn.put('revision:' + id, { id, feedback, attempts: 0 });
     await txn.put(key(id), updated);
     return { status: 200, draft: updated };

@@ -89,7 +89,7 @@ function conversation(draft, connections) {
     else if (missingPhoto) element('small', 'Needs a photo', card);
     else if (!connections[platform]) element('small', 'Account setup pending', card);
   }
-  const info = element('p', { held: 'Held for review', revising: 'Patch is working on a revision.', publishing: 'Sending approved posts…' }[draft.state], article);
+  const info = element('p', { held: 'Held for review', revising: 'Patch is working on a revision.', publishing: 'Sending approved posts…', capturing: 'Patch is waiting for the island camera.' }[draft.state] || draft.photoError, article);
   info.setAttribute('role', 'status');
   if (!editable && !retryable) return article;
 
@@ -98,7 +98,7 @@ function conversation(draft, connections) {
     try {
       const { draft: updated } = await api('inbox/' + draft.id, { action, revision: draft.revision, ...values });
       article.replaceWith(conversation(updated, connections));
-      if (['revising', 'publishing'].includes(updated.state)) setTimeout(refresh, 6000);
+      if (['revising', 'publishing', 'capturing'].includes(updated.state)) setTimeout(refresh, 6000);
     } catch (error) {
       info.textContent = error.message || 'Could not save your decision.';
       controls.disabled = false;
@@ -113,6 +113,7 @@ function conversation(draft, connections) {
   selection.forEach(([, check]) => check.addEventListener('change', update));
   update();
   if (editable) {
+    if (!draft.photo) button(controls, 'Ask for a camera photo', () => submit('camera'));
     button(controls, 'Hold', () => submit('hold'));
     const label = element('label', 'What should Patch change?', controls);
     const feedback = element('textarea', '', label);
@@ -152,7 +153,7 @@ async function refresh() {
     }
     panel.hidden = false;
     if (showing && !window.location.hash) document.getElementById('draft-' + showing)?.scrollIntoView();
-    if (drafts.some(draft => ['publishing', 'revising'].includes(draft.state))) setTimeout(refresh, 8000);
+    if (drafts.some(draft => ['publishing', 'revising', 'capturing'].includes(draft.state))) setTimeout(refresh, 8000);
   } catch (error) {
     if (!location.pathname.endsWith('/tablet.html')) return;
     panel.hidden = false;
