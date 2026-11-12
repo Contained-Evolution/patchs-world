@@ -5,6 +5,8 @@ import { anchorFor, holdFor, ROPE_TREES, trees } from './world-state.js';
 import { forest, isReserved } from './forest.js';
 import { createTerrainTiles } from './terrain-mesh.js';
 import { addRiverWater, oceanGeometry } from './river-water.js';
+import { addPondScenery } from './pond-scenery.js';
+import { pondSwings } from './pond-swings.js';
 import { CLIMB_WALLS } from './climbing.js';
 import { createIslandCollision, bananaTrees, BANANA_TREE } from './island-collision.js';
 import { hammock } from './hammock.js';
@@ -30,13 +32,51 @@ export function createIsland(scene){
  const material=(color,extra={})=>new THREE.MeshStandardMaterial({color,roughness:1,...extra});
  const groundMat=material(0xffffff,{vertexColors:true,map:surfaceTexture('#dfdfdf',['#898989','#ffffff','#bbbbbb'])});
  const grassDetail=new THREE.TextureLoader().load(new URL('./assets/tropical-grass.png',document.baseURI).href);grassDetail.colorSpace=THREE.SRGBColorSpace;grassDetail.wrapS=grassDetail.wrapT=THREE.RepeatWrapping;grassDetail.anisotropy=4;
- groundMat.onBeforeCompile=shader=>{shader.uniforms.grassDetail={value:grassDetail};shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nvarying vec2 islandGround;').replace('#include <begin_vertex>','#include <begin_vertex>\nislandGround = position.xz;');shader.fragmentShader=shader.fragmentShader.replace('#include <common>','#include <common>\nvarying vec2 islandGround; uniform sampler2D grassDetail;').replace('#include <map_fragment>',`#include <map_fragment>
-vec3 detail=texture2D(grassDetail,islandGround*.18).rgb;float inland=1.0-smoothstep(.78,.95,length(islandGround/vec2(320.0,360.0)));diffuseColor.rgb*=mix(vec3(1.0),detail*1.55,inland*.8);`);};
+ groundMat.onBeforeCompile=shader=>{
+  shader.uniforms.grassDetail={value:grassDetail};
+  shader.uniforms.bankStone={value:rockMap};
+  shader.vertexShader=shader.vertexShader
+   .replace('#include <common>',`#include <common>
+attribute vec2 bank;
+varying vec2 islandBank;
+varying vec3 islandGround;
+varying float groundSlope;`)
+   .replace('#include <begin_vertex>',`#include <begin_vertex>
+islandGround=position;
+islandBank=bank;
+groundSlope=1.0-normal.y;`);
+  shader.fragmentShader=shader.fragmentShader
+   .replace('#include <common>',`#include <common>
+varying vec3 islandGround;
+varying vec2 islandBank;
+varying float groundSlope;
+uniform sampler2D grassDetail;
+uniform sampler2D bankStone;`)
+   .replace('#include <map_fragment>',`#include <map_fragment>
+vec2 xz=islandGround.xz;
+vec3 grass=texture2D(grassDetail,xz*.18).rgb;
+float inland=1.0-smoothstep(.78,.95,length(xz/vec2(320.0,360.0)));
+diffuseColor.rgb*=mix(vec3(1.0),grass*1.55,inland*.8);
+if(islandBank.x>.001){
+ vec3 rock=texture2D(bankStone,xz*.34+vec2(islandGround.y*.15,0.0)).rgb;
+ float grit=dot(texture2D(bankStone,xz*1.7).rgb,vec3(.29,.58,.13));
+ float variation=dot(texture2D(bankStone,xz*.027).rgb,vec3(.29,.58,.13));
+ float seam=sin(islandGround.y*8.4+xz.x*.32+xz.y*.49+variation*15.0);
+ vec3 mud=mix(vec3(.086,.045,.025),vec3(.205,.118,.064),islandBank.y)*(.77+variation*.95);
+ vec3 gravel=vec3(.30,.234,.16)*(.53+grit*2.2);
+ vec3 slate=vec3(.17,.19,.20)*(.54+rock*1.7)*(.67+.33*smoothstep(-.65,-.22,seam));
+ float stones=islandBank.y*smoothstep(.05,.23,variation);
+ float ledge=smoothstep(.012,.1,groundSlope+variation*.19)*islandBank.y;
+ vec3 soil=mix(mix(mud,gravel,stones),slate,ledge*.86);
+ diffuseColor.rgb=mix(diffuseColor.rgb,soil,smoothstep(0.0,.83,islandBank.x));
+}`);
+ };
  const barkMap=new THREE.TextureLoader().load(new URL('./assets/tropical-bark.png',document.baseURI).href);barkMap.colorSpace=THREE.SRGBColorSpace;barkMap.wrapS=barkMap.wrapT=THREE.RepeatWrapping;barkMap.repeat.set(1,3);barkMap.anisotropy=4;const bark=material(0xc4b3a0,{map:barkMap});
  const leafMap=new THREE.TextureLoader().load(new URL('./assets/tropical-leaf.png',document.baseURI).href);leafMap.colorSpace=THREE.SRGBColorSpace;leafMap.anisotropy=4;
  const foliage=material(0xc1d9ae,{map:leafMap,alphaTest:.35,side:THREE.DoubleSide,roughness:.9,emissive:0x334b29,emissiveMap:leafMap,emissiveIntensity:.35});
  const rockMap=new THREE.TextureLoader().load(new URL('./assets/volcanic-rock.png',document.baseURI).href);rockMap.colorSpace=THREE.SRGBColorSpace;rockMap.wrapS=rockMap.wrapT=THREE.RepeatWrapping;rockMap.anisotropy=4;const rock=material(0xbab9ad,{map:rockMap});
  const sand=material(0xd8c592),wood=material(0x725039),rope=material(0xd1c7a0);
+ const pondScenery=addPondScenery(scene,rope,walkSolids);
  const wet=material(0x67836b,{roughness:.55});
  const add=(geo,mat,x=0,y=0,z=0)=>{const o=new THREE.Mesh(geo,mat);o.position.set(x,y,z);scene.add(o);return o;};
  const beam=(mat,a,b,r1,r2=r1)=>{const av=new THREE.Vector3(...a),bv=new THREE.Vector3(...b),d=bv.clone().sub(av);const o=add(new THREE.CylinderGeometry(r2,r1,d.length(),8),mat);o.position.copy(av).add(bv).multiplyScalar(.5);o.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize());return o;};
@@ -141,13 +181,29 @@ if (trackingPatch) {
   const x=ISLAND.pondX+Math.cos(angle)*ISLAND.pondRX*edge*.94;
   const z=ISLAND.pondZ+Math.sin(angle)*ISLAND.pondRZ*edge*.94;
   const channel=streamInfo(x,z);
-  if(Math.abs(Math.sin(angle))<.36||channel.distance<channel.width+4)continue;
+  if(Math.abs(Math.sin(angle))<.36||channel.distance<channel.width+4||pondSwings.some(s=>Math.hypot(x-s.x,z-s.z)<4))continue;
   if(i%3!==0)stone(x,z,.9+rand(i)*1.6,.55+rand(i+40)*1.1,.8+rand(i+90)*1.4);
   if(i%4===0)for(let j=0;j<4;j++)reedData.push({x:x+j*.2,y:groundHeight(x+j*.2,z),z,h:.8+rand(i+j)*.8});
  }
  const reeds=new THREE.InstancedMesh(new THREE.CylinderGeometry(.01,.025,1,5),material(0x567343),reedData.length);
  reedData.forEach((p,i)=>{pose.position.set(p.x,p.y+p.h/2,p.z);pose.rotation.set(0,0,-.1);pose.scale.set(1,p.h,1);pose.updateMatrix();reeds.setMatrixAt(i,pose.matrix);});
  reeds.instanceMatrix.needsUpdate=true;reeds.computeBoundingSphere();scene.add(reeds);
+ const shoreStones=new THREE.InstancedMesh(boulder,rock,420);
+ shoreStones.count=0;
+ for(let i=0;i<420;i++){
+  const angle=rand(i+8400)*Math.PI*2,edge=pondOutline(angle)*(.83+rand(i+9200)*.31);
+  const x=ISLAND.pondX+Math.cos(angle)*ISLAND.pondRX*edge;
+  const z=ISLAND.pondZ+Math.sin(angle)*ISLAND.pondRZ*edge;
+  const y=groundHeight(x,z),stream=streamInfo(x,z);
+  if(y<ISLAND.pondY-.12||stream.distance<stream.width+2)continue;
+  const slab=i%9===0,size=slab?.28+rand(i+2100)*.49:.052+rand(i+6300)*.15;
+  pose.position.set(x,y+.018,z);
+  pose.rotation.set(.1,rand(i+8600)*Math.PI*2,.13);
+  pose.scale.set(size,slab?size*.19:size*.51,size*.74);
+  pose.updateMatrix();
+  shoreStones.setMatrixAt(shoreStones.count++,pose.matrix);
+ }
+ shoreStones.instanceMatrix.needsUpdate=true;shoreStones.computeBoundingSphere();scene.add(shoreStones);
  for(let s=RIVER.entry+8;s<RIVER.foot+4;s+=4){
   for(const side of [-1,1]){
    const falls=s>RIVER.lip-8;
@@ -180,5 +236,5 @@ if (trackingPatch) {
  const boulderMesh=new THREE.InstancedMesh(boulder,rock,stones.length);stones.forEach((p,i)=>{pose.position.set(p.x,groundHeight(p.x,p.z)+p.sy*.10,p.z);pose.rotation.set(rand(p.x+p.z)*.4,rand(p.x-p.z)*6,.1);pose.scale.set(p.sx,p.sy,p.sz);pose.updateMatrix();boulderMesh.setMatrixAt(i,pose.matrix);walkSolids.rock(p.x,p.z,boulder,pose.matrix);});boulderMesh.instanceMatrix.needsUpdate=true;boulderMesh.computeBoundingSphere();scene.add(boulderMesh);
  // Chairs, the camp table and the coconut computer.
  const furniture=createFurniture(scene,{bark,wood},block);
- return { walkSolids, block, setRope, setTrackingTarget, setComputer:furniture.setComputer, resetRopes(){for(const i of ROPE_TREES)setRope(i,null);}, update(dt,daylight){furniture.update(dt,daylight);waterTime.value+=dt;waterLight.value=daylight;foliage.emissiveIntensity=.05+daylight*.3;} };
+ return { walkSolids, block, setRope, pondScenery, setTrackingTarget, setComputer:furniture.setComputer, resetRopes(){for(const i of ROPE_TREES)setRope(i,null);}, update(dt,daylight){pondScenery.update(dt);furniture.update(dt,daylight);waterTime.value+=dt;waterLight.value=daylight;foliage.emissiveIntensity=.05+daylight*.3;} };
 }

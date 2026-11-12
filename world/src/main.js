@@ -17,6 +17,7 @@ import { setupNotifications } from './notifications.js';
 import { registerApp } from './app.js';
 import { setupInstall } from './install.js';
 import { ISLAND, RIVER, riverPoint, riverSpeed } from './terrain.js';
+import { pondSwings, pondSwingPose, nextPondSwing } from './pond-swings.js';
 import { travelFraction } from './travel-progress.js';
 import { adaptiveQuality } from './render-quality.js';
 import { places, groundHeight, walkRoute, swingLoop, traversalLoop, holdFor, trees, statusText, isLocalPreview, safePatch } from './world-state.js';
@@ -258,6 +259,7 @@ const riverBank = [entryBank.x,entryBank.z];
 const riverEntrySeconds = Math.hypot(riverBank[0]-places.pond[0],riverBank[1]-places.pond[1])/1.7
   +(RIVER.length-RIVER.entry)/2.3+20;
 let riverRide = null, swim = null;
+let pondSwing = null;
 
 function followRiver(dt) {
  const here=[patch.position.x,patch.position.z];
@@ -400,7 +402,8 @@ async function poll() {
     // A poll can arrive after an activity ended while this tab was paused. Place
     // Patch at the server's destination instead of replaying an obsolete journey.
     const [px,pz]=places[next.patch.place];
-    if (!hasLiveState || (!riverRide?.boarding && previous && previous.since!==next.patch.since && !next.patch.target && Math.hypot(patch.position.x-px,patch.position.z-pz)>60)) {
+    const midSwing=pondSwing?.elapsed!=null;
+    if (!hasLiveState || (!midSwing && !riverRide?.boarding && previous && previous.since!==next.patch.since && !next.patch.target && Math.hypot(patch.position.x-px,patch.position.z-pz)>60)) {
       const { action, place, target, since, spirit, activityWeather }=next.patch;
       const age=(serverNow-Date.parse(since))/1000;
       if(action==='swim'&&place==='pond'&&!target&&age>riverEntrySeconds){
@@ -513,17 +516,35 @@ if(action==='swim'&&place==='pond'&&!target){
 const activityTime=(serverNow-Date.parse(since))/1000,lap=swim?.plan.at(activityTime);
 const seat=target?null:seatFor(action,place),dest=seat?[seat.x,seat.z]:climb?climb.start:lap?[lap.x,lap.z]:places[target]||places[place];
 const travel = !!(target && places[target] && ['walk','run','swing'].includes(action));
-const swinging = action === 'swing';
+const swimmingHoleSwing = action==='swing'&&place==='pond'&&!target;
+const swinging = action==='swing'&&!swimmingHoleSwing;
 const key = `${action}|${place}|${target||''}|${since||''}`;
 if(groundActivity!==key){
  groundActivity=key;groundApproach=null;inFurniture=false;swimAccess=null;enteringPond=false;
- if(!riverRide?.boarding)riverRide=lap&&!inPond(patch.position.x,patch.position.z)?{boarding:false,station:null}:null;
+ if(pondSwing?.elapsed==null)pondSwing=swimmingHoleSwing?{index:seedFrom(key)%pondSwings.length,direction:1,elapsed:null}:null;
+ if(!riverRide?.boarding)riverRide=lap&&pondSwing?.elapsed==null&&!inPond(patch.position.x,patch.position.z)?{boarding:false,station:null}:null;
 }
-const leavingPond=!sleeping&&!lap&&(swimAccess||inPond(patch.position.x,patch.position.z));
+const leavingPond=!lap&&(swimAccess||inPond(patch.position.x,patch.position.z));
+let pondGrip=null, pondRope=-1;
 if(riverRide&&!ropeExit){
  journey=null;descent=null;wasAirborne=false;
  patch.rotation.z=0;
  followRiver(dt);
+} else if(pondSwing?.elapsed!=null){
+ const swing=pondSwings[pondSwing.index],sample=pondSwingPose(swing,pondSwing.elapsed);
+ pondSwing.elapsed+=dt;
+ patch.position.set(...sample.position);
+ patch.rotation.z=0;
+ face(swing.heading,dt);
+ playClip(sample.clip);
+ if(sample.grip){
+  heldGrip=pondGrip=sample.grip;
+  pondRope=pondSwing.index;
+ }
+ if(sample.landed){
+  scenery.pondScenery.splash(sample.position[0],sample.position[2]);
+  pondSwing=swimmingHoleSwing?nextPondSwing(pondSwing):null;
+ }
 } else if(leavingPond){
  const here=[patch.position.x,patch.position.z];
  swimAccess ??= pondAccess(here,solids);
@@ -531,12 +552,24 @@ if(riverRide&&!ropeExit){
   const {bank}=swimAccess,dx=bank[0]-here[0],dz=bank[1]-here[1],distance=Math.hypot(dx,dz);
   const step=distance>0?Math.min(1,dt*1.7/distance):1,next=[here[0]+dx*step,here[1]+dz*step];
   if(clearGroundLine(here,next,solids,true)){
-   patch.position.set(next[0],inPond(...next)?ISLAND.pondY-.35:groundHeight(...next),next[1]);
+   const bed=groundHeight(...next);
+   patch.position.set(next[0],inPond(...next)?Math.max(bed,ISLAND.pondY-.35):bed,next[1]);
    face(Math.atan2(dx,dz),dt);
    if(step===1)swimAccess=null;
   }
  }
  playClip('swim');
+} else if(swimmingHoleSwing&&!ropeExit){
+ const {mount,heading}=pondSwings[pondSwing.index];
+ if(Math.hypot(patch.position.x-mount[0],patch.position.z-mount[1])<=GROUND_ARRIVAL_DISTANCE){
+  pondSwing.elapsed=0;
+  face(heading,dt);
+ }else{
+  const walking=approachGround(mount,dt);
+  patch.position.y=groundHeight(patch.position.x,patch.position.z);
+  playClip(walking?'walk':'idle');
+ }
+ journey=null;descent=null;wasAirborne=false;
 } else if(ropeExit){
  ropeExit.elapsed+=dt;const seg=ropeExit.plan.at(ropeExit.elapsed),p=placement(ropeExit.line,seg);
  patch.position.set(p.x,p.y,p.z);patch.rotation.z=0;face(p.heading,dt);poseClip(p.clip,p.time);
@@ -710,6 +743,7 @@ if(patchModel)patchModel.position.set(0,0,seatShift);seatShift=0;
 if(mixer) mixer.update(dt);
 foodProps.update(foodPose,patch,leftHandBone,rightHandBone);
 patchEyes?.update(dt, action==='sleep' && ['sleep','sleep-lay','sleep-roll'].includes(currentName), {rate:blinkRate(action,talking), shift:currentName!==faceClip, drowsy:action==='sleep'?0:drowsiness(state.patch.needs?.energy)});faceClip=currentName;
+scenery.pondScenery.hold(pondRope,pondGrip);
 if(rightHandBone&&heldGrip){
   patch.updateMatrixWorld(true);rightHandBone.getWorldPosition(handWorld);
   const correction=new THREE.Vector3(...heldGrip).sub(handWorld);patch.worldToLocal(correction.add(patch.position));patchModel.position.copy(correction);

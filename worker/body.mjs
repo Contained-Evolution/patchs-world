@@ -30,6 +30,7 @@ export const ACTIVITIES = [
   { action: 'eat', place: 'shelves', minutes: [4, 8], effects: { hunger: 0.045, comfort: 0.006 } },
   { action: 'fish', place: 'pond', minutes: [20, 40], effects: { fun: 0.008, hunger: 0.004, comfort: 0.003 }, appeal: 0.4 },
   { action: 'swim', place: 'pond', minutes: [10, 25], effects: { fun: 0.015, comfort: 0.005, energy: -0.0006 }, appeal: 0.5 },
+  { action: 'swing', place: 'pond', minutes: [10, 20], effects: { fun: 0.018, energy: -0.0006 }, appeal: 0.3 },
   { action: 'swing', place: 'tall-trees', minutes: [10, 25], effects: { fun: 0.018, energy: -0.0006 }, appeal: 0.3 },
   { action: 'climb', place: 'tall-trees', minutes: [8, 18], effects: { fun: 0.012, energy: -0.0006 }, appeal: 0.3 },
   { action: 'climb', place: 'lookout', minutes: [8, 16], effects: { fun: 0.012, energy: -0.0008 }, appeal: 0.3 },
@@ -57,7 +58,7 @@ const EFFECTS = {
 };
 export const CHOICES = Object.keys(EFFECTS);
 export const WHERE = {
-  eat: ['banana-grove', 'shelves', 'beach'], computer: ['computer'], fish: ['pond'], swim: ['pond'], swing: ['tall-trees'], climb: ['tall-trees', 'lookout'], archery: ['meadow', 'beach'],
+  eat: ['banana-grove', 'shelves', 'beach'], computer: ['computer'], fish: ['pond'], swim: ['pond'], swing: ['tall-trees', 'pond'], climb: ['tall-trees', 'lookout'], archery: ['meadow', 'beach'],
   explore: ['tall-trees', 'cave', 'tide-pools', 'beach', 'meadow', 'lookout', 'banana-grove', 'pond'],
 };
 export const PLACES_KNOWN = Object.keys(SPOTS);
