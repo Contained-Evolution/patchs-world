@@ -1,13 +1,15 @@
-import { trees, ROPE_LENGTH } from './world-state.js';
+import { trees } from './world-state.js';
+import { SWING_TREE } from './swing-tree.js';
 
 const mix=(a,b,t)=>a+(b-a)*t;
 const smooth=t=>t*t*(3-2*t);
-const radius=.95;
+const { traversal, rope } = SWING_TREE;
 
 // In-place swings pause on a supported hold. Through journeys keep their server timing.
 export function swingRhythm(seconds,lengths,spirit,weather) {
- const pace=spirit==='happy'?3.6:spirit==='tired'?2.3:3;
- const rest=(spirit==='tired'?4:spirit==='happy'?1:2)+(weather==='storm'?2:0);
+ const mood=spirit==='happy'||spirit==='tired'?spirit:'default';
+ const pace=traversal.pace[mood];
+ const rest=traversal.rest[mood]+(weather==='storm'?traversal.stormRest:0);
  const duration=lengths.reduce((sum,length)=>sum+length/pace+rest,0);
  let time=Math.max(0,seconds)%duration,distance=0;
  for(const length of lengths){
@@ -24,7 +26,7 @@ export function swingRhythm(seconds,lengths,spirit,weather) {
 // transfer. The renderer uses this same point for Patch's animated grip.
 export function makeTransfer(from,to) {
  const dx=to.grip[0]-from.grip[0],dz=to.grip[2]-from.grip[2],length=Math.hypot(dx,dz),ux=dx/length,uz=dz/length;
- const ropeOffset=.9, ropeRise=ROPE_LENGTH-Math.sqrt(ROPE_LENGTH**2-ropeOffset**2);
+ const ropeOffset=rope.swingOffset, ropeRise=rope.length-Math.sqrt(rope.length**2-ropeOffset**2);
  function sample(t,plan) {
   const shifted=(hold,sign)=>[hold.grip[0]-uz*ropeOffset*sign,hold.grip[1]+ropeRise,hold.grip[2]+ux*ropeOffset*sign];
   const start=from.type==='rope'?shifted(from,plan.depart):from.grip;
@@ -32,15 +34,15 @@ export function makeTransfer(from,to) {
   if(t<=.25){const f=smooth(t*4);return {grip:from.type==='rope'?from.grip.map((v,i)=>mix(v,start[i],f)):from.grip.slice(),hold:from};}
   if(t>=.75){const f=smooth((t-.75)*4);return {grip:to.type==='rope'?end.map((v,i)=>mix(v,to.grip[i],f)):to.grip.slice(),hold:to};}
   const u=(t-.25)*2,arc=Math.sin(Math.PI*u),grip=start.map((v,i)=>mix(v,end[i],u));
-  grip[0]+=-uz*plan.bend*arc;grip[2]+=ux*plan.bend*arc;grip[1]+=arc*.65;
+  grip[0]+=-uz*plan.bend*arc;grip[2]+=ux*plan.bend*arc;grip[1]+=arc*traversal.airLift;
   return {grip,hold:null};
  }
  let best=null;
- for(const depart of [-1,1])for(const arrive of [-1,1])for(const bend of [1.5,-1.5,2,-2,2.5,-2.5,3,-3]){
+ for(const depart of [-1,1])for(const arrive of [-1,1])for(const bend of traversal.bends){
   const plan={depart,arrive,bend};let clearance=Infinity;
   for(let j=0;j<=160;j++){const [x,,z]=sample(j/160,plan).grip;for(const tree of trees)clearance=Math.min(clearance,Math.hypot(x-tree[0],z-tree[1]));}
   if(!best||clearance>best.clearance)best={...plan,clearance};
  }
- if(best.clearance<radius)throw new Error(`No clear transfer between trees ${from.index} and ${to.index}`);
+ if(best.clearance<traversal.trunkClearance)throw new Error(`No clear transfer between trees ${from.index} and ${to.index}`);
  return {from,to,...best,at:t=>sample(Math.max(0,Math.min(1,t)),best)};
 }

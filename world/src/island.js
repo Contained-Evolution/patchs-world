@@ -1,3 +1,4 @@
+import { SWING_TREE } from './swing-tree.js';
 import * as THREE from 'three';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { ISLAND, places, coastRadius, shoreFraction, groundHeight, pondOutline, RIVER, riverPoint, streamInfo, nearPondStairs, TIDE_POOLS, tideWaterHeight } from './terrain.js';
@@ -135,7 +136,7 @@ if (trackingPatch) {
  // Independent chunks let the camera cull forests outside its field of view.
  for(const chunk of tiles.values()){
   const palms=chunk.filter(t=>!t.broad),broadTrees=chunk.filter(t=>t.broad),trunkMesh=new THREE.InstancedMesh(trunkGeo,bark,chunk.length),leafMesh=new THREE.InstancedMesh(blade,foliage,palms.length*7),canopyMesh=new THREE.InstancedMesh(canopyGeometry,canopyMaterial,broadTrees.length*3);
-  chunk.forEach((tree,i)=>{const y=groundHeight(tree.x,tree.z),visibleHeight=tree.h+(tree.swing?3.5:0);pose.position.set(tree.x,y+visibleHeight/2,tree.z);pose.rotation.set(0,tree.angle,tree.grove?BANANA_TREE.trunkLean:0);pose.scale.set(tree.grove?BANANA_TREE.trunkScale:1,visibleHeight,tree.grove?BANANA_TREE.trunkScale:1);pose.updateMatrix();trunkMesh.setMatrixAt(i,pose.matrix);});
+  chunk.forEach((tree,i)=>{const y=groundHeight(tree.x,tree.z),visibleHeight=tree.h+(tree.swing?SWING_TREE.canopyExtension:0);pose.position.set(tree.x,y+visibleHeight/2,tree.z);pose.rotation.set(0,tree.angle,tree.grove?BANANA_TREE.trunkLean:0);pose.scale.set(tree.grove?BANANA_TREE.trunkScale:1,visibleHeight,tree.grove?BANANA_TREE.trunkScale:1);pose.updateMatrix();trunkMesh.setMatrixAt(i,pose.matrix);});
   palms.forEach((tree, i) => {
    const y = groundHeight(tree.x, tree.z);
    for (let j = 0; j < 7; j++) {
@@ -148,8 +149,8 @@ if (trackingPatch) {
     leafMesh.setMatrixAt(i * 7 + j, pose.matrix);
    }
   });
-  broadTrees.forEach((tree,i)=>{const y=groundHeight(tree.x,tree.z),w=9+rand(i+81)*5;for(let j=0;j<3;j++){pose.position.set(tree.x,y+tree.h+(tree.swing?3.5:.8),tree.z);if(tree.swing){pose.position.y-=.4+j*.08;pose.rotation.set(-Math.PI/2,0,tree.angle+j*Math.PI/3);pose.scale.set(w,w*.8,1);}else{pose.rotation.set(0,tree.angle+j*Math.PI/3,0);pose.scale.set(w,w*.48,1);}pose.updateMatrix();canopyMesh.setMatrixAt(i*3+j,pose.matrix);}});
-  const branches=new THREE.InstancedMesh(branchGeometry,bark,broadTrees.length*2);broadTrees.forEach((tree,i)=>{const y=groundHeight(tree.x,tree.z),height=tree.h+(tree.swing?3.5:0);for(let j=0;j<2;j++){const angle=tree.angle+j*2.8,start=new THREE.Vector3(tree.x,y+height*.7,tree.z),end=new THREE.Vector3(tree.x+Math.cos(angle)*2.6,y+height+.4,tree.z+Math.sin(angle)*2.6),direction=end.clone().sub(start);pose.position.copy(start).add(end).multiplyScalar(.5);pose.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),direction.clone().normalize());pose.scale.set(1,direction.length(),1);pose.updateMatrix();branches.setMatrixAt(i*2+j,pose.matrix);}});
+  broadTrees.forEach((tree,i)=>{const y=groundHeight(tree.x,tree.z),w=9+rand(i+81)*5;for(let j=0;j<3;j++){pose.position.set(tree.x,y+tree.h+(tree.swing?SWING_TREE.canopyExtension:.8),tree.z);if(tree.swing){pose.position.y-=.4+j*.08;pose.rotation.set(-Math.PI/2,0,tree.angle+j*Math.PI/3);pose.scale.set(w,w*.8,1);}else{pose.rotation.set(0,tree.angle+j*Math.PI/3,0);pose.scale.set(w,w*.48,1);}pose.updateMatrix();canopyMesh.setMatrixAt(i*3+j,pose.matrix);}});
+  const branches=new THREE.InstancedMesh(branchGeometry,bark,broadTrees.length*2);broadTrees.forEach((tree,i)=>{const y=groundHeight(tree.x,tree.z),height=tree.h+(tree.swing?SWING_TREE.canopyExtension:0);for(let j=0;j<2;j++){const angle=tree.angle+j*2.8,start=new THREE.Vector3(tree.x,y+height*.7,tree.z),end=new THREE.Vector3(tree.x+Math.cos(angle)*2.6,y+height+.4,tree.z+Math.sin(angle)*2.6),direction=end.clone().sub(start);pose.position.copy(start).add(end).multiplyScalar(.5);pose.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),direction.clone().normalize());pose.scale.set(1,direction.length(),1);pose.updateMatrix();branches.setMatrixAt(i*2+j,pose.matrix);}});
   for(const mesh of [trunkMesh,leafMesh,canopyMesh,branches])if(mesh.count){mesh.instanceMatrix.needsUpdate=true;mesh.computeBoundingSphere();scene.add(mesh);}
  }
  // Layered understory turns the trunks into a living forest.

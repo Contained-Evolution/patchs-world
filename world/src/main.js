@@ -21,7 +21,7 @@ import { ISLAND, RIVER, riverPoint, riverSpeed } from './terrain.js';
 import { pondSwings, pondSwingPose, nextPondSwing } from './pond-swings.js';
 import { travelFraction } from './travel-progress.js';
 import { adaptiveQuality } from './render-quality.js';
-import { places, groundHeight, walkRoute, swingLoop, traversalLoop, holdFor, trees, statusText, isLocalPreview, safePatch } from './world-state.js';
+import { places, groundHeight, walkRoute, swingLoop, traversalLoop, holdFor, ROPE_TREES, trees, statusText, isLocalPreview, safePatch } from './world-state.js';
 import { hasAnimationRoom, patchRoute, roamPlan, ROAM, seedFrom, rng, swimPlan } from './patch-motion.js';
 import { clearGroundLine, inPond, nearestWalkable, pondAccess } from './island-collision.js';
 import { CLIPS } from './patch-clips.js';
@@ -321,7 +321,7 @@ function startClimb(place,key,since,until,spirit,weather){
   const seed=seedFrom(key),random=rng(seed),duration=Math.max(60,(Date.parse(until)-Date.parse(since))/1000||600);
   if(place==='lookout'){const line=wallHold(CLIMB_WALLS[0]),plan=climbPlan(line,random,{duration,fromGround:true,spirit,weather});return {key,line,plan,start:line.stand(plan.segments[0].s),joined:false};}
   // A rope is held facing its tree.
-  const hold=holdFor([1,9,8][seed%3]),[gx,,gz]=hold.grip,[tx,tz]=trees[hold.index];
+  const hold=holdFor([...ROPE_TREES][seed%ROPE_TREES.size]),[gx,,gz]=hold.grip,[tx,tz]=trees[hold.index];
   const line=holdLine(hold,Math.atan2(tx-gx,tz-gz)),plan=climbPlan(line,random,{duration,fromGround:false,spirit,weather});
   return {key,line,plan,start:[gx,gz],joined:true};
 }
