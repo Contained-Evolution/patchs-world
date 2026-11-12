@@ -328,12 +328,12 @@ export class PatchWorld extends DurableObject {
     return result?.thought;
   }
 
-  async deliverLetter(who, raw, exemptFromDailyLimit) {
+  async sendLetter(who, raw) {
     const now = Date.now(), text = cleanText(raw?.text), lookup = raw?.lookup === true;
     if (lookup && (text.length > 120 || /https?:|www\.|[\r\n]/i.test(text))) return { status: 400, error: 'Write a lookup question of up to 120 characters without links.' };
     if (await this.isBlocked(who)) return { status: 403, error: "You can't write to Patch." };
     const unreadCount = ((await this.ctx.storage.get('unread')) || []).length;
-    const problem = checkLetter(text, await this.limits(who, now), unreadCount, { exemptFromDailyLimit });
+    const problem = checkLetter(text, await this.limits(who, now), unreadCount, { exemptFromDailyLimit: who.admin });
     if (problem) return { status: /a day|full/.test(problem) ? 429 : 400, error: problem };
     let refused;
     try { refused = await this.filter(text, now); } catch { return { status: 503, error: "Patch can't get mail right now. Try again soon." }; }
@@ -467,7 +467,7 @@ async function visitorApi(request, env, url, path) {
   if (!who) return json({ error: 'Sign in to talk to Patch.', signIn: SIGN_IN }, 401);
   const send = ({ status, ...body }) => json(body, status);
   if (path === '/api/letters' && request.method === 'GET') return json({ letters: await patch.letters(who) });
-  if (path === '/api/letters' && request.method === 'POST') return send(await patch.deliverLetter(who, await readJson(request), who.admin === true));
+  if (path === '/api/letters' && request.method === 'POST') return send(await patch.sendLetter(who, await readJson(request)));
   if (path === '/api/gifts' && request.method === 'GET') return json(await patch.gifts(who));
   if (path === '/api/gifts' && request.method === 'POST') return send(await patch.sendGift(who, (await readJson(request))?.kind));
   if (path === '/api/board' && request.method === 'POST') return send(await patch.sendPost(who, await readText(request)));
