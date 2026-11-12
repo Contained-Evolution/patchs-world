@@ -6,7 +6,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { CLIPS } from './patch-clips.js';
 
 const $ = s => document.querySelector(s);
-const GROUPS = ['Ground','Foraging','Devices','Water','Sleep','Trees','Free hang','Braced hang'];
+const GROUPS = ['Ground','Sitting','Feelings','Dancing','Archery','Foraging','Devices','Water','Sleep','Trees','Free hang','Braced hang'];
 
 export function setupAnimationViewer() {
   const root=$('#animations'),canvas=$('#locker-canvas'),list=$('#locker-list'),name=$('#locker-name'),use=$('#locker-use'),meta=$('#locker-meta');

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { advance, newBody, view, isNight, localMinutes, choose, take, leave, DAD_STONE } from '../body.mjs';
+import { advance, newBody, view, sleepiness, restMinutes, localMinutes, choose, take, leave, DAD_STONE } from '../body.mjs';
 import { weatherAt } from '../senses.mjs';
 import { ACTIONS, PLACES, NEEDS } from '../../shared/state.js';
 
@@ -33,14 +33,52 @@ test('a full day only uses known actions and places, and needs stay in range', (
   assert.ok(seen.size >= 6, [...seen].join(','));
 });
 
-test('he is asleep in his hammock in the middle of the night', () => {
-  const body = newBody(MORNING, 3);
+test('nobody sends him to bed: left to his needs he sleeps when he is tired, at any hour', () => {
   const night = MORNING + 17 * HOUR; // 3:00 the next morning
-  for (let t = MORNING; t <= night; t += 10 * 60000) advance(body, t);
-  assert.ok(isNight(night));
-  const { patch } = view(body, night);
-  assert.equal(patch.action, 'sleep');
-  assert.equal(patch.place, 'hammock');
+  assert.ok(sleepiness(night) > 0.99 && sleepiness(night + 12 * HOUR) < 0.01);
+  // Rested in the small hours, he stays up.
+  const rested = newBody(night, 3);
+  rested.needs.energy = 0.95;
+  for (let t = night; t <= night + 2 * HOUR; t += 5 * 60000) { advance(rested, t); assert.notEqual(view(rested, t).patch.action, 'sleep'); }
+  // Worn out at noon, he goes to his hammock and naps, then gets up again.
+  const noon = MORNING + 2 * HOUR, tired = newBody(noon, 4);
+  Object.assign(tired.needs, { energy: 0.08, hunger: 0.9 });
+  advance(tired, noon + 30 * 60000);
+  const nap = view(tired, noon + 30 * 60000).patch;
+  assert.deepEqual([nap.action, nap.place], ['sleep', 'hammock']);
+  assert.ok(tired.activity.end - tired.activity.start < 4 * HOUR, 'a daytime sleep is a nap');
+  advance(tired, noon + 5 * HOUR);
+  assert.notEqual(view(tired, noon + 5 * HOUR).patch.action, 'sleep');
+  // Worn out at night, he sleeps until he is rested.
+  const late = newBody(night, 5);
+  Object.assign(late.needs, { energy: 0.2, hunger: 0.9 });
+  advance(late, night + 30 * 60000);
+  assert.equal(late.activity.action, 'sleep');
+  assert.ok(late.activity.end - late.activity.start > 6 * HOUR);
+  assert.equal(restMinutes({ energy: 0.25 }), 500);
+});
+
+test('over a week of quiet his sleep adds up to a real rest, mostly at night', () => {
+  const body = newBody(MORNING, 21);
+  let asleep = 0, atNight = 0;
+  for (let t = MORNING; t < MORNING + 7 * 24 * HOUR; t += 5 * 60000) {
+    advance(body, t);
+    if (view(body, t).patch.action !== 'sleep') continue;
+    asleep += 5;
+    if (sleepiness(t) > 0.5) atNight += 5;
+  }
+  const hours = asleep / 60 / 7;
+  assert.ok(hours > 5 && hours < 12, `${hours} hours of sleep a day`);
+  assert.ok(atNight / asleep > 0.6, `${atNight / asleep} of his sleep at night`);
+});
+
+test('his spirit comes from how he felt when the activity began', () => {
+  const body = newBody(MORNING, 8), spirit = needs => view({ ...body, needs: { ...body.needs, ...needs } }, MORNING).patch.spirit;
+  const full = { hunger: 0.9, energy: 0.9, fun: 0.9, comfort: 0.9, social: 0.9 };
+  assert.equal(spirit(full), 'happy');
+  assert.equal(spirit({ ...full, energy: 0.2 }), 'tired');
+  assert.equal(spirit({ ...full, hunger: 0.1 }), 'grumpy');
+  assert.equal(spirit({ ...full, fun: 0.4, social: 0.4 }), 'okay');
 });
 
 test('he never starves over a week of quiet', () => {

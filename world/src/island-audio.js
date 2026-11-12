@@ -1,13 +1,13 @@
 import { ACTIONS, GIFT_SOUND_DURATION } from '../../shared/state.js';
 import { ISLAND, places, pondFraction, shoreFraction, streamInfo, TIDE_POOLS } from './terrain.js';
 
-const steps = new Set(['walk', 'run', 'walk-texting', 'carry-walk', 'carry-jog', 'carry-run']);
+const steps = new Set(['walk', 'run', 'happy-walk', 'walk-texting', 'carry-walk', 'carry-jog', 'carry-run']);
 const sleep = new Set(['sleep', 'sleep-lay', 'sleep-roll']);
 const actionSounds = {
   idle: 'breath', think: 'breath', look: 'rustle', wave: 'rustle', explore: 'rustle',
   walk: 'step', run: 'step', climb: 'grip', swing: 'rope', swim: 'splash',
   fish: 'cast', eat: 'bite', sit: 'seat', sleep: 'cloth',
-  write: 'tap', research: 'tap', computer: 'key', 'watch-sky': 'seat'
+  write: 'tap', research: 'tap', computer: 'key', 'watch-sky': 'seat', archery: 'rustle', dance: 'rustle'
 };
 const clipSounds = {
   'sleep-roll': 'cloth', 'sit-to-type': 'seat', 'type-to-sit': 'seat',
@@ -15,13 +15,13 @@ const clipSounds = {
   'walk-texting': 'tap', 'hang-drop': 'rustle', 'braced-drop': 'rustle', yawn: 'breath',
   'open-lid': 'lid', 'carry-stop': 'seat', 'swing-start': 'rope',
   'swing-land': 'land', 'rope-to-ground': 'land', 'climb-top': 'grip',
-  'jump-down': 'rustle', jump: 'rustle', fall: 'rustle'
+  'jump-down': 'rustle', jump: 'rustle', fall: 'rustle', flip: 'rustle', backflip: 'rustle', 'bow-draw': 'rope', 'tree-climb': 'grip'
 };
 const repeats = {
   typing: [.18, 'key'], 'tablet-stand': [1.1, 'tap'],
   swim: [.68, 'splash'], tread: [1.55, 'splash'],
   'rope-climb': [.52, 'rope'], 'rope-swing': [.65, 'rope'], 'rope-hang': [1.5, 'rope'], swing: [.75, 'rope'],
-  hang: [1.5, 'grip']
+  hang: [1.5, 'grip'], 'tree-climb': [.6, 'grip']
 };
 
 // Each burst describes a filtered noise band and its envelope.

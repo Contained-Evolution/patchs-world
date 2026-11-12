@@ -16,7 +16,16 @@ CLIPS = {'Breathing Idle': 'idle', 'Walking': 'walk', 'Running': 'run', 'Hanging
          'Climbing To Top': 'climb-top', 'Yawn': 'yawn', 'Jumping Down': 'jump-down', 'Jump': 'jump',
          'Opening A Lid': 'open-lid', 'Falling': 'fall', 'Picking Up': 'pick-up',
          'Walking carry box': 'carry-walk', 'running carry box': 'carry-run',
-         'jogging carry box': 'carry-jog', 'Walking carry box and stop': 'carry-stop'}
+         'jogging carry box': 'carry-jog', 'Walking carry box and stop': 'carry-stop',
+         'Happy Idle': 'happy-idle', 'Happy Walk': 'happy-walk', 'Angry': 'angry', 'Angry Point': 'angry-point',
+         'Climbing tree': 'tree-climb', 'archery Idle 01': 'bow-idle', 'archery Idle 03 Examine': 'bow-examine',
+         'archery Aim Idle 02 Looking': 'bow-look', 'Standing Draw Arrow': 'bow-draw', 'Standing Aim Overdraw': 'bow-aim',
+         'Happy Idle 2': 'happy-idle-2', 'Happy arm swing': 'happy-swing', 'Excited': 'excited', 'Sitting Victory': 'sit-cheer',
+         'Running Forward Flip': 'flip', 'Dancing': 'dance', 'Arms Hip Hop Dance': 'dance-arms', 'Hip Hop Dancing': 'dance-hip-hop',
+         'Hip Hop Dancing 2': 'dance-hip-hop-2', 'Hip Hop Dancing (3)': 'dance-hip-hop-3', 'Swing Dancing': 'dance-swing',
+         'Swing Dancing 2': 'dance-swing-2', 'Backflip': 'backflip', 'stand to sit': 'stand-to-sit', 'sitting to scared': 'sit-scared',
+         'Seated Idle': 'seat-idle', 'Sitting Idle 2': 'sit-idle-2', 'Sitting Idle (3)': 'sit-idle-3', 'Male Laying Pose': 'lay-pose',
+         'Laying': 'lay', 'sky watching': 'sky-watch', 'Laying Sleeping 2': 'sleep-lay-2'}
 MESHY = {'Idle_03': 'look-around', 'Swing_on_Rope_to_Ground': 'rope-to-ground'}
 bpy.ops.wm.read_factory_settings(use_empty=True)
 bpy.ops.import_scene.fbx(filepath=os.path.join(art, 'Patch.fbx'))

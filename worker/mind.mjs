@@ -6,7 +6,7 @@
 import { CHILDHOOD, PERSONA, LIFE_STORY } from './persona.mjs';
 import { perceive, nextWeather } from './senses.mjs';
 import { lightUp, recordRecall, normalTags, strengthOf, tagsIn, conceptGraph } from './memory-graph.mjs';
-import { CHOICES, WHERE, PLACES_KNOWN, TIME_ZONE, localMinutes, choose, travelMinutes, carrying, take, leave, didSince } from './body.mjs';
+import { CHOICES, WHERE, PLACES_KNOWN, TIME_ZONE, localMinutes, choose, travelMinutes, carrying, take, leave, didSince, restMinutes } from './body.mjs';
 import { giftNotes } from './gifts.mjs';
 import { STARTING_CATEGORIES } from '../shared/memory.js';
 
@@ -93,7 +93,7 @@ const PLACE_TAGS = {
 };
 const ACTION_TAGS = {
   eat: ['food'], fish: ['fishing'], swim: ['swimming'], swing: ['swinging'], climb: ['climbing'], sleep: ['sleeping'], explore: ['exploring', 'adventure'],
-  'watch-sky': ['sky', 'clouds', 'stars'], computer: ['computer', 'letters', 'friends'], research: ['learning', 'internet', 'wondering'], write: ['writing', 'stories'], think: ['wondering'], look: ['big world'], sit: ['quiet'],
+  'watch-sky': ['sky', 'clouds', 'stars'], computer: ['computer', 'letters', 'friends'], research: ['learning', 'internet', 'wondering'], write: ['writing', 'stories'], think: ['wondering'], look: ['big world'], sit: ['quiet'], archery: ['games', 'aiming'], dance: ['dancing', 'fun'],
 };
 export function cuesFor(body, mind, now) {
   const { activity, needs = {} } = body, cues = [...perceive(activity.target || activity.place, now).tags, ...(PLACE_TAGS[activity.target || activity.place] || []), ...(ACTION_TAGS[activity.action] || []), ...(mind.noticed || [])];
@@ -102,7 +102,7 @@ export function cuesFor(body, mind, now) {
   if (needs.social < 0.35) cues.push('missing family', 'family', 'friends');
   if (needs.fun < 0.3) cues.push('games', 'fun');
   const minutes = localMinutes(now);
-  if (minutes >= 20 * 60 || minutes < 6 * 60) cues.push('stars', 'moon', 'goodnight');
+  if (minutes >= 20 * 60 || minutes < 6 * 60) cues.push('stars', 'moon');
   return cues;
 }
 
@@ -135,7 +135,13 @@ function choicesText(body) {
   const here = body.activity.target || body.activity.place;
   const where = action => WHERE[action] ? ` (only at ${WHERE[action].join(', ')}${action === 'eat' ? ', or anywhere with food you carry' : ''})` : '';
   return `Things you can do: ${CHOICES.map(action => action + where(action)).join('; ')}.
-Places, and minutes to get there from here: ${PLACES_KNOWN.map(place => `${place} ${place === here ? '(here)' : travelMinutes(here, place)}`).join(', ')}.`;
+Places, and minutes to get there from here: ${PLACES_KNOWN.map(place => `${place} ${place === here ? '(here)' : travelMinutes(here, place)}`).join(', ')}.
+${sleepLine(body)}`;
+}
+// Sleep is his own to choose. He is told only how much rest his body is asking for.
+function sleepLine(body) {
+  const hours = Math.round(restMinutes(body.needs) / 30) / 2;
+  return `Nobody sets your bedtime. Sleep or nap whenever you feel like it, day or night, anywhere you like, for 10 to 600 minutes.${hours >= 1 ? ` Right now a full rest would take about ${hours} hours.` : ' Right now you feel rested.'}`;
 }
 
 // His daily internet allowance, and what his tablet and coconut computer tell him: what they can do, how much internet is left, and whether mail is waiting.

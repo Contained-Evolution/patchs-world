@@ -9,7 +9,7 @@ export const PLACES = ['hammock', 'shelves', 'computer', 'pond', 'banana-grove',
 // What Patch can be doing. Each maps to an animation or procedural motion in the browser.
 // computer: at the coconut computer, reading and answering letters and searching the web.
 // research and write: on his tablet anywhere (searching the web; writing his journal and memories), or typing when at the computer.
-export const ACTIONS = ['idle', 'walk', 'run', 'climb', 'swing', 'swim', 'fish', 'eat', 'sit', 'sleep', 'think', 'write', 'research', 'computer', 'wave', 'look', 'explore', 'watch-sky'];
+export const ACTIONS = ['idle', 'walk', 'run', 'climb', 'swing', 'swim', 'fish', 'eat', 'sit', 'sleep', 'think', 'write', 'research', 'computer', 'wave', 'look', 'explore', 'watch-sky', 'archery', 'dance'];
 
 export const GIFT_SOUND_DURATION = 8000;
 
@@ -23,6 +23,7 @@ export const sampleState = {
     target: null, // a place ID he is heading to while walking, running or swinging
     needs: { hunger: 0.4, energy: 0.8, fun: 0.6, comfort: 0.7, social: 0.3 },
     mood: 'curious',
+    spirit: 'okay', // how he carries himself through this activity: okay | happy | tired | grumpy
     says: null, // a short line he says out loud, or null
     speechUntil: null, // expiry for the spoken line
     speech: null, // the line being said or about to start: { text, at, until, voice } (voice: recording id, or null)

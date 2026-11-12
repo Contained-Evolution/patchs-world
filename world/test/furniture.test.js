@@ -64,7 +64,7 @@ test('with his tablet he pulls it out once, then wanders slowly, reading as he g
     // Once he has walked with it, he never pulls it out again.
     if (pose.clip === 'tablet-stand' && s > clip.duration && [...clips].includes('walk-texting')) assert.ok(pose.time >= clip.held);
   }
-  assert.ok([...clips].every(name => name === 'tablet-stand' || name === 'walk-texting'));
+  assert.ok([...clips].every(name => ['tablet-stand', 'walk-texting', 'texting'].includes(name)));
 });
 
 test('status tells computer, tablet and journal work apart', () => {

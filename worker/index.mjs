@@ -423,7 +423,7 @@ main{max-width:520px;padding:24px}h1{font-weight:normal;font-size:34px;margin:0 
 <p id="now">Checking on Patch…</p>
 <small>His island is still being drawn. He's already living there.</small>
 </main><script>
-const words={eat:'eating',fish:'fishing',swim:'swimming',swing:'swinging through the trees',climb:'climbing',sit:'sitting',look:'looking out over the water',computer:'at his coconut computer',research:'looking something up',write:'writing in his journal',think:'thinking',sleep:'asleep',walk:'walking',run:'running',idle:'looking around',explore:'exploring','watch-sky':'watching the sky'};
+const words={eat:'eating',fish:'fishing',swim:'swimming',swing:'swinging through the trees',climb:'climbing',sit:'sitting',look:'looking out over the water',computer:'at his coconut computer',research:'looking something up',write:'writing in his journal',think:'thinking',sleep:'asleep',walk:'walking',run:'running',idle:'looking around',explore:'exploring','watch-sky':'watching the sky',archery:'practising with his bow',dance:'dancing'};
 const places={hammock:'by his hammock',shelves:'by his rope shelves',computer:'at camp',pond:'at the pond','banana-grove':'in the banana grove','tall-trees':'in the tall trees',beach:'on the beach',lookout:'at the lookout','tide-pools':'at the tide pools',meadow:'in the meadow',cave:'at the cave'};
 async function tick(){try{const s=await (await fetch('/api/state',{cache:'no-store'})).json();const p=s.patch;
 const targets={hammock:'to his hammock',shelves:'to his rope shelves',computer:'to his coconut computer',pond:'to the pond','banana-grove':'to the banana grove','tall-trees':'to the tall trees',beach:'to the beach',lookout:'to the lookout','tide-pools':'to the tide pools',meadow:'to the meadow',cave:'to the cave'};
