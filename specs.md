@@ -26,4 +26,4 @@
 - Static assets: `world/dist`, served at the root. [prepare.mjs](worker/scripts/prepare.mjs) builds the world if present and adds the Pangolin font (OFL).
 - Tests: `npm test` in `world/` and `worker/`. Deploy: `npm run deploy` in `worker/`. If a new Durable Object method answers "RPC receiver does not implement the method" after a deploy, deploy again.
 
-- Owner publishing: [social.mjs](worker/social.mjs) provides the journal's review and publication workflow. The owner account approves each platform separately. X uses OAuth with PATCH_X_CLIENT_ID and the /api/social/x/callback redirect. Facebook and Instagram use the PATCH_META_PAGE_TOKEN secret for the linked Page. The Durable Object stores platform submission receipts.
+- Owner publishing: [social.mjs](worker/social.mjs) provides the journal's review and publication workflow. The owner account approves each platform separately. X uses OAuth with PATCH_X_CLIENT_ID and the /api/social/x/callback redirect. Facebook and Instagram use the PATCH_META_PAGE_TOKEN secret for the linked Page. The SocialPublisher Durable Object stores platform submission receipts.

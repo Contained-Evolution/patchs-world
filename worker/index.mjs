@@ -40,12 +40,16 @@ const diaryKey = entry => { const m = localMinutes(entry.at); return `diary:${en
 
 const newId = now => `${now.toString(36)}${crypto.getRandomValues(new Uint32Array(1))[0].toString(36)}`;
 
-// The one Patch. Every visitor reads the same body; one alarm runs his mind.
-export class PatchWorld extends DurableObject {
+export class SocialPublisher extends DurableObject {
+  async socialReceipt(platform) {
+    if (platform === 'facebook' && this.env.PATCH_CRAB_FACEBOOK_PUBLISHED === 'true') return { state: 'published' };
+    return this.ctx.storage.get(receiptKey(platform));
+  }
+
   async socialDrafts() {
     return Promise.all(Object.entries(drafts).map(async ([platform, draft]) => ({
       platform, ...draft, ready: configured(this.env, platform),
-      receipt: await this.ctx.storage.get(receiptKey(platform)),
+      receipt: await this.socialReceipt(platform),
     })));
   }
 
@@ -55,7 +59,7 @@ export class PatchWorld extends DurableObject {
     }
     const storage = this.ctx.storage;
     try {
-      const receipt = await storage.get(receiptKey(platform));
+      const receipt = await this.socialReceipt(platform);
       if (receipt) return { status: 409, error: 'This draft already has a submission record.' };
       if (platform === 'x' && !callback) return { status: 200, authorize: await authorizeX(storage, this.env, owner) };
       const headers = platform === 'x' ? await xHeaders(storage, this.env, owner, callback.state, callback.code) : null;
@@ -66,6 +70,10 @@ export class PatchWorld extends DurableObject {
     }
   }
 
+}
+
+// The one Patch. Every visitor reads the same body; one alarm runs his mind.
+export class PatchWorld extends DurableObject {
   // Once, when his mind took charge of his day: delete every letter, board post and record of who wrote.
   async freshStart(now) {
     if (this.started || await this.ctx.storage.get('freshStart')) { this.started = true; return; }
@@ -499,12 +507,13 @@ async function visitorApi(request, env, url, path) {
   const send = ({ status, ...body }) => json(body, status);
   if (path.startsWith('/api/social/')) {
     if (!who.admin) return json({ error: 'Owner access required.' }, 403);
-    if (path === '/api/social/drafts' && request.method === 'GET') return json(await patch.socialDrafts());
+    const publisher = env.SOCIAL_PUBLISHER.get(env.SOCIAL_PUBLISHER.idFromName('patch'));
+    if (path === '/api/social/drafts' && request.method === 'GET') return json(await publisher.socialDrafts());
     if (path === '/api/social/publish' && request.method === 'POST') {
-      return send(await patch.publishDraft(who.id, (await readJson(request))?.platform));
+      return send(await publisher.publishDraft(who.id, (await readJson(request))?.platform));
     }
     if (path === '/api/social/x/callback' && request.method === 'GET') {
-      const result = await patch.publishDraft(who.id, 'x', {
+      const result = await publisher.publishDraft(who.id, 'x', {
         state: url.searchParams.get('state'), code: url.searchParams.get('code'),
       });
       const query = result.error ? '?social=' + encodeURIComponent(result.error) : '';
