@@ -16,7 +16,7 @@ import { setupCommunity } from './community.js';
 import { setupNotifications } from './notifications.js';
 import { registerApp } from './app.js';
 import { setupInstall } from './install.js';
-import { ISLAND } from './terrain.js';
+import { ISLAND, RIVER, riverPoint, riverSpeed } from './terrain.js';
 import { travelFraction } from './travel-progress.js';
 import { adaptiveQuality } from './render-quality.js';
 import { places, groundHeight, walkRoute, swingLoop, traversalLoop, holdFor, trees, statusText, isLocalPreview, safePatch } from './world-state.js';
@@ -251,6 +251,42 @@ let state = null, hasLiveState = false, demo = false, journey = null, serverOffs
 let groundApproach = null, groundActivity = null, inFurniture = false, swimAccess = null, enteringPond = false, beats = null, satAt = 0, seatShift = 0;
 const GROUND_ARRIVAL_DISTANCE = .15;
 const SWIM_ARRIVAL_DISTANCE = .6;
+const riverEntry = riverPoint(RIVER.entry);
+const entryBank = riverPoint(RIVER.entry,-1.42);
+const riverBank = [entryBank.x,entryBank.z];
+let riverRide = null;
+
+function followRiver(dt) {
+ const here=[patch.position.x,patch.position.z];
+ if(!riverRide.boarding){
+  if(Math.hypot(here[0]-riverBank[0],here[1]-riverBank[1])>GROUND_ARRIVAL_DISTANCE){
+   const walking=approachGround(riverBank,dt);
+   patch.position.y=groundHeight(patch.position.x,patch.position.z);
+   playClip(walking?'walk':'idle');
+   return;
+  }
+  riverRide.boarding=true;
+ }
+ if(riverRide.station===null){
+  const dx=riverEntry.x-here[0],dz=riverEntry.z-here[1],distance=Math.hypot(dx,dz);
+  const step=distance>0?Math.min(1,dt*1.9/distance):1;
+  const x=here[0]+dx*step,z=here[1]+dz*step;
+  const bed=groundHeight(x,z);
+  patch.position.set(x,Math.max(bed,riverEntry.y-.35),z);
+  face(Math.atan2(dx,dz),dt);
+  playClip(bed>riverEntry.y-.35?'walk':'swim');
+  if(step===1)riverRide.station=RIVER.entry;
+  return;
+ }
+ const s=Math.min(RIVER.length,riverRide.station+dt*riverSpeed(riverRide.station));
+ riverRide.station=s;
+ const current=riverPoint(s,.08*Math.sin((s-RIVER.entry)*.32));
+ const falling=s>=RIVER.lip&&s<RIVER.foot;
+ patch.position.set(current.x,current.y+(falling?.18:-.35),current.z);
+ face(current.heading,dt);
+ playClip(falling?'fall':'swim');
+ if(s===RIVER.length)riverRide=null;
+}
 function approachGround(goal, dt) {
   const here = [patch.position.x, patch.position.z];
   const change = groundApproach ? Math.hypot(goal[0]-groundApproach.goal[0],goal[1]-groundApproach.goal[1]) : Infinity;
@@ -363,7 +399,7 @@ async function poll() {
     // A poll can arrive after an activity ended while this tab was paused. Place
     // Patch at the server's destination instead of replaying an obsolete journey.
     const [px,pz]=places[next.patch.place];
-    if (!hasLiveState || (previous && previous.since!==next.patch.since && !next.patch.target && Math.hypot(patch.position.x-px,patch.position.z-pz)>60)) {
+    if (!hasLiveState || (!riverRide?.boarding && previous && previous.since!==next.patch.since && !next.patch.target && Math.hypot(patch.position.x-px,patch.position.z-pz)>60)) {
       const seat = next.patch.target ? null : seatFor(next.patch.action, next.patch.place);
       const spawn = seat ? [seat.x, seat.z] : nearestWalkable(px,pz,solids);
       if (spawn) patch.position.set(spawn[0],groundHeight(...spawn),spawn[1]);
@@ -464,9 +500,16 @@ const seat=target?null:seatFor(action,place),dest=seat?[seat.x,seat.z]:climb?cli
 const travel = !!(target && places[target] && ['walk','run','swing'].includes(action));
 const swinging = action === 'swing';
 const key = `${action}|${place}|${target||''}|${since||''}`;
-if(groundActivity!==key){groundActivity=key;groundApproach=null;inFurniture=false;swimAccess=null;enteringPond=false;}
-const leavingPond=!sleeping&&!lap&&(swimAccess||inPond(patch.position.x,patch.position.z));
-if(leavingPond){
+if(groundActivity!==key){
+ groundActivity=key;groundApproach=null;inFurniture=false;swimAccess=null;enteringPond=false;
+ if(!riverRide?.boarding)riverRide=lap&&!inPond(patch.position.x,patch.position.z)?{boarding:false,station:null}:null;
+}
+const leavingPond=!lap&&(swimAccess||inPond(patch.position.x,patch.position.z));
+if(riverRide&&!ropeExit){
+ journey=null;descent=null;wasAirborne=false;
+ patch.rotation.z=0;
+ followRiver(dt);
+} else if(leavingPond){
  const here=[patch.position.x,patch.position.z];
  swimAccess ??= pondAccess(here,solids);
  if(swimAccess){

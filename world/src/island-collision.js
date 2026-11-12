@@ -3,7 +3,7 @@ import { forest } from './forest.js';
 import { hammock, hammockSupports } from './hammock.js';
 import { CLIMB_WALLS } from './climbing.js';
 import { COMPUTER_DESK_DISTANCE, COMPUTER_TENT } from './furniture.js';
-import { groundHeight, ISLAND, places, pondFraction, shoreFraction, walkShoreLimit, streamInfo, streamHalfWidth, TIDE_POOLS, tideWaterHeight } from './terrain.js';
+import { groundHeight, ISLAND, places, pondFraction, shoreFraction, walkShoreLimit, streamInfo, TIDE_POOLS, tideWaterHeight } from './terrain.js';
 
 export const WALK_RADIUS = .3;
 const CELL_SIZE = 8;
@@ -130,7 +130,7 @@ export function dryGround(x, z, swimming = false) {
   if (shore > walkShoreLimit || (shore > .88 && groundHeight(x, z) <= ISLAND.ocean)) return false;
   if (!swimming && inPond(x, z)) return false;
   const stream = streamInfo(x, z);
-  if (stream.distance < streamHalfWidth(stream.segment, stream.t) && groundHeight(x, z) < stream.level) return false;
+  if (!swimming && stream.distance < stream.width*1.17 && groundHeight(x, z) < stream.level) return false;
   return !TIDE_POOLS.some(pool => {
     const [px, pz, rx, rz] = pool;
     return Math.hypot((x - px) / rx, (z - pz) / rz) < .8 && groundHeight(x, z) < tideWaterHeight(pool);
