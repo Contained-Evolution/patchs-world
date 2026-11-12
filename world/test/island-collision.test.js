@@ -15,20 +15,31 @@ import { walkRoute } from '../src/world-state.js';
 
 test('rendered island solids block both walkers and all fruit trees have a reachable picking spot', t => {
   const gradient = { addColorStop() {} };
-  const context = new Proxy({}, {
-    get: (_, name) => name === 'getImageData' ? () => ({ data: new Uint8ClampedArray(512*512*4) })
+  const canvas = {};
+  const context = new Proxy({ canvas }, {
+    get: (target, name) => name in target ? target[name]
+      : name === 'measureText' ? text => ({ width: text.length * 23 })
+      : name === 'getImageData' ? () => ({ data: new Uint8ClampedArray(512*512*4) })
       : String(name).endsWith('Gradient') ? () => gradient : () => {}
   });
   const previous = globalThis.document;
-  globalThis.document = { baseURI: 'http://localhost/patch/', createElement: () => ({ getContext: () => context }) };
+  canvas.getContext = () => context;
+  globalThis.document = {
+    baseURI: 'http://localhost/patch/',
+    createElement: () => canvas,
+    querySelector: () => ({ textContent: 'Patch’s World' }),
+    querySelectorAll: () => [{ textContent: 'Swim at the swimming hole.' }],
+    fonts: { ready: Promise.resolve(), load: () => Promise.resolve() }
+  };
   t.after(() => { globalThis.document = previous; });
   t.mock.method(THREE.TextureLoader.prototype, 'load', () => new THREE.Texture());
   t.mock.method(GLTFLoader.prototype, 'load', () => {});
   const scene = new THREE.Scene();
   const { walkSolids: solids, block } = createIsland(scene);
   createFoodProps(scene, block);
+  assert.ok(scene.getObjectByName('Camp rules sign'));
 
-  for (const [x,z] of [[6,-1], [hammock.x, hammock.z], ...hammockSupports.map(({ x, z }) => [x, z]), [5.2,2], [278,32], [-145,-205], [FOOD_STORE[0],FOOD_STORE[1]+1.15]]) {
+  for (const [x,z] of [[4.6,5.7], [6,-1], [hammock.x, hammock.z], ...hammockSupports.map(({ x, z }) => [x, z]), [5.2,2], [278,32], [-145,-205], [FOOD_STORE[0],FOOD_STORE[1]+1.15]]) {
     assert.ok(solids.blocks(x,z), `missing solid at ${x},${z}`);
   }
   for (const [x,z] of [[ISLAND.pondX,ISLAND.pondZ], STREAM[2], ...TIDE_POOLS]) {

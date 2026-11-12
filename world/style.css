@@ -280,3 +280,5 @@ nav button[hidden]{display:none}
 .health-gauges .gauge { width:48px; height:48px; border:1px solid #d3d7b4b3; border-radius:9px; background:#143e36f5; box-shadow:0 3px 14px #14362d80; }
 .care-line { padding:8px 12px; border-radius:9px; background:#233f36; color:#f6dbab; }
 @media (max-height:480px) { .hud { left:max(108px, calc(env(safe-area-inset-left) + 104px)); } .stream { height:80px; } }
+
+#camp-rules { display:grid; gap:.8em; max-width:42ch; padding-inline-start:1.35em; line-height:1.45; }

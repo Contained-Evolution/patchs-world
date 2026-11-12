@@ -148,7 +148,7 @@ for (const container of [$('#island-menu'), $('.quick-row')]) container.addEvent
     embeddedPage.title = $('#page-title').textContent = button.title || button.textContent;
     community.showPanel('page', hub);
     embeddedPage.src = `./${page}.html`;
-  } else if (['audio', 'video', 'patch', 'animations'].includes(panel)) {
+  } else if (['audio', 'video', 'patch', 'rules', 'animations'].includes(panel)) {
     community.showPanel(panel, hub);
     if (panel === 'animations') animations.open();
   }

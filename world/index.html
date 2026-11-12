@@ -142,11 +142,22 @@
     <h2 id="animations-title" tabindex="-1">Animations</h2>
     <section id="animations" class="locker" aria-labelledby="locker-title" hidden><canvas id="locker-canvas" aria-label="Patch on a turntable. Drag to turn him, scroll to zoom."></canvas><div class="locker-head"><div><span class="eyebrow">PATCH'S LOCKER</span><h3 id="locker-title">Animation viewer</h3></div><button id="close-animations" type="button" aria-label="Close animations">×</button></div><div class="locker-list" id="locker-list" aria-label="Animations wired to Patch"></div><div class="locker-now" aria-live="polite"><strong id="locker-name">Loading Patch…</strong><span id="locker-use"></span><small id="locker-meta"></small><div class="locker-controls"><button id="locker-play" type="button">Pause</button><input id="locker-scrub" type="range" min="0" max="1000" value="0" aria-label="Position in the animation"><button id="locker-speed" type="button" aria-label="Playback speed">1×</button><button id="locker-spin" type="button" aria-pressed="true">Spin</button></div></div></section>
   </section>
+  <section class="community island-panel" id="rules-panel" aria-labelledby="rules-title" hidden>
+    <h2 id="rules-title" tabindex="-1">Patch&rsquo;s World</h2>
+    <ul id="camp-rules">
+      <li>Stay inside the reef. You could drown in the open ocean. The swimming hole is safe for swimming.</li>
+      <li>A green light on a security camera means someone is watching live.</li>
+      <li>When storms roll in, the cave is a good place to get out of the rain.</li>
+      <li>Give Patch time to answer a letter before sending the same request again.</li>
+      <li>Tell Patch how you feel. You can offer ideas, and he&rsquo;ll decide what he wants to do.</li>
+    </ul>
+  </section>
   <section class="community island-panel" id="more-panel" aria-labelledby="more-title" hidden>
     <h2 id="more-title" tabindex="-1">Menu</h2>
   <nav id="island-menu" aria-label="Island menu">
     <button id="open-video" type="button" data-panel="video">Display</button>
     <button id="open-patch" type="button" data-panel="patch">Patch</button>
+    <button id="open-rules" type="button" data-panel="rules">Camp rules</button>
     <button id="open-board" type="button" data-panel="board">Message board</button>
     <button id="open-gifts" type="button" data-page="gifts">Leave a gift</button>
     <button id="open-animations" type="button" data-panel="animations" hidden>Animations</button>
