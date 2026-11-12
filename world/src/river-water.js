@@ -18,13 +18,14 @@ export function oceanGeometry() {
 
 const splash=riverPoint(RIVER.foot+3);
 
-export function addRiverWater(add, time, daylight) {
+export function addRiverWater(add, time, daylight, rain) {
  const water=new THREE.MeshStandardMaterial({
   color:0x69baaa,roughness:.22,metalness:.1,transparent:true,side:THREE.DoubleSide,depthWrite:false
  });
  water.onBeforeCompile=shader=>{
   shader.uniforms.waterTime=time;
   shader.uniforms.waterLight=daylight;
+  shader.uniforms.waterRain=rain;
   shader.uniforms.riverEnd={value:RIVER.length};
   shader.uniforms.splashCenter={value:new THREE.Vector2(splash.x,splash.z)};
   shader.vertexShader=shader.vertexShader
@@ -39,6 +40,7 @@ waterPosition=position.xz;`);
    .replace('#include <common>',`#include <common>
 uniform float waterTime;
 uniform float waterLight;
+uniform float waterRain;
 uniform vec2 splashCenter;
 uniform float riverEnd;
 varying vec4 water;
@@ -60,16 +62,26 @@ float drop=water.w;
 float detail=1.0-smoothstep(.15,1.9,length(fwidth(waterPosition)));
 vec2 p=mix(waterPosition,vec2(across*9.0,along*.56),river);
 p.y-=waterTime*mix(.35,2.1,river);
+p.x+=waterNoise(p*.36)*.48;
 float eddy=waterNoise(p*.62);
+float impact=0.0;
+if(waterRain>0.0 && detail>.01 && drop<.8){
+ vec2 rainUV=waterPosition*1.65;
+ vec2 cell=floor(rainUV);
+ vec2 offset=vec2(waterHash(cell+11.0),waterHash(cell+27.0));
+ float age=fract(waterTime*1.15+waterHash(cell+51.0));
+ float radius=length(fract(rainUV)-mix(vec2(.28),vec2(.72),offset));
+ float ring=1.0-smoothstep(.011,.042,abs(radius-age*.28));
+ impact=ring*smoothstep(.02,.12,age)*(1.0-age)*waterRain*detail;
+}
 float rippleA=sin(p.x*1.2+p.y*3.0+eddy*6.5);
 float rippleB=sin(p.x*-2.7+p.y*1.3+waterNoise(p*1.1)*5.0);
-normal=normalize(normal+vec3(rippleA,rippleB,0.0)*(.10-.045*drop)*detail);
-float deep=smoothstep(.0,2.65,depth);
-diffuseColor.rgb=mix(vec3(.25,.53,.39),vec3(.022,.24,.23),deep);
-diffuseColor.rgb*=1.0+(rippleA+rippleB)*.028*detail;
-diffuseColor.a=mix(.38,.91,smoothstep(0.0,1.7,depth));
+normal=normalize(normal+vec3(rippleA,rippleB,0.0)*(.047+.068*drop)*detail);
+float deep=1.0-exp(-max(depth,0.0)*.37);
+diffuseColor.rgb=mix(vec3(.16,.29,.26),vec3(.033,.16,.155),deep);
+diffuseColor.a=.045+deep*.40;
 float ribbons=waterNoise(vec2(across*27.0+eddy*.7,p.y*.39));
-float whitewater=smoothstep(.62,.94,ribbons)*(.12+drop*.67)*river;
+float whitewater=smoothstep(.62,.94,ribbons)*(.025+drop*.76)*river;
 float veil=(.21+.61*ribbons)*drop;
 float splashDist=length(waterPosition-splashCenter);
 float spray=(1.0-smoothstep(1.0,10.0,splashDist))*(.20+.80*smoothstep(.37,.72,waterNoise(p*1.5)));
@@ -78,9 +90,14 @@ diffuseColor.rgb=mix(diffuseColor.rgb,vec3(.72,.87,.81),foam);
 diffuseColor.a=max(diffuseColor.a,foam*.94);
 diffuseColor.a*=1.0-smoothstep(riverEnd-7.0,riverEnd,along);`)
    .replace('#include <opaque_fragment>',`float grazing=pow(1.0-clamp(dot(normal,normalize(vViewPosition)),0.0,1.0),4.0);
-outgoingLight=mix(outgoingLight,vec3(.36,.52,.54)*(.14+.86*waterLight),grazing*(1.0-foam)*.66);
+float reflection=grazing*(1.0-foam);
+vec3 reflectedSky=mix(vec3(.035,.058,.10),vec3(.29,.44,.43),waterLight);
+outgoingLight=mix(outgoingLight,reflectedSky,reflection*.86);
+diffuseColor.a=mix(diffuseColor.a,.79,reflection);
+outgoingLight+=vec3(.55,.70,.68)*impact*(.14+waterLight*.23);
+diffuseColor.a+=impact*.17*(1.0-diffuseColor.a);
 outgoingLight+=vec3(.59,.73,.64)*foam*(.12+.18*waterLight);
-outgoingLight+=vec3(.9,.85,.68)*smoothstep(.91,1.0,rippleA)*eddy*detail*waterLight*.09;
+outgoingLight+=vec3(.9,.85,.68)*smoothstep(.91,1.0,rippleA)*eddy*detail*waterLight*.04;
 #include <opaque_fragment>`);
  };
 

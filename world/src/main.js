@@ -439,7 +439,40 @@ const sun=mesh(new THREE.SphereGeometry(18,16,12),new THREE.MeshBasicMaterial({c
 // Soft procedural cloud cards replace the old solid spheres.
 function cloudTexture(){const c=document.createElement('canvas');c.width=512;c.height=256;const g=c.getContext('2d');for(let i=0;i<16;i++){const x=70+(i*71)%380,y=95+Math.sin(i*2.3)*32,r=35+(i%5)*12,grad=g.createRadialGradient(x,y,0,x,y,r);grad.addColorStop(0,'rgba(255,255,255,.15)');grad.addColorStop(1,'rgba(255,255,255,0)');g.fillStyle=grad;g.fillRect(x-r,y-r,r*2,r*2);}return new THREE.CanvasTexture(c);}
 const cloudMap=cloudTexture(),clouds=[];for(let i=0;i<10;i++){const m=new THREE.Sprite(new THREE.SpriteMaterial({map:cloudMap,transparent:true,opacity:.75,depthWrite:false}));m.scale.set(190+i%3*35,90,1);m.position.set(Math.cos(i*2.4)*510,650+i%3*45,Math.sin(i*2.4)*510);scene.add(m);clouds.push(m);}
-const rainGeo=new THREE.BufferGeometry(),drops=[];for(let i=0;i<500;i++)drops.push((Math.random()-.5)*50,Math.random()*35,(Math.random()-.5)*50);rainGeo.setAttribute('position',new THREE.Float32BufferAttribute(drops,3));const rain=new THREE.Points(rainGeo,new THREE.PointsMaterial({color:0xd6edf2,size:.12,transparent:true,opacity:.7}));scene.add(rain);
+const rainGeometry = new THREE.BufferGeometry();
+const dropVertices = [], dropTips = [];
+for (let i = 0; i < 1700; i++) {
+  const drop = [(Math.random()-.5)*54, Math.random()*26, (Math.random()-.5)*54];
+  dropVertices.push(...drop, ...drop);
+  dropTips.push(0, 1);
+}
+rainGeometry.setAttribute('position', new THREE.Float32BufferAttribute(dropVertices, 3));
+rainGeometry.setAttribute('tip', new THREE.Float32BufferAttribute(dropTips, 1));
+const rainTime = { value: 0 }, rainStrength = { value: 0 };
+const rain = new THREE.LineSegments(rainGeometry, new THREE.ShaderMaterial({
+  transparent: true, depthWrite: false,
+  uniforms: { rainTime, rainStrength },
+  vertexShader: `
+    attribute float tip;
+    uniform float rainTime, rainStrength;
+    varying float rainAlpha;
+    void main() {
+      vec3 drop = position;
+      drop.y = mod(drop.y-rainTime,26.0)-11.0;
+      drop.x = mod(drop.x+27.0+rainTime*.15,54.0)-27.0;
+      rainAlpha = (1.0-smoothstep(12.0,26.0,length(drop.xz)))*mix(.12,.62,tip)*rainStrength;
+      drop += tip*vec3(.09,-mix(.37,.74,rainStrength),.028);
+      gl_Position = projectionMatrix*modelViewMatrix*vec4(drop,1.0);
+    }`,
+  fragmentShader: `
+    varying float rainAlpha;
+    void main() {
+      gl_FragColor = vec4(.68,.81,.85,rainAlpha);
+      #include <colorspace_fragment>
+    }`
+}));
+rain.frustumCulled = false;
+scene.add(rain);
 let last=performance.now();const spawn=nearestWalkable(0,0,solids);patch.position.set(spawn[0],groundHeight(...spawn),spawn[1]);
 const findPatch = $('#find-patch'), followPatch = $('#follow-patch');
 const sleepingInHammock = () => inFurniture && state?.patch.action === 'sleep' && state.patch.place === 'hammock';
@@ -480,10 +513,10 @@ function renderAerial(view) {
     sunLight.color.copy(aerialSunColor);
   }
 }
-function renderIsland(now, rainOffset = 0) {
+function renderIsland(now) {
   updateMap(now, camera.position, patch.visible ? patch.position : null, dialog.open && !mapHome.hidden);
   const renderView = view => {
-    if (rain.visible) rain.position.set(view.position.x, view.position.y - rainOffset, view.position.z);
+    if (rain.visible) rain.position.set(view.position.x, view.position.y, view.position.z);
     scenery.setTrackingTarget(patch.visible && !cameraFeeds.open && followPatch.checked ? patch.position : null);
     renderer.render(scene, view);
   };
@@ -783,5 +816,9 @@ sound.update(cameraFeeds.camera || controls.camera, {
   carrying: state.patch.carrying, gift: state.patch.giftSound, speech, now: Date.now() + serverOffset,
   silent: cameraFeeds.open && !cameraFeeds.camera
 });
-scenery.update(reducedMotion.matches?0:dt,daylight);renderIsland(now,reducedMotion.matches?0:t*12%30);}
+const rainAmount = weather==='storm' ? 1 : weather==='rain' ? .58 : 0;
+rainStrength.value = rainAmount;
+if (rain.visible && !reducedMotion.matches) rainTime.value += dt*(10+rainAmount*7);
+scenery.update(reducedMotion.matches?0:dt,daylight,rainAmount);
+renderIsland(now);}
 requestAnimationFrame(frame);addEventListener('resize',()=>{controls.resize(innerWidth/innerHeight);renderer.setSize(innerWidth,innerHeight);});

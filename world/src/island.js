@@ -62,11 +62,11 @@ if(islandBank.x>.001){
  float grit=dot(texture2D(bankStone,xz*1.7).rgb,vec3(.29,.58,.13));
  float variation=dot(texture2D(bankStone,xz*.027).rgb,vec3(.29,.58,.13));
  float seam=sin(islandGround.y*8.4+xz.x*.32+xz.y*.49+variation*15.0);
- vec3 mud=mix(vec3(.086,.045,.025),vec3(.205,.118,.064),islandBank.y)*(.77+variation*.95);
- vec3 gravel=vec3(.30,.234,.16)*(.53+grit*2.2);
- vec3 slate=vec3(.17,.19,.20)*(.54+rock*1.7)*(.67+.33*smoothstep(-.65,-.22,seam));
- float stones=islandBank.y*smoothstep(.05,.23,variation);
- float ledge=smoothstep(.012,.1,groundSlope+variation*.19)*islandBank.y;
+ vec3 mud=mix(vec3(.19,.118,.072),vec3(.23,.139,.081),islandBank.y)*(.77+variation*.95);
+ vec3 gravel=vec3(.38,.29,.20)*(.66+grit*1.4);
+ vec3 slate=vec3(.21,.22,.22)*(.70+rock*1.4)*(.67+.33*smoothstep(-.65,-.22,seam));
+ float stones=smoothstep(.055,.21,variation)*mix(.93,.58,islandBank.y);
+ float ledge=smoothstep(.035,.23,groundSlope+variation*.42);
  vec3 soil=mix(mix(mud,gravel,stones),slate,ledge*.86);
  diffuseColor.rgb=mix(diffuseColor.rgb,soil,smoothstep(0.0,.83,islandBank.x));
 }`);
@@ -85,11 +85,11 @@ if(islandBank.x>.001){
  // Heightfield follows the exact same coast and ground query as movement and Patch.
  for(const geometry of createTerrainTiles())add(geometry,groundMat);
  // Transparent, sunlit moving water uses the same shader idea as Tenari's valley.
- const waterTime={value:0},waterLight={value:1};
+ const waterTime={value:0},waterLight={value:1},waterRain={value:0};
  const water=material(0x317d87,{roughness:.25,metalness:.16,transparent:true,opacity:.83,depthWrite:false,side:THREE.DoubleSide});
  water.onBeforeCompile=shader=>{shader.uniforms.waterTime=waterTime;shader.uniforms.waterLight=waterLight;shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nvarying vec2 wavePosition;').replace('#include <begin_vertex>','#include <begin_vertex>\nwavePosition = (modelMatrix * vec4(position,1.0)).xz;');shader.fragmentShader=shader.fragmentShader.replace('#include <common>','#include <common>\nvarying vec2 wavePosition; uniform float waterTime; uniform float waterLight;').replace('#include <normal_fragment_maps>',`#include <normal_fragment_maps>\nfloat a=sin(wavePosition.x*.24+wavePosition.y*.14+waterTime*.7); float b=sin(wavePosition.x*-.12+wavePosition.y*.34-waterTime*.5); float waveFade=1.0-smoothstep(1.0,5.0,length(fwidth(wavePosition))); a*=waveFade; b*=waveFade; normal=normalize(normal+vec3(a*.09,b*.09,0.0)); diffuseColor.rgb*=.9+.06*a+.04*b;`).replace('#include <opaque_fragment>',`float fresnel=pow(1.0-abs(dot(normal,normalize(vViewPosition))),3.0); outgoingLight=mix(outgoingLight,vec3(.45,.65,.68),fresnel*.5); float shine=pow(max(0.0,sin(wavePosition.x*.12+wavePosition.y*.08+waterTime)*sin(wavePosition.y*.16-wavePosition.x*.03-waterTime*.8)),20.0); outgoingLight+=vec3(.8,.88,.76)*shine*waveFade*waterLight*.08;\n#include <opaque_fragment>`);};
  add(oceanGeometry(),water);
- addRiverWater(add,waterTime,waterLight);
+ addRiverWater(add,waterTime,waterLight,waterRain);
  // Deterministic irregular tropical growth; activity spaces stay clear.
  const trunkGeo=new THREE.CylinderGeometry(.06,.5,1,8),trunks=forest,rocks=[];
  const reserved=isReserved;
@@ -204,6 +204,40 @@ if (trackingPatch) {
   shoreStones.setMatrixAt(shoreStones.count++,pose.matrix);
  }
  shoreStones.instanceMatrix.needsUpdate=true;shoreStones.computeBoundingSphere();scene.add(shoreStones);
+ // Flat bedrock, loose gravel and low ferns frame the inland reach above the falls.
+ const bedStones=new THREE.InstancedMesh(boulder,rock,360);
+ const riverFerns=new THREE.InstancedMesh(blade,foliage,240);
+ bedStones.count=0;
+ riverFerns.count=0;
+ for(let i=0;i<360;i++){
+  const station=THREE.MathUtils.lerp(RIVER.entry+2,RIVER.lip-3,rand(i+4400));
+  const side=i%2===0?-1:1;
+  const slab=i%11===0;
+  const point=riverPoint(station,side*(slab?.54+rand(i+4500)*.57:.24+rand(i+4500)*.88));
+  const height=groundHeight(point.x,point.z);
+  const size=slab?.45+rand(i+4600)*1.1:.045+rand(i+4600)**2*.26;
+  pose.position.set(point.x,height+(slab?.015:.035),point.z);
+  pose.rotation.set(.08,point.heading+rand(i+4700)*1.6,.10);
+  pose.scale.set(size,slab?size*.14:size*.48,size*(slab?1.38:.79));
+  pose.updateMatrix();
+  bedStones.setMatrixAt(bedStones.count++,pose.matrix);
+  if(i%12!==0)continue;
+  const bank=riverPoint(station,(i%24===0?-1:1)*(1.14+rand(i+4800)*.37));
+  const bankHeight=groundHeight(bank.x,bank.z);
+  if(bankHeight<bank.y+.22)continue;
+  for(let leaf=0;leaf<8;leaf++){
+   pose.position.set(bank.x,bankHeight+.08,bank.z);
+   pose.rotation.set(-.32-leaf%3*.14,leaf*Math.PI/4+rand(i+4900),0);
+   pose.scale.setScalar(.25+rand(i+leaf+5100)*.29);
+   pose.updateMatrix();
+   riverFerns.setMatrixAt(riverFerns.count++,pose.matrix);
+  }
+ }
+ for(const mesh of [bedStones,riverFerns]){
+  mesh.instanceMatrix.needsUpdate=true;
+  mesh.computeBoundingSphere();
+  scene.add(mesh);
+ }
  for(let s=RIVER.entry+8;s<RIVER.foot+4;s+=4){
   for(const side of [-1,1]){
    const falls=s>RIVER.lip-8;
@@ -236,5 +270,5 @@ if (trackingPatch) {
  const boulderMesh=new THREE.InstancedMesh(boulder,rock,stones.length);stones.forEach((p,i)=>{pose.position.set(p.x,groundHeight(p.x,p.z)+p.sy*.10,p.z);pose.rotation.set(rand(p.x+p.z)*.4,rand(p.x-p.z)*6,.1);pose.scale.set(p.sx,p.sy,p.sz);pose.updateMatrix();boulderMesh.setMatrixAt(i,pose.matrix);walkSolids.rock(p.x,p.z,boulder,pose.matrix);});boulderMesh.instanceMatrix.needsUpdate=true;boulderMesh.computeBoundingSphere();scene.add(boulderMesh);
  // Chairs, the camp table and the coconut computer.
  const furniture=createFurniture(scene,{bark,wood},block);
- return { walkSolids, block, setRope, pondScenery, setTrackingTarget, setComputer:furniture.setComputer, resetRopes(){for(const i of ROPE_TREES)setRope(i,null);}, update(dt,daylight){pondScenery.update(dt);furniture.update(dt,daylight);waterTime.value+=dt;waterLight.value=daylight;foliage.emissiveIntensity=.05+daylight*.3;} };
+ return { walkSolids, block, setRope, pondScenery, setTrackingTarget, setComputer:furniture.setComputer, resetRopes(){for(const i of ROPE_TREES)setRope(i,null);}, update(dt,daylight,rain=0){waterRain.value=rain;pondScenery.update(dt);furniture.update(dt,daylight);waterTime.value+=dt;waterLight.value=daylight;foliage.emissiveIntensity=.05+daylight*.3;} };
 }
