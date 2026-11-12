@@ -116,7 +116,7 @@ export function setupCommunity(dialog) {
     try { await checkUser(); if(name==='letters') { if(user) await loadLetters(); else {letters=[];renderLetters(); $(dialog,'#letter-text').value=''; $(dialog,'#letter-text').dispatchEvent(new Event('input'));} } else renderBoard(); }
     catch(error) { user=null; if(name==='letters') {letters=[];renderLetters();} else if(boardLoaded) renderBoard(); notice(name,error.message); }
   }
-  for(const name of ['letters','board']) $(dialog,`#open-${name}`).addEventListener('click',()=>openPanel(name,true));
+  for(const name of ['letters','board']) document.querySelector(`#open-${name}`).addEventListener('click',event=>openPanel(name,!!event.currentTarget.closest('#more-panel')));
   dialog.querySelectorAll('.back-map').forEach(button=>button.addEventListener('click',()=>{ sections().forEach(panel=>panel.hidden=true); current=null; const active=button.closest('section').id.replace(/-panel$/,''); home.hidden=false; dialog.scrollTop=0; $(dialog,`#open-${active}`)?.focus(); }));
   dialog.addEventListener('close',()=>{
     if (dialog.open) return;

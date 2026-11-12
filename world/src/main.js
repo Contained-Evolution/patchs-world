@@ -100,10 +100,13 @@ document.addEventListener('keydown', event => {
   healthButton.focus();
 });
 
-function openIslandMenu(panel) {
+function openDialog() {
   setHealthDrop(false);
   controls.pause();
-  dialog.showModal();
+  if (!dialog.open) dialog.showModal();
+}
+function openIslandMenu(panel) {
+  openDialog();
   community.showPanel(panel);
 }
 $('#open-map').onclick = () => openIslandMenu('map');
@@ -118,19 +121,20 @@ $('#back-to-map').onclick = () => {
   community.showPanel('more');
 };
 const embeddedPage = $('#island-page');
-const menu = $('#island-menu');
-menu.addEventListener('click', event => {
+// The menu hub and the quick buttons beside the stream open the same pages; only pages opened from the hub have a Back button to it.
+for (const container of [$('#island-menu'), $('.quick-row')]) container.addEventListener('click', event => {
   const button = event.target.closest('button');
   if (!button) return;
-  const { panel, page } = button.dataset;
+  const { panel, page } = button.dataset, hub = !!button.closest('#more-panel');
   if (animations.isOpen() && panel !== 'animations') animations.close();
+  openDialog();
   if (page) {
     embeddedPage.dataset.page = page;
-    embeddedPage.title = $('#page-title').textContent = button.textContent;
-    community.showPanel('page', true);
+    embeddedPage.title = $('#page-title').textContent = button.title || button.textContent;
+    community.showPanel('page', hub);
     embeddedPage.src = `./${page}.html`;
   } else if (['audio', 'video', 'patch', 'animations'].includes(panel)) {
-    community.showPanel(panel, true);
+    community.showPanel(panel, hub);
     if (panel === 'animations') animations.open();
   }
 });
@@ -274,6 +278,23 @@ function renderCare(p) {
   carrying.hidden = !items.length;
   carrying.textContent = items.length ? `Carrying: ${items.join(', ')}` : '';
 }
+// Everything Patch thinks and says, oldest at the top; the stream follows the newest line unless the visitor scrolled up.
+const stream = $('#stream'), streamSeen = new Set();
+function renderStream(feed) {
+  if (!Array.isArray(feed)) return;
+  const fresh = feed.filter(line => line && typeof line.text === 'string' && !streamSeen.has(`${line.at}|${line.kind}|${line.text}`));
+  if (!fresh.length) return;
+  const follow = stream.scrollHeight - stream.scrollTop - stream.clientHeight < 24;
+  stream.querySelector('.stream-empty')?.remove();
+  for (const line of fresh) {
+    streamSeen.add(`${line.at}|${line.kind}|${line.text}`);
+    const item = document.createElement('p');
+    item.className = `stream-line stream-${line.kind === 'says' ? 'says' : 'thought'}`;
+    item.textContent = line.kind === 'says' ? `“${line.text}”` : line.text;
+    stream.append(item);
+  }
+  if (follow) stream.scrollTop = stream.scrollHeight;
+}
 const localPreview = isLocalPreview(location.hostname), start = performance.now();
 // Each recording's timing, loaded once, so his mouth follows the words he's saying.
 const timings = new Map();
@@ -304,6 +325,7 @@ async function poll() {
     if (!state || (previous && previous.since!==next.patch.since && !next.patch.target && Math.hypot(patch.position.x-px,patch.position.z-pz)>60)) {const spawn=nearestWalkable(px,pz,solids);if(spawn)patch.position.set(spawn[0],groundHeight(...spawn),spawn[1]);}
     state = next; hasLiveState = true; demo = false;
     renderCare(next.patch);
+    renderStream(next.feed);
     $('#connection').hidden = true;
   } catch {
     demo = localPreview && !hasLiveState;

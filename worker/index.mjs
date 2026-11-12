@@ -12,6 +12,7 @@ import { concepts } from './memory-graph.mjs';
 import { cleanSubscription, addDevice, sendPush, gone, deliveries } from './push.mjs';
 import { canSpeak, voiceRoom, countVoice, record } from './voice.mjs';
 import { estimateMs, schedule, speechView } from '../shared/speech.js';
+import { feedFrom } from '../shared/feed.js';
 
 const headers = {
   'x-content-type-options': 'nosniff',
@@ -82,12 +83,13 @@ export class PatchWorld extends DurableObject {
     const now = Date.now();
     const body = await this.body(now);
     if (this.env.OPENROUTER_API_KEY && !(await this.ctx.storage.getAlarm())) await this.ctx.storage.setAlarm(now + 60000);
-    const stored = await this.ctx.storage.get(['unread', 'giftSound', 'speech']);
+    const stored = await this.ctx.storage.get(['unread', 'giftSound', 'speech', 'mind']);
     const result = view(body, now, (stored.get('unread') || []).length);
     const sound = stored.get('giftSound');
     if (sound && now - sound.at < GIFT_SOUND_DURATION) result.patch.giftSound = sound;
     const speech = speechView(stored.get('speech'), now);
     result.patch.speech = speech;
+    result.feed = feedFrom(stored.get('mind')?.thoughts);
     if (speech && Date.parse(speech.at) <= now) Object.assign(result.patch, { says: speech.text, speechUntil: speech.until });
     return result;
   }

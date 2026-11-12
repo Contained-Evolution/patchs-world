@@ -7,13 +7,19 @@
   <title>Patch’s Journal</title>
   <link rel="stylesheet" href="./visits.css">
 </head>
-<body>
+<body class="journal-page">
+  <header class="journal-bar">
+    <button id="entries-toggle" type="button" aria-expanded="false" aria-controls="entries-drawer" aria-label="All journal entries" hidden>
+      <svg aria-hidden="true" viewBox="0 0 32 32" width="26" height="26" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M6 9h20M6 16h20M6 23h20"/></svg>
+    </button>
+    <nav class="site-links" aria-label="Patch’s World"><a href="./">← Island</a><a href="./community.html?view=letters">Write to Patch</a><a href="./gifts.html">Leave a gift</a></nav>
+  </header>
+  <div id="drawer-backdrop" hidden></div>
+  <nav id="entries-drawer" aria-label="Journal entries" inert><ol id="entries-list"></ol></nav>
   <main>
-    <nav aria-label="Patch’s World"><a href="./">← Island</a><a href="./community.html?view=letters">Write to Patch</a><a href="./gifts.html">Leave a gift</a></nav>
-    <h1>Patch’s Journal</h1>
     <p id="status" role="status">Opening Patch’s journal…</p>
     <div class="journal" id="journal" hidden>
-      <section aria-labelledby="entries-title"><h2 id="entries-title">His journal</h2><div id="entries"></div></section>
+      <section aria-live="polite"><div id="entry"></div></section>
       <aside>
         <section aria-labelledby="words-title"><h2 id="words-title">Wordbook</h2><div id="words"></div></section>
         <section aria-labelledby="research-title"><h2 id="research-title">Research notes</h2><div id="research"></div></section>

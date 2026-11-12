@@ -29,3 +29,16 @@ button+button{background:transparent;color:#20554b;margin-top:6px}
 @media(prefers-reduced-motion:reduce){.ball.bouncing{animation:none}}
 @media(max-width:630px){.journal,.gifts{grid-template-columns:1fr}}
 [hidden]{display:none!important}
+.journal-bar{display:flex;align-items:center;gap:12px;min-height:56px;padding:8px 12px}
+.journal-bar nav{margin:0}
+.framed .site-links{display:none}
+.journal-page main{padding-top:4px}
+.journal-bar #entries-toggle{padding:8px 10px;margin:0}
+#drawer-backdrop{position:fixed;inset:0;z-index:4;background:#08241d99}
+#entries-drawer{position:fixed;z-index:5;top:0;bottom:0;left:0;display:block;width:min(300px,82vw);margin:0;padding:12px 10px;overflow-y:auto;background:#122b26;border-right:1px solid #ddc58b;box-shadow:6px 0 24px #0008;transform:translateX(-102%);transition:transform .22s ease-out}
+#entries-drawer.open{transform:none}
+#entries-list{margin:0;padding:0;list-style:none;display:grid;gap:8px}
+#entries-list button{display:grid;gap:2px;width:100%;margin:0;padding:10px 12px;text-align:left;border:1px solid #ffffff3d;border-radius:10px;background:#20554b;color:#fff7e3}
+#entries-list button[aria-current]{background:#f0c47e;color:#20382e;border-color:#f0c47e}
+#entries-list small{font-size:.85rem;opacity:.85}
+@media(prefers-reduced-motion:reduce){#entries-drawer{transition:none}}
