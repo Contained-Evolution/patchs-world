@@ -309,7 +309,7 @@ export class PatchWorld extends DurableObject {
     const note = {
       title: revised ? 'Patch revised a social draft' : 'Patch texted Contained Evolution',
       body: 'Open Patch’s tablet conversation to review the post.',
-      url: '/social-review.html?draft=' + id + '#social-drafts',
+      url: '/tablet.html?draft=' + id + '#social-drafts',
       tag: 'patch-social-' + id,
     };
     const results = await Promise.allSettled(devices.filter(device => device.social)
@@ -596,7 +596,7 @@ async function visitorApi(request, env, url, path) {
         state: url.searchParams.get('state'), code: url.searchParams.get('code'),
       });
       const query = result.error ? '?social=' + encodeURIComponent(result.error) : '';
-      return Response.redirect(SITE + '/social-review.html' + query + '#social-drafts', 303);
+      return Response.redirect(SITE + '/tablet.html' + query + '#social-drafts', 303);
     }
     return json({ error: 'Not found.' }, 404);
   }

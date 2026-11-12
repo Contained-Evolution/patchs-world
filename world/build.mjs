@@ -17,6 +17,7 @@ for (const filename of ['journal.js', 'social-inbox.js', 'visits.css']) {
   socialReview = socialReview.replace('./' + filename, './' + versioned);
 }
 await writeFile('dist/social-review.html', socialReview);
+await writeFile('dist/tablet.html', socialReview);
 const islandScript = await readFile('dist/main.js');
 const captureScript = 'camera-' + createHash('sha256').update(islandScript).digest('hex').slice(0, 12) + '.js';
 await writeFile('dist/' + captureScript, islandScript);

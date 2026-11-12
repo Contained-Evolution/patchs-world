@@ -154,7 +154,7 @@ async function refresh() {
     if (showing && !window.location.hash) document.getElementById('draft-' + showing)?.scrollIntoView();
     if (drafts.some(draft => ['publishing', 'revising'].includes(draft.state))) setTimeout(refresh, 8000);
   } catch (error) {
-    if (!location.pathname.endsWith('/social-review.html')) return;
+    if (!location.pathname.endsWith('/tablet.html')) return;
     panel.hidden = false;
     status.textContent = error.status === 401 ? 'Sign in to review messages from Patch.' : error.message || 'The inbox could not open.';
     if (error.signIn) link(accounts, error.signIn, 'Sign in to Contained Evolution');
