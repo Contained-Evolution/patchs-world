@@ -2,7 +2,7 @@
 // GET /api/state returns { patch, clock }; the browser polls it every few seconds.
 
 // Places on the island. The world side owns their positions; the Worker only uses the IDs.
-// hammock, shelves and computer (the coconut computer, his desk under a coconut palm) together are his camp.
+// hammock, shelves and computer (the coconut computer in its tent) together are his camp.
 // tall-trees is the jungle forest; pond includes the stream and waterfall.
 export const PLACES = ['hammock', 'shelves', 'computer', 'pond', 'banana-grove', 'tall-trees', 'beach', 'lookout', 'tide-pools', 'meadow', 'cave'];
 

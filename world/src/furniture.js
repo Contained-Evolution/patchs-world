@@ -12,6 +12,17 @@ export const SEATS = {
 // The camp bench serves the rope shelves too.
 SEATS.shelves = SEATS.hammock;
 
+// The tent runs east–west so the entrance opens toward the camp clearing.
+const [computerX, computerZ] = places.computer;
+export const COMPUTER_DESK_DISTANCE = .60;
+export const COMPUTER_TENT = {
+ x: computerX, z: computerZ + .8, scale: 7.5, halfLength: 3.45, halfWidth: 3.05, halfDoor: .72,
+};
+export function insideComputerTent(x, z) {
+ const tent = COMPUTER_TENT;
+ return Math.abs(x - tent.x) < tent.halfLength && Math.abs(z - tent.z) < tent.halfWidth;
+}
+
 export function computerActivity(action, place, target, secondsLeft) {
  if (place !== 'computer' || target) return 'Inbox';
  if (action === 'research') return 'Searching the web';

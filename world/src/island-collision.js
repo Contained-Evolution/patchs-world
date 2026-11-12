@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { forest } from './forest.js';
 import { CLIMB_WALLS } from './climbing.js';
+import { COMPUTER_DESK_DISTANCE, COMPUTER_TENT } from './furniture.js';
 import { groundHeight, ISLAND, places, pondFraction, shoreFraction, walkShoreLimit, streamInfo, streamHalfWidth, TIDE_POOLS, tideWaterHeight } from './terrain.js';
 
 export const WALK_RADIUS = .3;
@@ -80,6 +81,22 @@ export function createIslandCollision() {
   solids.box(x - 7.3, z - 20, x - 5, z - 3);
   solids.box(x + 5, z - 20, x + 7.3, z - 3);
   solids.box(x - 8, z - 20, x + 8, z - 14.9);
+
+  // Two open ends. Only the fabric walls and the curtains flanking each opening stop walking.
+  const tent = COMPUTER_TENT;
+  const west = tent.x - tent.halfLength, east = tent.x + tent.halfLength;
+  const north = tent.z - tent.halfWidth, south = tent.z + tent.halfWidth;
+  const edge = .12;
+  for (const z of [north, south]) solids.box(west, z - edge, east, z + edge);
+  for (const x of [west, east]) {
+    solids.box(x - edge, north, x + edge, tent.z - tent.halfDoor);
+    solids.box(x - edge, tent.z + tent.halfDoor, x + edge, south);
+  }
+
+  // Match the desk's ground footprint before its model finishes loading.
+  const [deskX, chairZ] = places.computer;
+  const deskZ = chairZ - COMPUTER_DESK_DISTANCE;
+  solids.box(deskX - .48, deskZ - .32, deskX + .48, deskZ + .327);
 
   const bounds = new THREE.Box3();
   return Object.assign(solids, {

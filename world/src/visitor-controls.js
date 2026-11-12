@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { groundHeight } from './world-state.js';
 import { nearestWalkable, walkStep } from './island-collision.js';
+import { COMPUTER_TENT, insideComputerTent } from './furniture.js';
 import { shoreFraction, walkShoreLimit } from './terrain.js';
 
 export { walkable, walkStep } from './island-collision.js';
@@ -18,7 +19,7 @@ export function createVisitorControls(camera, canvas, isModalOpen, scene, walkSo
   const rayDirection = new THREE.Vector3(), sightPoint = new THREE.Vector3();
   const smoothedView = new THREE.Vector3();
   const sightHits = [];
-  let solids;
+  let solids, wasInTent = false;
   const viewOffsets = [[7, 2], [7, -.6], [4.5, .7], [4.5, -1.7]];
   let viewOffset = viewOffsets[0];
   const euler = new THREE.Euler(0, 0, 0, 'YXZ');
@@ -134,6 +135,19 @@ export function createVisitorControls(camera, canvas, isModalOpen, scene, walkSo
   function positionPatchView(position, dt, snap = false) {
     target.copy(position);
     target.y += 1;
+    const inTent = insideComputerTent(position.x, position.z);
+    if (inTent) {
+      const tent = COMPUTER_TENT;
+      // A fixed view from inside the entrance keeps the canvas roof out of the way.
+      destination.set(tent.x + 2.15, groundHeight(tent.x + 2.15, tent.z + .55) + 1.45, tent.z + .55);
+      if (snap || !wasInTent) patchView.position.copy(destination);
+      else patchView.position.lerp(destination, 1 - Math.exp(-8 * dt));
+      patchView.lookAt(position.x, position.y + .74, position.z - .25);
+      wasInTent = true;
+      return;
+    }
+    if (wasInTent) snap = true;
+    wasInTent = false;
     const positionAt = (angle, [radius, height]) => {
       const x = position.x + Math.cos(angle) * radius;
       const z = position.z + Math.sin(angle) * radius;
@@ -245,7 +259,7 @@ export function createVisitorControls(camera, canvas, isModalOpen, scene, walkSo
       }
     },
     findPatch(position, tracking = false) {
-      if (tracking || position.y > groundHeight(position.x, position.z) + 3) {
+      if (tracking || insideComputerTent(position.x, position.z) || position.y > groundHeight(position.x, position.z) + 3) {
         setMode(tracking ? 'follow' : 'watch');
         viewAngle = Math.PI / 4;
         viewOffset = viewOffsets[0];

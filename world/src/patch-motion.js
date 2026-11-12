@@ -3,7 +3,7 @@
 import { CLIPS } from './patch-clips.js';
 import { places } from './terrain.js';
 import { clearGroundLine, nearestWalkable, walkable } from './island-collision.js';
-import { SEATS } from './furniture.js';
+import { COMPUTER_TENT, SEATS, insideComputerTent } from './furniture.js';
 
 export function seedFrom(text){let h=2166136261;for(const c of String(text))h=Math.imul(h^c.charCodeAt(0),16777619);return h>>>0;}
 export function rng(seed){let a=seed>>>0;return()=>{a=(a+0x6d2b79f5)>>>0;let t=a;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return((t^(t>>>14))>>>0)/4294967296;};}
@@ -15,13 +15,35 @@ export function patchRoute(from,to,seed,remembered=[],solids){
  const clear=(a,b)=>clearGroundLine(a,b,solids);
  if(clear(start,goal))return [start,goal];
 
+ const startInside=insideComputerTent(...start),goalInside=insideComputerTent(...goal);
+ if(startInside!==goalInside){
+  const tent=COMPUTER_TENT, outside=startInside?goal:start;
+  const preferred=outside[0]>=tent.x?1:-1;
+  for(const side of [preferred,-preferred]){
+   const door=[tent.x+side*(tent.halfLength-.65),tent.z];
+   const entry=[tent.x+side*(tent.halfLength+.65),tent.z];
+   const inside=startInside?start:goal;
+   const inner=clear(inside,door)?[inside,door]:searchRoute(inside,door,solids,seed);
+   if(!inner||!clear(door,entry))continue;
+   const outer=startInside?routeGround(entry,goal,seed,remembered,solids):routeGround(start,entry,seed,remembered,solids);
+   if(startInside&&outer.at(-1)===goal)return [...inner,...outer];
+   if(goalInside&&outer.at(-1)===entry)return [...outer,...inner.reverse()];
+  }
+ }
+
+ return routeGround(start,goal,seed,remembered,solids);
+}
+
+function routeGround(start,goal,seed,remembered,solids){
+ const clear=(a,b)=>clearGroundLine(a,b,solids);
+ if(clear(start,goal))return [start,goal];
  const direct=searchRoute(start,goal,solids,seed);
  if(direct)return direct;
 
  // A remembered route can take him well outside the local search corridor.
  const route=[start];
  for(const point of [...remembered.slice(1,-1),goal]){
-  const next=nearestWalkable(...point,solids);
+  const next=point===goal?goal:nearestWalkable(...point,solids);
   if(!next)continue;
   const last=route.at(-1),leg=clear(last,next)?[last,next]:searchRoute(last,next,solids,seed);
   if(leg)route.push(...leg.slice(1));

@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { groundHeight } from './terrain.js';
-import { SEATS, SEAT_HEIGHT, computerActivity } from './furniture.js';
+import { SEATS, SEAT_HEIGHT, COMPUTER_DESK_DISTANCE, COMPUTER_TENT, computerActivity } from './furniture.js';
 
 export function createFurniture(scene, { bark, wood }, block) {
  const material = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 1, ...extra });
@@ -43,6 +43,17 @@ export function createFurniture(scene, { bark, wood }, block) {
   const pot = new THREE.Mesh(new THREE.SphereGeometry(.09, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), shell); pot.rotation.x = Math.PI; pot.position.set(.35, .09, -.05); g.add(pot);
  }
 
+ const tent = COMPUTER_TENT;
+ const tentGround = Math.min(...[-1, 1].flatMap(side => [-1, 1].map(end =>
+  groundHeight(tent.x + end * tent.halfLength, tent.z + side * tent.halfWidth))));
+ const loader = new GLTFLoader();
+ loader.load(new URL('./assets/computer-tent.glb', document.baseURI).href, ({ scene: shelter }) => {
+  shelter.position.set(tent.x, tentGround + .305908 * tent.scale, tent.z);
+  shelter.rotation.y = Math.PI / 2;
+  shelter.scale.setScalar(tent.scale);
+  scene.add(shelter);
+ });
+
  // The desk model faces +z, back toward the chair after rotation.
  const seat = SEATS.computer, computer = group(seat.x, seat.z, seat.heading);
  chair(computer, .1);
@@ -50,12 +61,10 @@ export function createFurniture(scene, { bark, wood }, block) {
  const g = canvas.getContext('2d'), texture = new THREE.CanvasTexture(canvas);
  texture.colorSpace = THREE.SRGBColorSpace;
  const glass = new THREE.MeshBasicMaterial({ map: texture, alphaTest: .5, toneMapped: false });
- new GLTFLoader().load(new URL('./assets/coconut-computer.glb', document.baseURI).href, ({ scene: desk }) => {
-  desk.position.set(0, .457764, .60);
+ loader.load(new URL('./assets/coconut-computer.glb', document.baseURI).href, ({ scene: desk }) => {
+  desk.position.set(0, .457764, COMPUTER_DESK_DISTANCE);
   desk.rotation.y = Math.PI;
   computer.add(desk);
-  desk.updateWorldMatrix(true, true);
-  desk.traverse(child => { if (child.isMesh) block(child); });
   // Fit the display inside the blue glass of the shell.
   const screen = new THREE.Mesh(new THREE.PlaneGeometry(.345, .242), glass);
   screen.position.set(-.025, .252, .008);

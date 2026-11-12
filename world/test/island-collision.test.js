@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { createIsland } from '../src/island.js';
 import { BANANA_TREE, bananaTrees, clearGroundLine, nearestWalkable, pondAccess, walkable, walkStep } from '../src/island-collision.js';
+import { COMPUTER_TENT } from '../src/furniture.js';
+import { forest } from '../src/forest.js';
 import { createFoodProps } from '../src/food-props.js';
 import { FOOD_STORE, forageTrees } from '../src/foraging.js';
 import { patchRoute } from '../src/patch-motion.js';
@@ -31,6 +33,17 @@ test('rendered island solids block both walkers and all fruit trees have a reach
   }
   assert.equal(walkable(ISLAND.pondX,ISLAND.pondZ,undefined,undefined,solids,true),true);
   assert.ok(walkStep(6,-3,0,4,solids)[1] < -1.9);
+
+  const tent = COMPUTER_TENT;
+  for (const side of [-1, 1]) {
+    const outsideX = tent.x + side * (tent.halfLength + 1);
+    const insideX = tent.x + side * (tent.halfLength - 1);
+    assert.ok(clearGroundLine([outsideX, tent.z], [insideX, tent.z], solids));
+    assert.ok(!clearGroundLine([outsideX, tent.z + 1.1], [insideX, tent.z + 1.1], solids));
+    assert.ok(!clearGroundLine([tent.x, tent.z + side * (tent.halfWidth + 1)], [tent.x, tent.z + side * (tent.halfWidth - 1)], solids));
+  }
+  assert.ok(solids.blocks(places.computer[0], places.computer[1] - .6));
+  assert.ok(forest.every(tree => Math.hypot(tree.x - tent.x, tree.z - tent.z) > 11));
 
   const access=pondAccess(places.pond,solids);
   assert.ok(access);
