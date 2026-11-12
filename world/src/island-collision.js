@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { BANANA_TREE } from './banana-tree.js';
 import { pondSwings } from './pond-swings.js';
 import { forest } from './forest.js';
 import { hammock, hammockSupports } from './hammock.js';
@@ -58,7 +59,7 @@ export function createWalkSolids() {
 
 // Ground-level trunks, rocks, furniture and structures are solid. Canopies, reeds,
 // grass, loose decorations and carried props do not obstruct walking.
-export const BANANA_TREE = { trunkRadius: .48, pickDistance: 1.05, fruitHeight: 1.65 };
+export { BANANA_TREE } from './banana-tree.js';
 export const bananaTrees = forest.filter(tree => tree.grove);
 
 export function bananaPickingSpots(tree, origin, solids) {

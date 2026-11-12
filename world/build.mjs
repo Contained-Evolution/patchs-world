@@ -1,5 +1,6 @@
 import { build } from 'esbuild';
 import { writeAssetCatalog } from './asset-catalog.mjs';
+import { bananaTreeCatalogEntry } from './src/banana-tree.js';
 import { createHash } from 'node:crypto';
 import { join, relative, sep } from 'node:path';
 import { mkdir, copyFile, cp, rm, readdir, readFile, writeFile } from 'node:fs/promises';
@@ -14,7 +15,9 @@ const captureScript = 'camera-' + createHash('sha256').update(islandScript).dige
 await writeFile('dist/' + captureScript, islandScript);
 await writeFile('dist/social-camera.html', (await readFile('index.html', 'utf8')).replace('./main.js', './' + captureScript));
 await cp('assets', 'dist/assets', { recursive: true });
-await writeAssetCatalog(["Banana grove trees and fruit","Tall trees and swing ropes","Island terrain and water","Camp furniture"]);
+const bananaTree = bananaTreeCatalogEntry();
+await writeAssetCatalog([bananaTree.name, 'Tall trees and swing ropes', 'Island terrain and water', 'Camp furniture'],
+  { [bananaTree.name]: bananaTree });
 await cp('icons', 'dist/icons', { recursive: true });
 // The service worker caches every built file except source maps, keyed by content so a deploy only re-downloads what changed.
 const files = {};

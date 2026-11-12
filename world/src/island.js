@@ -8,7 +8,8 @@ import { addRiverWater, oceanGeometry } from './river-water.js';
 import { addPondScenery, createPondSteps, addWaterfallVines } from './pond-scenery.js';
 import { pondSwings } from './pond-swings.js';
 import { CLIMB_WALLS } from './climbing.js';
-import { createIslandCollision, bananaTrees, BANANA_TREE } from './island-collision.js';
+import { createIslandCollision, bananaTrees } from './island-collision.js';
+import { BANANA_TREE, TRUNK_GEOMETRY, FRUIT_GEOMETRY, bananaFruitConnector, leafGeometry, palmLeafPose } from './banana-tree.js';
 import { hammock } from './hammock.js';
 import { addCampHammock } from './camp-hammock.js';
 import { addCampRulesSign } from './camp-rules-sign.js';
@@ -18,13 +19,6 @@ function surfaceTexture(base, strokes, seed=1){
  const c=document.createElement('canvas');c.width=c.height=512;const g=c.getContext('2d');g.fillStyle=base;g.fillRect(0,0,512,512);
  for(let i=0;i<3800;i++){const x=rand(i+seed)*512,y=rand(i+seed+4000)*512,r=.5+rand(i+seed+8000)*3;g.globalAlpha=.05+rand(i+20000)*.15;g.fillStyle=strokes[i%strokes.length];g.beginPath();g.ellipse(x,y,r*2,r,rand(i+10)*Math.PI,0,Math.PI*2);g.fill();}
  g.globalAlpha=1;const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(100,110);t.anisotropy=4;return t;
-}
-function leafGeometry(){
- // Curved lanceolate blade, tapered at both ends, with a central ridge.
- const p=[],uv=[],idx=[],n=3;
- for(let i=0;i<=n;i++){const t=i/n,w=Math.sin(Math.PI*t)**.72*.48,y=Math.sin(t*Math.PI)*.18-t*t*.3;for(const side of [-1,0,1]){p.push(side*w,y+(side===0?.045:0),t*3.5);uv.push((side+1)/2,t);}}
- for(let i=0;i<n;i++)for(let j=0;j<2;j++){let a=i*3+j,b=a+1,c=a+3,d=c+1;idx.push(a,c,b,b,c,d);}
- const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));g.setIndex(idx);g.computeVertexNormals();return g;
 }
 function rockGeometry(){let g=mergeVertices(new THREE.IcosahedronGeometry(1,2));const p=g.attributes.position;for(let i=0;i<p.count;i++){let x=p.getX(i),y=p.getY(i),z=p.getZ(i);let f=1+.16*Math.sin(x*7+z*4)*Math.cos(y*9-z*2);p.setXYZ(i,x*f,y*f,z*f);}g.computeVertexNormals();return g;}
 export function createIsland(scene){
@@ -98,7 +92,7 @@ if(islandBank.x>.001){
  add(oceanGeometry(),water);
  addRiverWater(add,waterTime,waterLight,waterRain);
  // Deterministic irregular tropical growth; activity spaces stay clear.
- const trunkGeo=new THREE.CylinderGeometry(.06,.5,1,8),trunks=forest,rocks=[];
+ const trunkGeo=new THREE.CylinderGeometry(...TRUNK_GEOMETRY),trunks=forest,rocks=[];
  const reserved=isReserved;
  const pose=new THREE.Object3D(),tiles=new Map();
  for(const tree of trunks){const key=`${Math.floor(tree.x/160)},${Math.floor(tree.z/160)}`;if(!tiles.has(key))tiles.set(key,[]);tiles.get(key).push(tree);}
@@ -141,8 +135,19 @@ if (trackingPatch) {
  // Independent chunks let the camera cull forests outside its field of view.
  for(const chunk of tiles.values()){
   const palms=chunk.filter(t=>!t.broad),broadTrees=chunk.filter(t=>t.broad),trunkMesh=new THREE.InstancedMesh(trunkGeo,bark,chunk.length),leafMesh=new THREE.InstancedMesh(blade,foliage,palms.length*7),canopyMesh=new THREE.InstancedMesh(canopyGeometry,canopyMaterial,broadTrees.length*3);
-  chunk.forEach((tree,i)=>{const y=groundHeight(tree.x,tree.z),visibleHeight=tree.h+(tree.swing?3.5:0);pose.position.set(tree.x,y+visibleHeight/2,tree.z);pose.rotation.set(0,tree.angle,tree.grove?.055:0);pose.scale.set(tree.grove?.75:1,visibleHeight,tree.grove?.75:1);pose.updateMatrix();trunkMesh.setMatrixAt(i,pose.matrix);});
-  palms.forEach((tree,i)=>{const y=groundHeight(tree.x,tree.z);for(let j=0;j<7;j++){pose.position.set(tree.x,y+tree.h,tree.z);pose.rotation.set(-.25-(j%3)*.12,tree.angle+j*Math.PI*2/7,(j%2)*.08);let size=(tree.grove?1.25:1.05)+rand(i*9+j)*.5;pose.scale.set(size,size,size);pose.updateMatrix();leafMesh.setMatrixAt(i*7+j,pose.matrix);}});
+  chunk.forEach((tree,i)=>{const y=groundHeight(tree.x,tree.z),visibleHeight=tree.h+(tree.swing?3.5:0);pose.position.set(tree.x,y+visibleHeight/2,tree.z);pose.rotation.set(0,tree.angle,tree.grove?BANANA_TREE.trunkLean:0);pose.scale.set(tree.grove?BANANA_TREE.trunkScale:1,visibleHeight,tree.grove?BANANA_TREE.trunkScale:1);pose.updateMatrix();trunkMesh.setMatrixAt(i,pose.matrix);});
+  palms.forEach((tree, i) => {
+   const y = groundHeight(tree.x, tree.z);
+   for (let j = 0; j < 7; j++) {
+    const size = (tree.grove ? BANANA_TREE.leafScale : 1.05) + rand(i * 9 + j) * .5;
+    const leaf = palmLeafPose(tree.angle, j, size, tree.h);
+    pose.position.set(tree.x, y + leaf.position[1], tree.z);
+    pose.rotation.set(...leaf.rotation);
+    pose.scale.set(...leaf.scale);
+    pose.updateMatrix();
+    leafMesh.setMatrixAt(i * 7 + j, pose.matrix);
+   }
+  });
   broadTrees.forEach((tree,i)=>{const y=groundHeight(tree.x,tree.z),w=9+rand(i+81)*5;for(let j=0;j<3;j++){pose.position.set(tree.x,y+tree.h+(tree.swing?3.5:.8),tree.z);if(tree.swing){pose.position.y-=.4+j*.08;pose.rotation.set(-Math.PI/2,0,tree.angle+j*Math.PI/3);pose.scale.set(w,w*.8,1);}else{pose.rotation.set(0,tree.angle+j*Math.PI/3,0);pose.scale.set(w,w*.48,1);}pose.updateMatrix();canopyMesh.setMatrixAt(i*3+j,pose.matrix);}});
   const branches=new THREE.InstancedMesh(branchGeometry,bark,broadTrees.length*2);broadTrees.forEach((tree,i)=>{const y=groundHeight(tree.x,tree.z),height=tree.h+(tree.swing?3.5:0);for(let j=0;j<2;j++){const angle=tree.angle+j*2.8,start=new THREE.Vector3(tree.x,y+height*.7,tree.z),end=new THREE.Vector3(tree.x+Math.cos(angle)*2.6,y+height+.4,tree.z+Math.sin(angle)*2.6),direction=end.clone().sub(start);pose.position.copy(start).add(end).multiplyScalar(.5);pose.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),direction.clone().normalize());pose.scale.set(1,direction.length(),1);pose.updateMatrix();branches.setMatrixAt(i*2+j,pose.matrix);}});
   for(const mesh of [trunkMesh,leafMesh,canopyMesh,branches])if(mesh.count){mesh.instanceMatrix.needsUpdate=true;mesh.computeBoundingSphere();scene.add(mesh);}
@@ -151,8 +156,22 @@ if (trackingPatch) {
  const understory=[];for(let i=0;i<2200;i++){let x=(rand(i+31000)*2-1)*300,z=(rand(i+36000)*2-1)*335;if(shoreFraction(x,z)>.87||reserved(x,z)||rand(i+39000)>.45)continue;understory.push({x,z,size:.35+rand(i+42000)*.5,angle:rand(i+44000)*6});}
  const lowLeaves=new THREE.InstancedMesh(blade,foliage,understory.length*3);understory.forEach((p,i)=>{for(let k=0;k<3;k++){pose.position.set(p.x,groundHeight(p.x,p.z)+.12,p.z);pose.rotation.set(-.6,p.angle+k*2.1,0);pose.scale.setScalar(p.size);pose.updateMatrix();lowLeaves.setMatrixAt(i*3+k,pose.matrix);}});lowLeaves.instanceMatrix.needsUpdate=true;lowLeaves.computeBoundingSphere();scene.add(lowLeaves);
  // Banana bunches grow in the grove, with visible curved fruit beneath the leaves.
- const fruitMat=material(0xd7ba4d),fruit=new THREE.InstancedMesh(new THREE.TorusGeometry(.24,.075,3,6,Math.PI*1.2),fruitMat,bananaTrees.length*4);
- bananaTrees.forEach((t,i)=>{for(let k=0;k<4;k++){pose.position.set(t.x+Math.cos(k*1.6)*.2,groundHeight(t.x,t.z)+BANANA_TREE.fruitHeight,t.z+Math.sin(k*1.6)*.2);pose.rotation.set(.2,k*1.6,0);pose.scale.setScalar(1);pose.updateMatrix();fruit.setMatrixAt(i*4+k,pose.matrix);}});fruit.instanceMatrix.needsUpdate=true;fruit.computeBoundingSphere();scene.add(fruit);
+ const fruit = new THREE.InstancedMesh(new THREE.TorusGeometry(...FRUIT_GEOMETRY),
+  material(BANANA_TREE.fruitColor), bananaTrees.length * BANANA_TREE.fruitCount);
+ bananaTrees.forEach((tree, i) => {
+  const ground = groundHeight(tree.x, tree.z);
+  for (let k = 0; k < BANANA_TREE.fruitCount; k++) {
+   const { position: [x, y, z], rotation } = bananaFruitConnector(k);
+   pose.position.set(tree.x + x, ground + y, tree.z + z);
+   pose.rotation.set(...rotation);
+   pose.scale.setScalar(1);
+   pose.updateMatrix();
+   fruit.setMatrixAt(i * BANANA_TREE.fruitCount + k, pose.matrix);
+  }
+ });
+ fruit.instanceMatrix.needsUpdate = true;
+ fruit.computeBoundingSphere();
+ scene.add(fruit);
  // The meadow remains open and is dotted with small flowers.
  const flowers=[];for(let i=0;i<500;i++){let a=rand(i+50000)*6.283,r=Math.sqrt(rand(i+51000))*45,x=places.meadow[0]+Math.cos(a)*r,z=places.meadow[1]+Math.sin(a)*r;if(shoreFraction(x,z)<.89)flowers.push([x,z,i]);}
  const flowerMap=new THREE.TextureLoader().load(new URL('./assets/wildflowers.png',document.baseURI).href);flowerMap.colorSpace=THREE.SRGBColorSpace;flowerMap.anisotropy=4;const flowerMat=material(0xffffff,{map:flowerMap,alphaTest:.65,side:THREE.DoubleSide}),flowerMesh=new THREE.InstancedMesh(new THREE.PlaneGeometry(1,1),flowerMat,flowers.length*2);flowers.forEach(([x,z,i],k)=>{for(let j=0;j<2;j++){const scale=.5+rand(i+52000)*.4;pose.position.set(x,groundHeight(x,z)+scale*.42,z);pose.rotation.set(0,rand(i+53000)*3+j*Math.PI/2,0);pose.scale.setScalar(scale);pose.updateMatrix();flowerMesh.setMatrixAt(k*2+j,pose.matrix);}});flowerMesh.instanceMatrix.needsUpdate=true;flowerMesh.computeBoundingSphere();scene.add(flowerMesh);

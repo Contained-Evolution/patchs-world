@@ -1,7 +1,7 @@
 # Technical specifications
 
 - Runtime: Cloudflare Worker `patchs-world`, entry [worker/index.mjs](worker/index.mjs), config [worker/wrangler.toml](worker/wrangler.toml).
-- The [asset catalog build](world/asset-catalog.mjs) publishes the inventory for Tenari’s World editor.
+- The [asset catalog build](world/asset-catalog.mjs) publishes the inventory and the [banana grove tree definition](world/src/banana-tree.js) for Tenari’s World editor.
 - Routes: its own address, `patch.containedevolution.com` (a custom domain in [wrangler.toml](worker/wrangler.toml)), so it installs and runs as its own app apart from Contained Evolution's. The company website still forwards `containedevolution.com/patch*` to it through a service binding; those requests move to the new address, and `/patch/sw.js` there is a service worker that clears copies saved at the old address.
 - Service bindings: `AUTH_SERVICE` → `ce-auth-candidate`. [accounts.mjs](worker/accounts.mjs) reads the Contained Evolution session cookie and checks it there.
 - Storage: one SQLite-backed Durable Object, `PatchWorld`, keyed `patch`. It holds Patch's body under `body`, his speech queue under `speech`, voice recordings (`voice:<id>`), his mind, memories, letters, board posts, journal entries (`diary:<date>T<time>`) and each account's notification devices (`push:<account id>`).

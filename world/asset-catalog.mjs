@@ -4,7 +4,7 @@ import { join, relative, sep } from 'node:path';
 
 const extensions = /\.(glb|png|jpe?g|webp|avif|ktx2)$/i;
 
-export async function writeAssetCatalog(procedural) {
+export async function writeAssetCatalog(procedural, definitions = {}) {
   const entries = await readdir('assets', { recursive: true, withFileTypes: true });
   const files = [];
   for (const entry of entries.filter(entry => entry.isFile() && extensions.test(entry.name))) {
@@ -14,5 +14,5 @@ export async function writeAssetCatalog(procedural) {
     files.push({ path, digest, kind: /\.glb$/i.test(path) ? 'Model' : 'Texture' });
   }
   files.sort((a, b) => a.path.localeCompare(b.path));
-  await writeFile('dist/asset-catalog.json', JSON.stringify({ files, procedural }));
+  await writeFile('dist/asset-catalog.json', JSON.stringify({ files, procedural, definitions }));
 }
