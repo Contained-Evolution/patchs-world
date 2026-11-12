@@ -64,7 +64,8 @@ function paintBoard(context, title, rules) {
 export function addCampRulesSign(scene, solids, { bark, wood, rope, foliage }, blade) {
   const sign = new THREE.Group();
   sign.name = 'Camp rules sign';
-  sign.position.set(4.6, groundHeight(4.6, 5.7), 5.7);
+  sign.position.set(3.9, groundHeight(3.9, 6) - .32, 6);
+  sign.scale.x = .74;
   sign.rotation.y = .63;
   scene.add(sign);
 
@@ -96,7 +97,10 @@ export function addCampRulesSign(scene, solids, { bark, wood, rope, foliage }, b
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = 4;
-  const face = new THREE.MeshStandardMaterial({ map: texture, roughness: .95 });
+  const face = new THREE.MeshStandardMaterial({
+    map: texture, roughness: .95,
+    emissive: 0xffffff, emissiveMap: texture, emissiveIntensity: .12
+  });
   mesh(new THREE.PlaneGeometry(width, height), face, 0, boardY, boardDepth / 2 + .002);
   function repaint() {
     paintBoard(context, title, rules);

@@ -37,9 +37,11 @@ test('rendered island solids block both walkers and all fruit trees have a reach
   const scene = new THREE.Scene();
   const { walkSolids: solids, block } = createIsland(scene);
   createFoodProps(scene, block);
-  assert.ok(scene.getObjectByName('Camp rules sign'));
+  const sign = scene.getObjectByName('Camp rules sign');
+  assert.ok(sign);
+  assert.ok(solids.blocks(sign.position.x, sign.position.z));
 
-  for (const [x,z] of [[4.6,5.7], [6,-1], [hammock.x, hammock.z], ...hammockSupports.map(({ x, z }) => [x, z]), [5.2,2], [278,32], [-145,-205], [FOOD_STORE[0],FOOD_STORE[1]+1.15]]) {
+  for (const [x,z] of [[6,-1], [hammock.x, hammock.z], ...hammockSupports.map(({ x, z }) => [x, z]), [5.2,2], [278,32], [-145,-205], [FOOD_STORE[0],FOOD_STORE[1]+1.15]]) {
     assert.ok(solids.blocks(x,z), `missing solid at ${x},${z}`);
   }
   for (const [x,z] of [[ISLAND.pondX,ISLAND.pondZ], STREAM[2], ...TIDE_POOLS]) {
