@@ -140,9 +140,16 @@
         aria-label="Camera tilt" aria-orientation="vertical" aria-valuemin="-100" aria-valuemax="100" aria-valuenow="0">
         <span class="move-stick-thumb" aria-hidden="true"></span>
       </div>
-      <div id="camera-rotate" class="move-stick camera-stick" role="slider" tabindex="0"
-        aria-label="Camera rotation" aria-valuemin="-100" aria-valuemax="100" aria-valuenow="0">
+      <div id="camera-rotate" class="move-stick camera-stick" role="group" tabindex="0"
+        aria-label="Pan camera left or right">
         <span class="move-stick-thumb" aria-hidden="true"></span>
+      </div>
+      <div class="drone-elevation" hidden>
+        <div id="drone-elevation" class="move-stick camera-stick" role="slider" tabindex="0"
+          aria-label="Drone elevation" aria-orientation="vertical" aria-valuemin="-100" aria-valuemax="100" aria-valuenow="0">
+          <span class="move-stick-thumb" aria-hidden="true"></span>
+        </div>
+        <span aria-hidden="true">Elevation</span>
       </div>
     </div>
   </section>

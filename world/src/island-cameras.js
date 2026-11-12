@@ -2,8 +2,8 @@ import {
   BoxGeometry, CylinderGeometry, Euler, Group, Mesh, MeshBasicMaterial,
   MeshStandardMaterial, PerspectiveCamera, SphereGeometry, Vector3, MathUtils
 } from 'three';
-import { forest } from './forest.js';
-import { groundHeight, ISLAND, places, RIVER, riverPoint, shoreFraction } from './terrain.js';
+import { createDrone } from './drone-flight.js';
+import { groundHeight, places, RIVER, riverPoint } from './terrain.js';
 
 // Each mount is an offset from the landmark it watches.
 const waterfall = riverPoint(RIVER.lip);
@@ -57,46 +57,6 @@ function cameraProps(scene) {
   };
 }
 
-function makeDrone() {
-  const camera = new PerspectiveCamera(52, 1, .1, 12000);
-  let highest = 0;
-  for (const tree of forest) {
-    highest = Math.max(highest, groundHeight(tree.x, tree.z) + tree.h);
-  }
-  // Leave room above crowns and the exposed ridges between trees.
-  for (let x = -ISLAND.radiusX * 1.2; x <= ISLAND.radiusX * 1.2; x += 8) {
-    for (let z = -ISLAND.radiusZ * 1.2; z <= ISLAND.radiusZ * 1.2; z += 8) {
-      highest = Math.max(highest, groundHeight(x, z));
-    }
-  }
-  const altitude = highest + 14;
-  let pitch, yaw;
-  return {
-    camera,
-    reset() {
-      camera.position.set(0, altitude, 0);
-      pitch = -Math.PI / 2;
-      yaw = 0;
-      camera.rotation.set(pitch, yaw, 0, 'YXZ');
-    },
-    look(dx, dy) {
-      yaw -= dx * .005;
-      pitch = MathUtils.clamp(pitch + dy * .005, -Math.PI / 2, -.2);
-      camera.rotation.set(pitch, yaw, 0, 'YXZ');
-    },
-    steer(turn, forward, elapsed) {
-      if (turn) {
-        yaw -= turn * 1.2 * elapsed;
-        camera.rotation.y = yaw;
-      }
-      const distance = 34 * forward * elapsed;
-      const x = camera.position.x - Math.sin(yaw) * distance;
-      const z = camera.position.z - Math.cos(yaw) * distance;
-      if (shoreFraction(x, z) <= 1) camera.position.set(x, altitude, z);
-    }
-  };
-}
-
 export function setupIslandCameras(renderer, scene) {
   const panel = document.querySelector('#cameras-panel');
   const dialog = panel.closest('dialog');
@@ -107,13 +67,12 @@ export function setupIslandCameras(renderer, scene) {
   const feedContext = feed.getContext('2d');
   const movement = document.querySelector('#camera-move');
   const rotation = document.querySelector('#camera-rotate');
-  const sticks = [
-    { node: movement, axis: 'y', value: 0, pointer: null },
-    { node: rotation, axis: 'x', value: 0, pointer: null }
-  ];
+  const elevation = document.querySelector('#drone-elevation');
+  const sticks = [movement, rotation, elevation].map(node => ({ node, x: 0, y: 0, pointer: null }));
   const audioButton = document.querySelector('#camera-audio');
   const createProp = cameraProps(scene);
-  const drone = makeDrone();
+  const drone = createDrone();
+  let motor = 0, motorUntil = 0;
   let selected, litView, audio = true, drag;
   let previewIndex = 0, nextPreview = 0, lastUpdate = performance.now();
 
@@ -184,17 +143,22 @@ export function setupIslandCameras(renderer, scene) {
     feed.tabIndex = flying ? 0 : -1;
     feed.toggleAttribute('data-flight', flying);
     movement.setAttribute('aria-label', flying ? 'Fly forward or backward' : 'Tilt camera up or down');
-    rotation.setAttribute('aria-label', flying ? 'Rotate drone left or right' : 'Pan camera left or right');
+    rotation.setAttribute('aria-label', flying ? 'Aim drone left, right, up or down' : 'Pan camera left or right');
+    elevation.parentElement.hidden = !flying;
     syncLight();
   }
 
-  function steer(side, vertical, elapsed) {
-    if (!isOpen() || (!side && !vertical)) return;
+  function steer(forward, turn, tilt, lift, elapsed) {
+    if (!isOpen() || (!forward && !turn && !tilt && !lift)) return;
     if (selected === flight) {
-      drone.steer(side, vertical, elapsed);
+      const motion = drone.steer(turn, tilt, forward, lift, elapsed);
+      if (motion) {
+        motor = motion;
+        motorUntil = performance.now() + 100;
+      }
     } else {
-      selected.pan = MathUtils.clamp(selected.pan - side * elapsed, -1.15, 1.15);
-      selected.tilt = MathUtils.clamp(selected.tilt + vertical * elapsed, -.6, .7);
+      selected.pan = MathUtils.clamp(selected.pan - turn * elapsed, -1.15, 1.15);
+      selected.tilt = MathUtils.clamp(selected.tilt + forward * elapsed, -.6, .7);
       selected.aim();
     }
   }
@@ -202,26 +166,37 @@ export function setupIslandCameras(renderer, scene) {
   function resetStick(stick) {
     const { node, pointer } = stick;
     stick.pointer = null;
-    stick.value = 0;
+    stick.x = stick.y = 0;
     node.removeAttribute('data-active');
-    node.setAttribute('aria-valuenow', '0');
-    node.style.removeProperty(`--stick-${stick.axis}`);
+    node.style.removeProperty('--stick-x');
+    node.style.removeProperty('--stick-y');
+    if (node.hasAttribute('aria-valuenow')) node.setAttribute('aria-valuenow', '0');
     if (pointer !== null && node.hasPointerCapture(pointer)) node.releasePointerCapture(pointer);
   }
 
+  function steerStick(node, x, y, elapsed) {
+    if (node === rotation) steer(0, x, y, 0, elapsed);
+    else if (node === elevation) steer(0, 0, 0, y, elapsed);
+    else steer(y, 0, 0, 0, elapsed);
+  }
+
   for (const stick of sticks) {
-    const { node, axis } = stick;
-    const vertical = axis === 'y';
+    const { node } = stick;
     const aim = event => {
       const bounds = node.getBoundingClientRect();
       const radius = bounds.width * .28;
-      const offset = vertical ? event.clientY - bounds.top - bounds.height / 2 :
-        event.clientX - bounds.left - bounds.width / 2;
-      const displacement = MathUtils.clamp(offset / radius, -1, 1);
-      const strength = Math.max(0, (Math.abs(displacement) - .15) / .85);
-      stick.value = Math.sign(displacement) * strength * (vertical ? -1 : 1);
-      node.style.setProperty(`--stick-${axis}`, `${displacement * radius}px`);
-      node.setAttribute('aria-valuenow', String(Math.round(stick.value * 100)));
+      const canPan = node === rotation;
+      const canTilt = !canPan || selected === flight;
+      const dx = canPan ? event.clientX - bounds.left - bounds.width / 2 : 0;
+      const dy = canTilt ? event.clientY - bounds.top - bounds.height / 2 : 0;
+      const distance = Math.hypot(dx, dy);
+      const scale = Math.min(1, radius / (distance || 1));
+      const strength = MathUtils.clamp((distance / radius - .15) / .85, 0, 1);
+      stick.x = strength * dx / (distance || 1);
+      stick.y = -strength * dy / (distance || 1);
+      node.style.setProperty('--stick-x', `${dx * scale}px`);
+      node.style.setProperty('--stick-y', `${dy * scale}px`);
+      if (node.hasAttribute('aria-valuenow')) node.setAttribute('aria-valuenow', String(Math.round(stick.y * 100)));
     };
     node.onpointerdown = event => {
       if (event.button !== 0 || stick.pointer !== null) return;
@@ -243,9 +218,8 @@ export function setupIslandCameras(renderer, scene) {
       if (event.altKey || event.ctrlKey || event.metaKey || !event.key.startsWith('Arrow')) return;
       const direction = directions[event.key.slice(5).toLowerCase()];
       if (!direction) return;
-      const [side, lift] = direction;
       event.preventDefault();
-      steer(vertical ? 0 : side, vertical ? lift : 0, .1);
+      steerStick(node, ...direction, .1);
     };
   }
   feed.onkeydown = event => {
@@ -271,6 +245,7 @@ export function setupIslandCameras(renderer, scene) {
   };
   function stopInput() {
     drag = null;
+    motor = motorUntil = 0;
     for (const stick of sticks) resetStick(stick);
   }
   window.addEventListener('blur', stopInput);
@@ -329,11 +304,12 @@ export function setupIslandCameras(renderer, scene) {
     update() {
       syncLight();
       const now = performance.now();
-      steer(sticks[1].value, sticks[0].value, Math.min((now - lastUpdate) / 1000, .05));
+      steer(sticks[0].y, sticks[1].x, sticks[1].y, sticks[2].y, Math.min((now - lastUpdate) / 1000, .05));
       lastUpdate = now;
     },
     get open() { return isOpen(); },
     get audio() { return audio; },
+    get droneMotion() { return isOpen() && selected === flight && performance.now() < motorUntil ? motor : 0; },
     get camera() {
       if (!isOpen()) return null;
       selected.camera.updateMatrixWorld();

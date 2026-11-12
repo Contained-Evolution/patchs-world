@@ -80,7 +80,7 @@ export function ambienceAt(x, z, daylight, weather) {
 }
 
 export function createIslandAudio(button, footsteps) {
-  let context, output, noise, layers, soundOn = true, paused = false;
+  let context, output, noise, layers, rotor, rotorLevel = 0, soundOn = true, paused = false;
   let nextVisitorStep = 0, nextPatchStep = 0;
   let footstepsOn = true;
   let nextBird = 0, nextThunder = 0, nextRepeat = 0, visitorStride = 0, patchStride = 0;
@@ -113,6 +113,17 @@ export function createIslandAudio(button, footsteps) {
       noise = context.createBuffer(1, context.sampleRate * 4, context.sampleRate);
       const samples = noise.getChannelData(0);
       for (let i = 0; i < samples.length; i++) samples[i] = Math.random() * 2 - 1;
+      const motor = context.createOscillator();
+      const filter = context.createBiquadFilter();
+      const gain = context.createGain();
+      motor.type = 'sawtooth';
+      motor.frequency.value = 78;
+      filter.type = 'lowpass';
+      filter.frequency.value = 310;
+      gain.gain.value = 0;
+      motor.connect(filter).connect(gain).connect(output);
+      motor.start();
+      rotor = { motor, gain: gain.gain, air: layer(560) };
       layers = {
         wind: layer(380), rain: layer(3000), surf: layer(245), water: layer(1170)
       };
@@ -243,6 +254,15 @@ export function createIslandAudio(button, footsteps) {
   }
 
   return {
+    setDroneMotion(value) {
+      const level = Math.round(value * 100) / 100;
+      if (!rotor || level === rotorLevel) return;
+      rotorLevel = level;
+      const time = context.currentTime;
+      rotor.motor.frequency.setTargetAtTime(78 + level * 41, time, .07);
+      rotor.gain.setTargetAtTime(level ? .065 + level * .065 : 0, time, .07);
+      rotor.air.setTargetAtTime(level * .16, time, .09);
+    },
     pause(value) {
       if (paused === value) return;
       paused = value;

@@ -543,7 +543,7 @@ function renderIsland(now) {
   if (cameraFeeds.open) cameraFeeds.render(now, renderView);
   else renderView(controls.camera);
 }
-function frame(now){requestAnimationFrame(frame);sound.pause(animations.isOpen() || (cameraFeeds.open && !cameraFeeds.audio));cameraFeeds.update();if(animations.isOpen()){last=now;return;}adaptiveTick?.(now);const dt=Math.min((now-last)/1000,.05);last=now;let t=(now-start)/1000;
+function frame(now){requestAnimationFrame(frame);sound.pause(animations.isOpen() || (cameraFeeds.open && !cameraFeeds.audio));cameraFeeds.update();sound.setDroneMotion(cameraFeeds.droneMotion);if(animations.isOpen()){last=now;return;}adaptiveTick?.(now);const dt=Math.min((now-last)/1000,.05);last=now;let t=(now-start)/1000;
 if (demo) { let n=Math.floor(t/9); const mockAction=mockActions[n%mockActions.length];state={patch:{...sampleState.patch,mail:n%3,action:mockAction,place:mockAction==='computer'?'computer':ids[Math.floor(n/2)%ids.length],target:['walk','run','swing'].includes(mockActions[n%mockActions.length]) ? ids[(Math.floor(n/2)+1)%ids.length] : null,since:`n${n}n`,says:null},clock:{dayFraction:(.38+t/240)%1,weather:['clear','cloudy','rain','storm'][Math.floor(t/60)%4]}}; }
 if (demo) renderCare(state.patch);
 const walked = controls.update(dt) || 0;
