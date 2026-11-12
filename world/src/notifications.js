@@ -57,7 +57,7 @@ export function setupNotifications(dialog, community, app) {
     finally { Object.values(choices).forEach(box => { box.disabled = false; }); }
   }
 
-  $('#open-alerts').addEventListener('click', () => { community.showPanel('alerts'); refresh(); });
+  $('#open-alerts').addEventListener('click', () => { community.showPanel('alerts', true); refresh(); });
   Object.values(choices).forEach(box => box.addEventListener('change', save));
   // Back from signing in: check again.
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && !$('#alerts-panel').hidden && !$('#alerts-signin').hidden) refresh(); });

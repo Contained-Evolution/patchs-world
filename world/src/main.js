@@ -25,6 +25,7 @@ import { clearGroundLine, inPond, nearestWalkable, pondAccess } from './island-c
 import { CLIPS } from './patch-clips.js';
 import { CLIMB_WALLS, wallHold, holdLine, climbPlan, ropeExitPlan, placement } from './climbing.js';
 import { setupAnimationViewer } from './animation-viewer.js';
+import { NEEDS, overallHealth, makeGauge } from './health-gauge.js';
 import { makeTransfer } from './traversal.js';
 import { seatFor, usesTablet, deskClip } from './furniture.js';
 
@@ -67,41 +68,54 @@ const soundSetting = $('#island-sound'), soundShortcut = $('#sound-shortcut');
 const sound = createIslandAudio(soundSetting, $('#footsteps'));
 function syncSoundShortcut() {
   soundShortcut.setAttribute('aria-pressed', String(soundSetting.checked));
-  soundShortcut.title = soundSetting.checked ? 'Mute island sound' : 'Unmute island sound';
+  soundShortcut.title = soundSetting.checked ? 'Audio (sound on)' : 'Audio (sound off)';
 }
 soundSetting.addEventListener('change', syncSoundShortcut);
-soundShortcut.onclick = () => soundSetting.click();
 syncSoundShortcut();
 const cameraFeeds = setupIslandCameras(renderer);
 const controls = createVisitorControls(camera, renderer.domElement, () => dialog.open, scene, solids);
 const updateMap = setupIslandMap(renderer, $('#mini-chart canvas'), $('#full-chart canvas'), $('#map-landmarks'), renderAerial);
 
-const dockControls = $('#island-controls');
-const dockSummary = dockControls.querySelector('summary');
+const healthButton = $('#open-health'), healthDrop = $('#health-drop');
+const overallGauge = makeGauge('❤️', 'Patch’s health'), needGauges = new Map();
+healthButton.append(overallGauge.el);
+overallGauge.set(null);
+for (const [key, label, icon] of NEEDS) {
+  const gauge = makeGauge(icon, label);
+  gauge.set(null);
+  needGauges.set(key, gauge);
+  $('#health-gauges').append(gauge.el);
+}
+function setHealthDrop(open) {
+  healthDrop.hidden = !open;
+  healthButton.setAttribute('aria-expanded', String(open));
+}
+healthButton.onclick = () => setHealthDrop(healthDrop.hidden);
 document.addEventListener('pointerdown', event => {
-  if (dockControls.open && !dockControls.contains(event.target)) dockControls.open = false;
+  if (!healthDrop.hidden && !healthDrop.contains(event.target) && !healthButton.contains(event.target)) setHealthDrop(false);
 });
-dockControls.addEventListener('keydown', event => {
-  if (event.key !== 'Escape' || !dockControls.open) return;
-  dockControls.open = false;
-  dockSummary.focus();
+document.addEventListener('keydown', event => {
+  if (event.key !== 'Escape' || healthDrop.hidden) return;
+  setHealthDrop(false);
+  healthButton.focus();
 });
 
 function openIslandMenu(panel) {
-  dockControls.open = false;
+  setHealthDrop(false);
   controls.pause();
   dialog.showModal();
   community.showPanel(panel);
 }
 $('#open-map').onclick = () => openIslandMenu('map');
+$('#open-menu').onclick = () => openIslandMenu('more');
+soundShortcut.onclick = () => openIslandMenu('audio');
 $('#open-cameras').onclick = () => {
-  dockSummary.focus({ preventScroll: true });
   cameraFeeds.showGrid();
   openIslandMenu('cameras');
 };
 $('#back-to-map').onclick = () => {
   if (animations.isOpen()) animations.close();
-  community.showPanel('map');
+  community.showPanel('more');
 };
 const embeddedPage = $('#island-page');
 const menu = $('#island-menu');
@@ -113,10 +127,10 @@ menu.addEventListener('click', event => {
   if (page) {
     embeddedPage.dataset.page = page;
     embeddedPage.title = $('#page-title').textContent = button.textContent;
-    community.showPanel('page');
+    community.showPanel('page', true);
     embeddedPage.src = `./${page}.html`;
   } else if (['audio', 'video', 'patch', 'animations'].includes(panel)) {
-    community.showPanel(panel);
+    community.showPanel(panel, true);
     if (panel === 'animations') animations.open();
   }
 });
@@ -129,7 +143,7 @@ embeddedPage.addEventListener('load', () => {
 });
 $('#close-animations').onclick = () => {
   animations.close();
-  community.showPanel('map');
+  community.showPanel('more');
 };
 dialog.addEventListener('close', () => { if (!dialog.open && animations.isOpen()) animations.close(); });
 // A notification opens the island at its panel: ?view=letters.
@@ -252,16 +266,13 @@ function followClimb(elapsed,dt){
   wasAirborne=!wall&&seg.mode!=='rope-ground';return true;
 }
 function renderCare(p) {
-  const panel=$('#care'), list=$('#care-needs');
-  if (!p.needs) { panel.hidden=true; return; }
-  panel.hidden=false; $('#care-mood').textContent=`Mood: ${p.mood || 'unknown'}`;
-  list.replaceChildren();
-  for (const [key,label] of [['hunger','Fullness'],['energy','Energy'],['fun','Fun'],['comfort','Comfort'],['social','Social']]) {
-    const value=p.needs[key]; if (!Number.isFinite(value)) continue;
-    const percent=Math.round(Math.max(0,Math.min(1,value))*100), row=document.createElement('div'), name=document.createElement('span'), meter=document.createElement('progress'), text=document.createElement('span');
-    row.className='care-row'; name.textContent=label; meter.max=100; meter.value=percent; meter.setAttribute('aria-label',label); text.textContent=`${percent}%`; row.append(name,meter,text); list.append(row);
-  }
-  if (Array.isArray(p.carrying) && p.carrying.length) { const carried=document.createElement('p'); carried.className='care-carrying'; carried.textContent=`Carrying: ${p.carrying.join(', ')}`; list.append(carried); }
+  const known = !!p.needs;
+  overallGauge.set(known ? overallHealth(p.needs) : null);
+  for (const [key, gauge] of needGauges) gauge.set(p.needs?.[key]);
+  $('#care-mood').textContent = p.mood ? `Mood: ${p.mood}` : '';
+  const carrying = $('#care-carrying'), items = Array.isArray(p.carrying) ? p.carrying : [];
+  carrying.hidden = !items.length;
+  carrying.textContent = items.length ? `Carrying: ${items.join(', ')}` : '';
 }
 const localPreview = isLocalPreview(location.hostname), start = performance.now();
 // Each recording's timing, loaded once, so his mouth follows the words he's saying.

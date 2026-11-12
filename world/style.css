@@ -25,20 +25,12 @@ dialog::backdrop { background:#08241dbb; }
   display:block; width:100%; padding:6px; border:1px solid #d3d7b4b3; border-radius:15px;
   background:#143e36ed; color:#fff6dd; text-align:left; box-shadow:0 3px 16px #14362d80;
 }
-#island-controls { margin-top:5px; }
-#island-controls summary {
-  min-height:44px; padding:6px 9px; align-content:center; cursor:pointer;
+.dock-find { display:grid; gap:4px; margin-top:5px; }
+.dock-find button, .dock-follow, #back-to-map, .map-view-controls button, #map-landmarks button, .hud-button {
   border:1px solid #d3d7b4b3; border-radius:9px; background:#143e36f5; color:#fff6dd;
 }
-#island-controls summary:focus-visible { outline:3px solid #ffdc91; outline-offset:2px; }
-.dock-controls { display:grid; gap:4px; margin-top:4px; }
-.dock-icons { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:4px; }
-.dock-controls button, .dock-follow, #back-to-map, .map-view-controls button, #map-landmarks button {
-  border:1px solid #d3d7b4b3; border-radius:9px; background:#143e36f5; color:#fff6dd;
-}
-.dock-controls button { min-height:44px; padding:3px; }
-.dock-controls button:disabled, .dock-follow:has(:disabled) { opacity:.6; }
-.dock-icons button { display:grid; place-items:center; }
+.dock-find button { min-height:44px; padding:3px; }
+.dock-find button:disabled, .dock-follow:has(:disabled) { opacity:.6; }
 #sound-shortcut[aria-pressed="false"] .sound-waves,
 #sound-shortcut[aria-pressed="true"] .sound-muted { display:none; }
 .dock-follow {
@@ -76,10 +68,7 @@ dialog::backdrop { background:#08241dbb; }
   display:grid; place-items:center; width:20px; height:20px; flex:none;
   border-radius:50%; background:#29483c; color:#f5cd83; font-size:12px;
 }
-#island-menu {
-  display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px;
-  border-top:1px solid #ffffff36; margin-top:14px; padding-top:12px;
-}
+#island-menu { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; }
 #island-menu button, .setting-row select {
   min-height:44px; padding:6px; border:1px solid #ffffff45; border-radius:9px;
   background:#284b40; color:#fff7e3;
@@ -110,7 +99,7 @@ dialog::backdrop { background:#08241dbb; }
 }
 @media (max-height:480px) {
   .map-dock { width:92px; }
-  #island-controls summary { padding-inline:5px; }
+  .hud { left:max(108px, calc(env(safe-area-inset-left) + 104px)); }
   .map-launch-title img { width:30px; height:30px; }
 }
 [hidden]{display:none!important}
@@ -129,13 +118,25 @@ dialog::backdrop { background:#08241dbb; }
 @media(max-width:650px){.community{padding:0}.community h3{font-size:25px}.panel-intro{gap:10px}.panel-icon{width:42px;height:42px;font-size:23px}.community form{padding:12px}.entry{padding:12px}.form-footer{align-items:center}.form-footer button{min-height:44px}}
 
 .community h3:focus{outline:none}
-.care { max-width:420px; margin-top:14px; padding:12px; border-radius:12px; background:#233f36; }
-.community .care h3 { margin:0 0 6px; font-size:18px; }
-.care-row { display:grid; grid-template-columns:72px minmax(20px,1fr) 42px; gap:8px; align-items:center; margin-top:5px; }
-.care-row progress { width:100%; height:8px; accent-color:#f0c47e; }
-.care-row span:last-child { text-align:right; }
-.care-mood, .care-carrying { color:#f6dbab; }
-.care-carrying { margin:7px 0 0; }
+.hud {
+  position:absolute; z-index:2; top:max(12px,env(safe-area-inset-top)); left:calc(max(12px,env(safe-area-inset-left)) + 120px);
+}
+.hud-row { display:flex; gap:6px; }
+.hud-button { display:grid; place-items:center; width:52px; height:52px; padding:0; box-shadow:0 3px 14px #14362d80; }
+.hud-button:focus-visible { outline:3px solid #ffdc91; outline-offset:2px; }
+.health-drop { width:52px; margin-top:6px; }
+.health-gauges { display:grid; gap:6px; }
+.health-gauges .gauge { width:52px; height:52px; border:1px solid #d3d7b4b3; border-radius:9px; background:#143e36f5; box-shadow:0 3px 14px #14362d80; }
+.health-drop :is(.care-mood, .care-carrying) {
+  width:max-content; max-width:min(60vw, 240px); margin:6px 0 0; padding:5px 9px; border-radius:9px;
+  background:#143e36f5; border:1px solid #d3d7b4b3; color:#f6dbab; font-size:14px;
+}
+.gauge { position:relative; display:grid; place-items:center; }
+.gauge svg { position:absolute; inset:0; width:100%; height:100%; fill:none; stroke-width:4.5; stroke-linecap:round; }
+.gauge-track { stroke:#ffffff26; }
+.gauge-fill { stroke:url(#gauge-grad); transition:stroke-dasharray .6s; }
+.gauge-icon { position:relative; font-size:20px; line-height:1; margin-top:-2px; }
+.gauge-defs { position:absolute; }
 #return-to-walk, #mouse-lock {
   border:1px solid #ffffff9c; border-radius:12px; background:#173f38ed; color:white;
 }
@@ -250,3 +251,4 @@ nav button[hidden]{display:none}
 #letter-kind{display:block;font:inherit;max-width:100%;min-height:44px;margin:6px 0 14px;padding:6px 10px;color:#263d35;background:#fff3d6;border:1px solid #948065;border-radius:8px}
 .install-help{width:min(440px,92vw);text-align:center}.install-help h2{margin:4px 0 12px;font-size:26px}.install-help p{line-height:1.5;color:#e4f0dc}#install-steps{font-size:19px;color:#fff8e6}.install-help .primary{margin-top:8px;font-size:17px}
 .reply-voice{display:block;width:100%;margin:4px 0 8px}
+.hud-button .gauge { width:100%; height:100%; }

@@ -4,28 +4,37 @@
     <span class="map-launch-title"><img src="./icons/icon-192.png" width="40" height="40" alt=""> <span>Patch’s<br>World</span></span>
     <span class="island-chart mini-chart" id="mini-chart" aria-hidden="true"><canvas width="360" height="380"></canvas></span>
   </button>
-  <details id="island-controls">
-    <summary>Controls</summary>
-    <div class="dock-controls">
-      <div class="dock-icons">
-        <button id="sound-shortcut" type="button" aria-label="Island sound" aria-pressed="true" title="Mute island sound">
-          <svg aria-hidden="true" viewBox="0 0 32 32" width="25" height="25" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M4 12h5l7-6v20l-7-6H4z" fill="currentColor"/>
-            <path class="sound-waves" d="M21 11a7 7 0 0 1 0 10m4-14a13 13 0 0 1 0 18"/>
-            <path class="sound-muted" d="m22 13 6 6m0-6-6 6"/>
-          </svg>
-        </button>
-        <button id="open-cameras" type="button" aria-label="Island cameras" aria-haspopup="dialog" title="Island cameras">
-          <svg aria-hidden="true" viewBox="0 0 40 32" width="30" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M4 6h32l-5 13H7Z M12 6l2 13 M20 19v6h12m0-5v10"/>
-            <circle cx="9" cy="13" r="2"/>
-          </svg>
-        </button>
-      </div>
-      <button id="find-patch" type="button" disabled>Find Patch</button>
-      <label class="dock-follow"><input id="follow-patch" type="checkbox" aria-label="Follow Patch" disabled> Follow</label>
-    </div>
-  </details>
+  <div class="dock-find">
+    <button id="find-patch" type="button" disabled>Find Patch</button>
+    <label class="dock-follow"><input id="follow-patch" type="checkbox" aria-label="Follow Patch" disabled> Follow</label>
+  </div>
+</div>
+<div class="hud">
+  <svg class="gauge-defs" width="0" height="0" aria-hidden="true" focusable="false"><defs><linearGradient id="gauge-grad" gradientUnits="userSpaceOnUse" x1="5" y1="0" x2="43" y2="0"><stop offset="0" stop-color="#e2574c"/><stop offset=".5" stop-color="#f0cf4e"/><stop offset="1" stop-color="#58c46a"/></linearGradient></defs></svg>
+  <div class="hud-row">
+    <button id="open-health" class="hud-button" type="button" aria-expanded="false" aria-controls="health-drop" aria-label="How Patch is doing"></button>
+    <button id="sound-shortcut" class="hud-button" type="button" aria-label="Audio" aria-haspopup="dialog" aria-pressed="true" title="Audio">
+      <svg aria-hidden="true" viewBox="0 0 32 32" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 12h5l7-6v20l-7-6H4z" fill="currentColor"/>
+        <path class="sound-waves" d="M21 11a7 7 0 0 1 0 10m4-14a13 13 0 0 1 0 18"/>
+        <path class="sound-muted" d="m22 13 6 6m0-6-6 6"/>
+      </svg>
+    </button>
+    <button id="open-cameras" class="hud-button" type="button" aria-label="Island cameras" aria-haspopup="dialog" title="Island cameras">
+      <svg aria-hidden="true" viewBox="0 0 40 32" width="32" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 6h32l-5 13H7Z M12 6l2 13 M20 19v6h12m0-5v10"/>
+        <circle cx="9" cy="13" r="2"/>
+      </svg>
+    </button>
+    <button id="open-menu" class="hud-button" type="button" aria-haspopup="dialog" aria-label="Menu" title="Menu">
+      <svg aria-hidden="true" viewBox="0 0 32 32" width="28" height="28" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M6 9h20M6 16h20M6 23h20"/></svg>
+    </button>
+  </div>
+  <div id="health-drop" class="health-drop" hidden>
+    <div id="health-gauges" class="health-gauges"></div>
+    <p id="care-mood" class="care-mood"></p>
+    <p id="care-carrying" class="care-carrying" hidden></p>
+  </div>
 </div>
 <div class="island-movement">
   <div id="move-stick" role="group" aria-label="Movement joystick">
@@ -41,7 +50,7 @@
 <dialog id="map" aria-labelledby="island-menu-title">
   <div class="map-head">
     <h1 id="island-menu-title">Patch’s World</h1>
-    <button id="back-to-map" type="button" hidden>Back to map</button>
+    <button id="back-to-map" type="button" hidden>Back</button>
     <button id="close-map" type="button" aria-label="Close island menu" autofocus>×</button>
   </div>
   <section id="map-home" aria-label="Island map">
@@ -68,11 +77,6 @@
     <p id="status">Checking on Patch…</p>
     <p id="connection" role="status" hidden>Can’t reach Patch right now</p>
     <p id="bubble" hidden></p>
-    <div id="care" class="care" hidden>
-      <h3>How Patch is doing</h3>
-      <div id="care-mood" class="care-mood"></div>
-      <div id="care-needs"></div>
-    </div>
   </section>
   <section class="community island-panel" id="audio-panel" aria-labelledby="audio-title" hidden>
     <h2 id="audio-title" tabindex="-1">Audio</h2>
@@ -80,7 +84,7 @@
     <label class="setting-row"><span>Footsteps</span><input id="footsteps" type="checkbox" checked></label>
   </section>
   <section class="community island-panel" id="video-panel" aria-labelledby="video-title" hidden>
-    <h2 id="video-title" tabindex="-1">Video</h2>
+    <h2 id="video-title" tabindex="-1">Display</h2>
     <label class="setting-row">Render quality
       <select id="render-quality"><option value="auto">Automatic</option><option value="reduced">Reduced</option><option value="full">Full</option></select>
     </label>
@@ -125,9 +129,10 @@
     <h2 id="animations-title" tabindex="-1">Animations</h2>
     <section id="animations" class="locker" aria-labelledby="locker-title" hidden><canvas id="locker-canvas" aria-label="Patch on a turntable. Drag to turn him, scroll to zoom."></canvas><div class="locker-head"><div><span class="eyebrow">PATCH'S LOCKER</span><h3 id="locker-title">Animation viewer</h3></div><button id="close-animations" type="button" aria-label="Close animations">×</button></div><div class="locker-list" id="locker-list" aria-label="Animations wired to Patch"></div><div class="locker-now" aria-live="polite"><strong id="locker-name">Loading Patch…</strong><span id="locker-use"></span><small id="locker-meta"></small><div class="locker-controls"><button id="locker-play" type="button">Pause</button><input id="locker-scrub" type="range" min="0" max="1000" value="0" aria-label="Position in the animation"><button id="locker-speed" type="button" aria-label="Playback speed">1×</button><button id="locker-spin" type="button" aria-pressed="true">Spin</button></div></div></section>
   </section>
+  <section class="community island-panel" id="more-panel" aria-labelledby="more-title" hidden>
+    <h2 id="more-title" tabindex="-1">Menu</h2>
   <nav id="island-menu" aria-label="Island menu">
-    <button id="open-audio" type="button" data-panel="audio">Audio</button>
-    <button id="open-video" type="button" data-panel="video">Video</button>
+    <button id="open-video" type="button" data-panel="video">Display</button>
     <button id="open-patch" type="button" data-panel="patch">Patch</button>
     <button id="open-letters" type="button" data-panel="letters">Letters</button>
     <button id="open-board" type="button" data-panel="board">Message board</button>
@@ -139,4 +144,5 @@
     <button id="install-app" type="button" aria-haspopup="dialog" hidden>Get the Patch app</button>
     <button id="app-update" type="button" hidden>Reload to update</button>
   </nav>
+  </section>
 </dialog><dialog id="install-help" class="install-help" aria-labelledby="install-title"><h2 id="install-title">Get Patch's World as an app</h2><p id="install-steps"></p><p>The app opens straight to Patch's island and keeps the island on your device, so it loads fast.</p><form method="dialog"><button class="primary" type="submit">Got it</button></form></dialog><div id="error" hidden>Patch's island couldn't load on this device.</div><script type="module" src="./main.js"></script></body></html>

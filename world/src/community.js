@@ -87,10 +87,11 @@ export function setupCommunity(dialog) {
   const sections = () => dialog.querySelectorAll('section.community');
   const menu = $(dialog, '#island-menu');
   const backToMap = $(dialog, '#back-to-map');
-  function showPanel(name) {
-    current=name;
+  let fromHub=false;
+  function showPanel(name, hub=false) {
+    current=name; fromHub=hub;
     home.hidden=name!=='map';
-    if (backToMap) backToMap.hidden = name === 'map';
+    if (backToMap) backToMap.hidden = !hub;
     sections().forEach(panel=>{ panel.hidden=panel.id!==`${name}-panel`; });
     if (menu) {
       for (const button of menu.querySelectorAll('button[aria-current]')) button.removeAttribute('aria-current');
@@ -106,16 +107,16 @@ export function setupCommunity(dialog) {
     const focus = name === 'map' ? $(dialog, '#map-overview') : $(dialog,`#${name}-title`);
     focus?.focus({preventScroll:true});
   }
-  async function openPanel(name) {
+  async function openPanel(name, hub=false) {
     user=null;
     if(name==='letters') { letters=[]; renderLetters(); $(dialog,'#letter-form').hidden=true; }
-    showPanel(name); notice(name,'');
+    showPanel(name,hub); notice(name,'');
     $(dialog,`#${name}-signin`).hidden=true;
     if(name==='board') loadBoard();
     try { await checkUser(); if(name==='letters') { if(user) await loadLetters(); else {letters=[];renderLetters(); $(dialog,'#letter-text').value=''; $(dialog,'#letter-text').dispatchEvent(new Event('input'));} } else renderBoard(); }
     catch(error) { user=null; if(name==='letters') {letters=[];renderLetters();} else if(boardLoaded) renderBoard(); notice(name,error.message); }
   }
-  for(const name of ['letters','board']) $(dialog,`#open-${name}`).addEventListener('click',()=>openPanel(name));
+  for(const name of ['letters','board']) $(dialog,`#open-${name}`).addEventListener('click',()=>openPanel(name,true));
   dialog.querySelectorAll('.back-map').forEach(button=>button.addEventListener('click',()=>{ sections().forEach(panel=>panel.hidden=true); current=null; const active=button.closest('section').id.replace(/-panel$/,''); home.hidden=false; dialog.scrollTop=0; $(dialog,`#open-${active}`)?.focus(); }));
   dialog.addEventListener('close',()=>{
     if (dialog.open) return;
@@ -123,7 +124,7 @@ export function setupCommunity(dialog) {
     else { sections().forEach(panel=>panel.hidden=true); current=null; home.hidden=false; }
   });
   // Back from signing in: if this panel was asking for an account, look again.
-  document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible' && panels[current] && !$(dialog,`#${current}-signin`).hidden) openPanel(current); });
+  document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible' && panels[current] && !$(dialog,`#${current}-signin`).hidden) openPanel(current,fromHub); });
   const letterKind = $(dialog, '#letter-kind');
   const letterInput = $(dialog, '#letter-text');
   const letterPlaceholder = letterInput.placeholder;
