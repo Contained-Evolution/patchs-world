@@ -198,7 +198,7 @@ const THINK_ASK = `Stop and think for a moment, as Patch. You decide what you do
   "says": "something short you say out loud, or null",
   "plan": null to keep doing what you're doing, or { "do": "one thing you can do", "where": "a place", "minutes": how long, "how": "walk, run or swing (to the tall trees) to get there, or null", "why": "a few words", "search": "for research or computer: what you want to look up on the internet, or null", "about": "for write: what you want to write about in your journal or memories, or null" },
   "remember": null or { "category": "a memory category", "subcategory": "a smaller group", "title": "a few words", "text": "the memory in your words", "feeling": "one word", "strength": 1 to 5 (5 = you will never forget it), "tags": ["2-8 short words for the things, people, places and feelings in it"] },
-  "gift": null or { "id": "gift number from your notes", "do": "eat, keep, replace or play" },
+  "gift": null or { "id": "gift number from your notes", "do": "eat, keep, replace, play or wear" },
   "take": [things from here to pick up and carry, up to 3; you can carry 6 things],
   "leave": [things you are carrying to put down here; they stay until you come back],
   "noticed": ["up to 6 short words for what you are noticing or thinking about right now"],

@@ -2,6 +2,7 @@ const status = document.querySelector('#status');
 const signIn = document.querySelector('#sign-in');
 const meal = document.querySelector('#send-meal');
 const ball = document.querySelector('#send-ball');
+const hoodie = document.querySelector('#send-hoodie');
 const stage = document.querySelector('.ball-stage');
 const shape = stage.querySelector('.ball');
 let state;
@@ -9,6 +10,12 @@ let state;
 function render() {
   meal.disabled = !state?.canSendMeal;
   ball.disabled = !state?.canSendBall;
+  document.querySelector('#hoodie-gift').hidden = !state?.canOfferHoodie;
+  hoodie.disabled = !state?.canOfferHoodie || Boolean(state.hoodie);
+  document.querySelector('#hoodie-state').textContent = ({
+    waiting: 'Your hoodie is waiting at camp.',
+    worn: 'Patch put on your hoodie.',
+  })[state?.hoodie] || '';
   const wear = state?.ball?.wear || 0;
   stage.style.setProperty('--wear', wear);
   stage.style.setProperty('--bounce', `${62 - wear * 53}px`);
@@ -29,7 +36,7 @@ function render() {
 }
 
 async function update(kind) {
-  meal.disabled = ball.disabled = true;
+  meal.disabled = ball.disabled = hoodie.disabled = true;
   status.textContent = kind ? 'Leaving your gift…' : 'Checking your gifts…';
   try {
     const response = await fetch('./api/gifts', kind && {
@@ -56,6 +63,7 @@ async function update(kind) {
 
 meal.addEventListener('click', () => update('meal'));
 ball.addEventListener('click', () => update('ball'));
+hoodie.addEventListener('click', () => update('hoodie'));
 document.querySelector('#preview-ball').addEventListener('click', () => {
   shape.classList.remove('bouncing');
   requestAnimationFrame(() => requestAnimationFrame(() => shape.classList.add('bouncing')));

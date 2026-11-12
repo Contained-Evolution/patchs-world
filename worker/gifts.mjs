@@ -14,6 +14,7 @@ function condition(wear) {
 
 export function giftView(gifts, day, now) {
   return {
+    hoodie: gifts.hoodie?.status || null,
     meal: gifts.meal?.status || null,
     canSendMeal: gifts.meal?.day !== day && gifts.meal?.status !== 'waiting',
     offer: gifts.offer?.status || null,
@@ -23,8 +24,9 @@ export function giftView(gifts, day, now) {
 }
 
 export function giftNotes(gifts = [], now) {
-  return gifts.map(({ id, meal, offer, ball }) => {
+  return gifts.map(({ id, meal, offer, ball, hoodie }) => {
     const options = [];
+    if (hoodie?.status === 'waiting') options.push('a gray hoodie with PATCH on it, a gift from Chris. Put it on (wear)');
     if (meal?.status === 'waiting') options.push('a banana left for you (eat)');
     if (offer?.status === 'waiting') options.push(ball ? 'a new ball from the same visitor. Keep the old ball (keep) or take the new one (replace)' : 'a new ball to keep (keep)');
     if (ball) options.push(`your ball, ${condition(ballWear(ball, now)).toLowerCase()} (play)`);
@@ -34,6 +36,10 @@ export function giftNotes(gifts = [], now) {
 
 export function useGift(gifts, action, body, now) {
   if (body.activity.target || !CAMP.includes(body.activity.place)) return false;
+  if (action === 'wear' && gifts.hoodie?.status === 'waiting') {
+    gifts.hoodie.status = 'worn';
+    return 'I put on the hoodie Chris gave me.';
+  }
   if (action === 'eat' && gifts.meal?.status === 'waiting') {
     gifts.meal.status = 'eaten';
     body.needs.hunger = Math.min(1, body.needs.hunger + 0.24);

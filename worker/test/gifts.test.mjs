@@ -35,3 +35,13 @@ test('the same ball wears down, gives less fun, and stays until Patch chooses a 
   assert.notEqual(gifts.ball, old);
   assert.equal(ballWear(gifts.ball, now + 32 * day), 0);
 });
+
+test('Patch can put on Chris’s hoodie once when he is at camp', () => {
+  const gifts = { hoodie: { status: 'waiting' }, offer: { status: 'waiting' } };
+  assert.equal(useGift(gifts, 'wear', { activity: { place: 'beach' } }, now), false);
+  assert.equal(useGift(gifts, 'wear', { activity: { place: 'computer', target: 'beach' } }, now), false);
+  assert.match(useGift(gifts, 'wear', camp(), now), /Chris/);
+  assert.equal(giftView(gifts, '2026-11-11', now).hoodie, 'worn');
+  assert.equal(gifts.offer.status, 'waiting');
+  assert.equal(useGift(gifts, 'wear', camp(), now), false);
+});

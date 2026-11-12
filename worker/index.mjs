@@ -83,8 +83,9 @@ export class PatchWorld extends DurableObject {
     const now = Date.now();
     const body = await this.body(now);
     if (this.env.OPENROUTER_API_KEY && !(await this.ctx.storage.getAlarm())) await this.ctx.storage.setAlarm(now + 60000);
-    const stored = await this.ctx.storage.get(['unread', 'giftSound', 'speech', 'mind']);
+    const stored = await this.ctx.storage.get(['unread', 'giftSound', 'speech', 'mind', 'outfit']);
     const result = view(body, now, (stored.get('unread') || []).length);
+    result.patch.outfit = stored.get('outfit') || null;
     const sound = stored.get('giftSound');
     if (sound && now - sound.at < GIFT_SOUND_DURATION) result.patch.giftSound = sound;
     const speech = speechView(stored.get('speech'), now);
@@ -284,19 +285,23 @@ export class PatchWorld extends DurableObject {
   async gifts(who) {
     const now = Date.now();
     const id = await this.ctx.storage.get(`gift-owner:${who.id}`);
-    return giftView(id && await this.ctx.storage.get(`gift:${id}`) || {}, localDate(now), now);
+    return { ...giftView(id && await this.ctx.storage.get(`gift:${id}`) || {}, localDate(now), now), canOfferHoodie: who.admin };
   }
 
   async sendGift(who, kind) {
     const now = Date.now(), day = localDate(now);
     if (await this.isBlocked(who)) return { status: 403, error: "You can't send gifts to Patch." };
-    if (kind !== 'meal' && kind !== 'ball') return { status: 400, error: 'Choose a banana or ball.' };
+    if (kind === 'hoodie' && !who.admin) return { status: 403, error: 'Only Chris can leave this hoodie.' };
+    if (!['meal', 'ball', 'hoodie'].includes(kind)) return { status: 400, error: 'Choose a banana or ball.' };
     const result = await this.ctx.storage.transaction(async txn => {
       const owner = `gift-owner:${who.id}`;
       const id = await txn.get(owner) || newId(now);
       const key = `gift:${id}`, gifts = await txn.get(key) || { id };
       const queue = await txn.get('campGifts') || [];
-      if (kind === 'meal') {
+      if (kind === 'hoodie') {
+        if (gifts.hoodie) return { status: 429, error: 'You already left the hoodie for Patch.' };
+        gifts.hoodie = { status: 'waiting' };
+      } else if (kind === 'meal') {
         if (!giftView(gifts, day, now).canSendMeal) return { status: 429, error: 'You can leave one banana a day, after Patch eats the last one.' };
         gifts.meal = { day, status: 'waiting' };
       } else {
@@ -305,7 +310,7 @@ export class PatchWorld extends DurableObject {
         gifts.offer = { status: 'waiting' };
       }
       await txn.put({ [owner]: id, [key]: gifts, campGifts: [id, ...queue.filter(other => other !== id)] });
-      return { status: 201, ...giftView(gifts, day, now) };
+      return { status: 201, ...giftView(gifts, day, now), canOfferHoodie: who.admin };
     });
     if (result.status === 201) await this.ping(now);
     return result;
@@ -321,6 +326,7 @@ export class PatchWorld extends DurableObject {
       const copy = { activity: body.activity, needs: { ...body.needs } };
       const thought = useGift(gifts, action, copy, now);
       if (!thought) return null;
+      if (action === 'wear') await txn.put('outfit', 'hoodie');
       await txn.put({ [key]: gifts, giftSound: sound });
       return { thought, needs: copy.needs };
     });

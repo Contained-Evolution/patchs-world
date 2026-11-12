@@ -179,11 +179,36 @@ const ping=new THREE.Sprite(new THREE.SpriteMaterial({map:pingTexture(),depthTes
 let patchMouth, patchEyes, mixer, patchModel, headBone, rightHandBone, leftHandBone, clips = {}, strideSpeed = {}, currentAction, currentName, roam = null;
 // Turn smoothly toward a heading instead of snapping at each bend.
 function face(angle,dt){const turn=Math.atan2(Math.sin(angle-patch.rotation.y),Math.cos(angle-patch.rotation.y));patch.rotation.y+=turn*Math.min(1,dt*7);}
+let hoodie, hoodieLoading;
+function updateOutfit() {
+  const wearingHoodie = state?.patch.outfit === 'hoodie';
+  if (hoodie) hoodie.visible = wearingHoodie;
+  if (!patchModel || !wearingHoodie || hoodie || hoodieLoading) return;
+  const model = patchModel;
+  hoodieLoading = new GLTFLoader().loadAsync(new URL('./assets/patch-hoodie.glb', document.baseURI).href)
+    .then(({ scene }) => {
+      const body = model.getObjectByProperty('isSkinnedMesh', true);
+      const garment = scene.getObjectByProperty('isSkinnedMesh', true);
+      const bones = new Map(body.skeleton.bones.map(bone => [bone.name, bone]));
+      const joints = garment.skeleton.bones.map(bone => bones.get(bone.name));
+      if (joints.some(joint => !joint)) throw new Error('The hoodie does not match Patch’s rig.');
+      scene.updateMatrixWorld(true);
+      garment.matrixWorld.decompose(garment.position, garment.quaternion, garment.scale);
+      garment.bind(new THREE.Skeleton(joints, garment.skeleton.boneInverses), garment.bindMatrix);
+      garment.frustumCulled = false;
+      garment.visible = state?.patch.outfit === 'hoodie';
+      model.add(garment);
+      hoodie = garment;
+    })
+    .catch(error => console.error('Unable to load Patch’s hoodie', error))
+    .finally(() => { hoodieLoading = null; });
+}
 const lookUp = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -0.6);
 new GLTFLoader().load(new URL('./assets/patch.glb', document.baseURI).href, gltf => {
   patchModel=gltf.scene; patch.add(patchModel);
   patchEyes=createPatchEyes(patchModel);
   patchMouth=createPatchMouth(patchModel);
+  updateOutfit();
   gltf.scene.traverse(node => { if (node.isBone && /mixamorig[:_]?head$/i.test(node.name)) headBone=node; if(node.isBone && /mixamorig[:_]?righthand$/i.test(node.name)) rightHandBone=node; if(node.isBone && /mixamorig[:_]?lefthand$/i.test(node.name)) leftHandBone=node; });
   mixer = new THREE.AnimationMixer(gltf.scene);
   for (const clip of gltf.animations) {
@@ -330,6 +355,7 @@ async function poll() {
     const [px,pz]=places[next.patch.place];
     if (!state || (previous && previous.since!==next.patch.since && !next.patch.target && Math.hypot(patch.position.x-px,patch.position.z-pz)>60)) {const spawn=nearestWalkable(px,pz,solids);if(spawn)patch.position.set(spawn[0],groundHeight(...spawn),spawn[1]);}
     state = next; hasLiveState = true; demo = false;
+    updateOutfit();
     renderCare(next.patch);
     renderStream(next.feed);
     $('#connection').hidden = true;
