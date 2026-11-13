@@ -4,7 +4,7 @@ import {createHash} from 'node:crypto';
 import {resolve,dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
-const files=['shared/editor/model.mjs','shared/editor/store.mjs','shared/editor/glb.mjs','shared/editor/collision.mjs','world/src/editor/editor.js','world/src/editor/registry.js','world/src/editor/assets.js','world/src/editor/published.js','world/editor.css','worker/editor-api.mjs'];
+const files=['shared/editor/model.mjs','shared/editor/camp.mjs','shared/editor/store.mjs','shared/editor/glb.mjs','shared/editor/collision.mjs','world/src/editor/editor.js','world/src/editor/registry.js','world/src/editor/assets.js','world/src/editor/published.js','world/editor.css','worker/editor-api.mjs'];
 const digest=async base=>Object.fromEntries(await Promise.all(files.map(async p=>[p,createHash('sha256').update(await readFile(resolve(base,p))).digest('hex')])));
 export async function verifyEditorPackage(){const manifest=JSON.parse(await readFile(resolve(root,'shared/editor/package-lock.json'),'utf8'));const actual=await digest(root);for(const file of files)if(actual[file]!==manifest.files[file])throw new Error('Shared editor differs from pinned version: '+file+'. Sync the editor package before building.');}
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){

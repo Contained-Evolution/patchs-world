@@ -2,7 +2,7 @@
 
 The caretaker menu's **Edit World** opens `/editor.html` in Patch’s World. Only the existing administrator account can read or modify drafts, upload models, or publish. Tenari keeps its **World editor** entry at `/world/valley.html` and scopes all editor data and uploads to the signed-in companion owner.
 
-The editor uses the actual island/valley scenery. Ordinary generated trees and decorative boulders have stable `base:` records and remain instanced. Activity fixtures, banana/swing trees and their supports, cave structure, terrain, water and Tenari town landmarks remain protected. New architecture can be made from blocks/platforms or static GLB models. Added models are decorative; they do not acquire activities automatically.
+The editor uses the actual island/valley scenery. Ordinary generated trees and decorative boulders have stable `base:` records and remain instanced. Patch’s computer tent and coconut computer/chair are separate movable fixtures. Both stay upright at their authored size and follow the ground. Moving the computer also moves its sitting point, heading and route destination; tent walls and entrances move and rotate with the tent. Deleting or duplicating these working fixtures remains disabled. Other activity fixtures, banana/swing trees and their supports, cave structure, terrain, water and Tenari town landmarks remain protected. New architecture can be made from blocks/platforms or static GLB models. Added models are decorative; they do not acquire activities automatically.
 
 ## Controls
 

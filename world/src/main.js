@@ -72,7 +72,7 @@ scene.fog = new THREE.Fog(0xadd9d4, 750, 1650);
 const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, .1, 12000);
 const scenery=createIsland(scene),solids=scenery.walkSolids;
 const loadEditorAsset=createAssetLoader('./','/api/editor');
-watchPublished('/api/editor',async layout=>{await scenery.registry.apply(layout,loadEditorAsset);scenery.setEditorLayout(layout);});
+watchPublished('/api/editor',async layout=>{await scenery.registry.apply(layout,loadEditorAsset);scenery.setEditorLayout(layout);groundActivity=null;groundApproach=null;journey=null;roam=null;beats=null;inFurniture=false;});
 const soundSetting = $('#island-sound'), soundShortcut = $('#sound-shortcut');
 const sound = createIslandAudio(soundSetting, $('#footsteps'));
 function syncSoundShortcut() {

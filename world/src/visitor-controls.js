@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { groundHeight } from './world-state.js';
 import { inPond, nearestWalkable, visitorEyeHeight, walkStep } from './island-collision.js';
-import { COMPUTER_TENT, insideComputerTent } from './furniture.js';
+import { COMPUTER_TENT, insideComputerTent, tentPoint } from './furniture.js';
 import { shoreFraction, walkShoreLimit, vinePoint } from './terrain.js';
 
 export { walkable, walkStep } from './island-collision.js';
@@ -124,7 +124,7 @@ export function createVisitorControls(camera, canvas, isModalOpen, scene, walkSo
   function landNearPatch(position) {
     const tent = COMPUTER_TENT;
     const [x, z] = insideComputerTent(position.x, position.z)
-      ? safeLanding(tent.x + tent.halfLength + 1.4, tent.z)
+      ? safeLanding(...tentPoint(tent.halfLength + 1.4,0))
       : safeLanding(position.x + 3, position.z + 4);
     setMode('walk');
     climb = null;
@@ -162,7 +162,8 @@ export function createVisitorControls(camera, canvas, isModalOpen, scene, walkSo
     if (inTent) {
       const tent = COMPUTER_TENT;
       // A fixed view from inside the entrance keeps the canvas roof out of the way.
-      destination.set(tent.x + 2.15, groundHeight(tent.x + 2.15, tent.z + .55) + 1.45, tent.z + .55);
+      const [viewX,viewZ]=tentPoint(2.15,.55);
+      destination.set(viewX,groundHeight(viewX,viewZ)+1.45,viewZ);
       if (snap || !wasInTent) patchView.position.copy(destination);
       else patchView.position.lerp(destination, 1 - Math.exp(-8 * dt));
       patchView.lookAt(position.x, position.y + .74, position.z - .25);

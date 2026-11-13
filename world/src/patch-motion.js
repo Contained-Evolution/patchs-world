@@ -3,7 +3,7 @@
 import { CLIPS } from './patch-clips.js';
 import { ISLAND, groundHeight, places } from './terrain.js';
 import { clearGroundLine, nearestWalkable, walkable } from './island-collision.js';
-import { COMPUTER_TENT, SEATS, insideComputerTent } from './furniture.js';
+import { COMPUTER_TENT, SEATS, insideComputerTent, tentPoint } from './furniture.js';
 import { BEATS, TABLET_BEATS, pickBeat, walkClip } from './patch-beats.js';
 
 export function seedFrom(text){let h=2166136261;for(const c of String(text))h=Math.imul(h^c.charCodeAt(0),16777619);return h>>>0;}
@@ -19,10 +19,10 @@ export function patchRoute(from,to,seed,remembered=[],solids){
  const startInside=insideComputerTent(...start),goalInside=insideComputerTent(...goal);
  if(startInside!==goalInside){
   const tent=COMPUTER_TENT, outside=startInside?goal:start;
-  const preferred=outside[0]>=tent.x?1:-1;
+  const outward=tentPoint(1,0),preferred=(outside[0]-tent.x)*(outward[0]-tent.x)+(outside[1]-tent.z)*(outward[1]-tent.z)>=0?1:-1;
   for(const side of [preferred,-preferred]){
-   const door=[tent.x+side*(tent.halfLength-.65),tent.z];
-   const entry=[tent.x+side*(tent.halfLength+.65),tent.z];
+   const door=tentPoint(side*(tent.halfLength-.65),0);
+   const entry=tentPoint(side*(tent.halfLength+.65),0);
    const inside=startInside?start:goal;
    const inner=clear(inside,door)?[inside,door]:searchRoute(inside,door,solids,seed);
    if(!inner||!clear(door,entry))continue;

@@ -73,7 +73,7 @@ export function bananaPickingSpots(tree, origin, solids) {
   return spots;
 }
 const trunkRadius = tree => tree.grove ? BANANA_TREE.trunkRadius : .7;
-export function createIslandCollision(skipDecorative = false) {
+export function createIslandCollision(skipDecorative = false, skipCamp = false) {
   const solids = createWalkSolids();
   for (const tree of forest) {
     if (skipDecorative && !tree.swing && !tree.grove) continue;
@@ -93,6 +93,7 @@ export function createIslandCollision(skipDecorative = false) {
   solids.box(x + 5, z - 20, x + 7.3, z - 3);
   solids.box(x - 8, z - 20, x + 8, z - 14.9);
 
+  if(!skipCamp){
   // Two open ends. Only the fabric walls and the curtains flanking each opening stop walking.
   const tent = COMPUTER_TENT;
   const west = tent.x - tent.halfLength, east = tent.x + tent.halfLength;
@@ -108,6 +109,8 @@ export function createIslandCollision(skipDecorative = false) {
   const [deskX, chairZ] = places.computer;
   const deskZ = chairZ - COMPUTER_DESK_DISTANCE;
   solids.box(deskX - .48, deskZ - .32, deskX + .48, deskZ + .327);
+
+  }
 
   const bounds = new THREE.Box3();
   return Object.assign(solids, {

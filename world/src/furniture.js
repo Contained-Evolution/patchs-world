@@ -1,3 +1,5 @@
+import {campDefaults,worldPoint,localPoint} from '../../shared/editor/camp.mjs';
+import {groundHeight,paths} from './terrain.js';
 // Where Patch sits. Each seat is a spot his feet stand on (he sits back onto the seat behind them),
 // the way he faces, and what it is. Sizes match his clips: seated hips are about .28 above his feet.
 import { places } from './terrain.js';
@@ -19,9 +21,17 @@ export const COMPUTER_DESK_DISTANCE = .60;
 export const COMPUTER_TENT = {
  x: computerX, z: computerZ + .8, scale: 7.5, halfLength: 3.45, halfWidth: 3.05, halfDoor: .72,
 };
-export function insideComputerTent(x, z) {
- const tent = COMPUTER_TENT;
- return Math.abs(x - tent.x) < tent.halfLength && Math.abs(z - tent.z) < tent.halfWidth;
+// Snapshot original placement before a draft or published layout moves the fixtures.
+export const CAMP_DEFAULTS=campDefaults(places,groundHeight);
+COMPUTER_TENT.heading=0;
+export function tentPoint(x,z){return worldPoint({position:[COMPUTER_TENT.x,0,COMPUTER_TENT.z],rotation:[0,COMPUTER_TENT.heading,0]},x,z);}
+export function insideComputerTent(x,z){const [px,pz]=localPoint({position:[COMPUTER_TENT.x,0,COMPUTER_TENT.z],rotation:[0,COMPUTER_TENT.heading,0]},x,z);return Math.abs(px)<COMPUTER_TENT.halfLength&&Math.abs(pz)<COMPUTER_TENT.halfWidth;}
+export function applyCampRecords(records){
+ const [tent,computer]=records;
+ COMPUTER_TENT.x=tent.position[0];COMPUTER_TENT.z=tent.position[2];COMPUTER_TENT.heading=tent.rotation[1];
+ Object.assign(SEATS.computer,{x:computer.position[0],z:computer.position[2],heading:computer.rotation[1]});
+ places.computer=[computer.position[0],computer.position[2]];
+ paths.computer=[[0,0],[...places.computer]];
 }
 
 export function computerActivity(action, place, target, secondsLeft) {

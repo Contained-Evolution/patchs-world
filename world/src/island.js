@@ -1,3 +1,5 @@
+import {campRecords} from '../../shared/editor/camp.mjs';
+import {CAMP_DEFAULTS,applyCampRecords} from './furniture.js';
 import {boundsCollision} from '../../shared/editor/collision.mjs';
 import { WorldRegistry } from './editor/registry.js';
 import { SWING_TREE } from './swing-tree.js';
@@ -25,7 +27,7 @@ function surfaceTexture(base, strokes, seed=1){
 }
 function rockGeometry(){let g=mergeVertices(new THREE.IcosahedronGeometry(1,2));const p=g.attributes.position;for(let i=0;i<p.count;i++){let x=p.getX(i),y=p.getY(i),z=p.getZ(i);let f=1+.16*Math.sin(x*7+z*4)*Math.cos(y*9-z*2);p.setXYZ(i,x*f,y*f,z*f);}g.computeVertexNormals();return g;}
 export function createIsland(scene){
- const walkSolids = createIslandCollision(true);
+ const walkSolids = createIslandCollision(true,true);
  const registry = new WorldRegistry(scene);
  let editorBlocks=()=>false;
  const fixedBlocks=walkSolids.blocks;
@@ -311,8 +313,9 @@ if (trackingPatch) {
  for(const pool of TIDE_POOLS){const [x,z,rx,rz]=pool,p=add(new THREE.CircleGeometry(1,32),water,x,tideWaterHeight(pool),z);p.rotation.x=-Math.PI/2;p.scale.set(rx*.8,rz*.8,1);for(let i=0;i<7;i++){const a=i*6.28/7,px=x+Math.cos(a)*rx*1.2,pz=z+Math.sin(a)*rz*1.2;stone(px,pz,1,.6,.8);}}
  const boulderMesh=new THREE.InstancedMesh(boulder,rock,stones.length);stones.forEach((p,i)=>{pose.position.set(p.x,groundHeight(p.x,p.z)+p.sy*.10,p.z);pose.rotation.set(rand(p.x+p.z)*.4,rand(p.x-p.z)*6,.1);pose.scale.set(p.sx,p.sy,p.sz);pose.updateMatrix();boulderMesh.setMatrixAt(i,pose.matrix);if(Math.hypot(p.x-places.cave[0],p.z-places.cave[1])<25)walkSolids.rock(p.x,p.z,boulder,pose.matrix);else registry.instance('base:rock:'+i,'Boulder',boulderMesh,i,[p.x,groundHeight(p.x,p.z)+p.sy*.10,p.z],[[-p.sx,-p.sy,-p.sz],[p.sx,p.sy,p.sz]]);});boulderMesh.instanceMatrix.needsUpdate=true;boulderMesh.computeBoundingSphere();scene.add(boulderMesh);
  // Chairs, the camp table and the coconut computer.
- const furniture=createFurniture(scene,{bark,wood},block);
+ const furniture=createFurniture(scene,{bark,wood},block,registry);
  addCampRulesSign(scene, walkSolids, { bark, wood, rope, foliage }, blade);
- editorBlocks=boundsCollision(registry.collisionBoxes({objects:[]}),groundHeight);
- return { registry, setEditorLayout(layout){editorBlocks=boundsCollision(registry.collisionBoxes(layout),groundHeight);}, walkSolids, block, setRope, pondScenery, setTrackingTarget, setComputer:furniture.setComputer, resetRopes(){for(const i of ROPE_TREES)setRope(i,null);}, update(dt,daylight,rain=0){waterRain.value=rain;pondScenery.update(dt);furniture.update(dt,daylight);waterTime.value+=dt;waterLight.value=daylight;foliage.emissiveIntensity=.05+daylight*.3;} };
+ const updateEditorLayout=layout=>{const boxes=boundsCollision(registry.collisionBoxes(layout),groundHeight),fixtures=registry.fixtureCollision(layout,groundHeight);editorBlocks=(...args)=>boxes(...args)||fixtures(...args);applyCampRecords(campRecords(layout,CAMP_DEFAULTS));};
+ updateEditorLayout({objects:[]});
+ return { registry, setEditorLayout:updateEditorLayout, walkSolids, block, setRope, pondScenery, setTrackingTarget, setComputer:furniture.setComputer, resetRopes(){for(const i of ROPE_TREES)setRope(i,null);}, update(dt,daylight,rain=0){waterRain.value=rain;pondScenery.update(dt);furniture.update(dt,daylight);waterTime.value+=dt;waterLight.value=daylight;foliage.emissiveIntensity=.05+daylight*.3;} };
 }

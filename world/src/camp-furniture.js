@@ -2,15 +2,15 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { groundHeight } from './terrain.js';
-import { SEATS, SEAT_HEIGHT, COMPUTER_DESK_DISTANCE, COMPUTER_TENT, computerActivity } from './furniture.js';
+import { SEATS, SEAT_HEIGHT, COMPUTER_DESK_DISTANCE, COMPUTER_TENT, CAMP_DEFAULTS, computerActivity } from './furniture.js';
 
-export function createFurniture(scene, { bark, wood }, block) {
+export function createFurniture(scene, { bark, wood }, block, registry) {
  const material = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 1, ...extra });
  const bamboo = material(0xc9b26a), shell = material(0x6b4a2e), lightWood = material(0xa7794c);
  // Each piece is built around its seat: +z is the way he faces, the seat sits just behind his feet.
  function group(x, z, heading) { const g = new THREE.Group(); g.position.set(x, groundHeight(x, z), z); g.rotation.y = heading; scene.add(g); return g; }
- function box(parent, mat, w, h, d, x, y, z) { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); parent.add(m); block(m); return m; }
- function post(parent, mat, r, h, x, z, y = 0) { const m = new THREE.Mesh(new THREE.CylinderGeometry(r * .85, r, h, 7), mat); m.position.set(x, y + h / 2, z); parent.add(m); block(m); return m; }
+ function box(parent, mat, w, h, d, x, y, z) { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); parent.add(m); if(!parent.userData.movableCamp)block(m); return m; }
+ function post(parent, mat, r, h, x, z, y = 0) { const m = new THREE.Mesh(new THREE.CylinderGeometry(r * .85, r, h, 7), mat); m.position.set(x, y + h / 2, z); parent.add(m); if(!parent.userData.movableCamp)block(m); return m; }
 
  function chair(parent, back = .12) {
   box(parent, lightWood, .44, .05, .34, 0, SEAT_HEIGHT - .025, -back);
@@ -43,20 +43,17 @@ export function createFurniture(scene, { bark, wood }, block) {
   const pot = new THREE.Mesh(new THREE.SphereGeometry(.09, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), shell); pot.rotation.x = Math.PI; pot.position.set(.35, .09, -.05); g.add(pot);
  }
 
- const tent = COMPUTER_TENT;
- const tentGround = Math.min(...[-1, 1].flatMap(side => [-1, 1].map(end =>
-  groundHeight(tent.x + end * tent.halfLength, tent.z + side * tent.halfWidth))));
- const loader = new GLTFLoader();
- loader.load(new URL('./assets/computer-tent.glb', document.baseURI).href, ({ scene: shelter }) => {
-  shelter.position.set(tent.x, tentGround + .305908 * tent.scale, tent.z);
-  shelter.rotation.y = Math.PI / 2;
-  shelter.scale.setScalar(tent.scale);
-  scene.add(shelter);
+ const [tentDefinition,computerDefinition]=CAMP_DEFAULTS;
+ const tentRoot=new THREE.Group();registry?.object(tentDefinition,tentRoot);
+ if(!registry){tentRoot.position.fromArray(tentDefinition.position);scene.add(tentRoot);}
+ const loader=new GLTFLoader();
+ loader.load(new URL('./assets/computer-tent.glb',document.baseURI).href,({scene:shelter})=>{
+  shelter.position.set(0,.305908*COMPUTER_TENT.scale,0);shelter.rotation.y=Math.PI/2;shelter.scale.setScalar(COMPUTER_TENT.scale);tentRoot.add(shelter);
  });
-
- // The desk model faces +z, back toward the chair after rotation.
- const seat = SEATS.computer, computer = group(seat.x, seat.z, seat.heading);
- chair(computer, .1);
+ const computer=new THREE.Group();computer.userData.movableCamp=!!registry;
+ registry?.object(computerDefinition,computer);
+ if(!registry){computer.position.fromArray(computerDefinition.position);computer.rotation.set(...computerDefinition.rotation);scene.add(computer);}
+ chair(computer,.1);
  const canvas = document.createElement('canvas'); canvas.width = 320; canvas.height = 224;
  const g = canvas.getContext('2d'), texture = new THREE.CanvasTexture(canvas);
  texture.colorSpace = THREE.SRGBColorSpace;
