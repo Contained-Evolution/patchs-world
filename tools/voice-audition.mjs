@@ -11,11 +11,12 @@ const MODEL = 'eleven_multilingual_ttv_v2';
 
 const LINE = `Hi friend! Thank you for your letter, it made my tail curl up all happy! Today I found a shiny shell at the tide pools, and I think a crab used to live in it. Dad always says, "Let's find out!" So tomorrow I'm going to go look. Ooh, and I learned a new word: barnacle! Write back soon, okay? Bye-bye!`;
 
+// Voice Design refuses child voices, so each is an adult performer doing a cartoon character.
 const VOICES = {
-  squeaky: 'A high-pitched, squeaky cartoon monkey boy, about five years old, bouncy and excited, a fast talker full of giggly energy, like the star of an animated kids\' show. Clear American accent, studio quality.',
-  cheeky: 'A very high, bright and slightly nasal cartoon voice for a cheeky little monkey who is amazed by everything, with silly upward inflections and playful timing. Studio quality.',
-  sweet: 'A sweet, curious young cartoon monkey with a small, slightly raspy voice, warm and gentle but full of wonder, talking a little fast like an excited kid in an animated film. Studio quality.',
-  goofy: 'A goofy, sing-song cartoon sidekick monkey with a high, rubbery, very expressive voice, friendly and silly, bouncing up and down in pitch. Studio quality.',
+  squeaky: 'An animated cartoon monkey character voiced by an adult voice actor: high-pitched, squeaky and bouncy, excited and fast-talking with giggly energy. Clear American accent, studio quality.',
+  cheeky: 'A cartoon monkey sidekick voiced by an adult performer: very high, bright and slightly nasal, cheeky and amazed by everything, with silly upward inflections and playful timing. Studio quality.',
+  sweet: 'A gentle animated monkey character voiced by an adult actor: soft, high and slightly raspy, warm and full of wonder, talking a little fast when excited. Studio quality.',
+  goofy: 'A goofy, sing-song cartoon monkey voiced by an adult comedian: high, rubbery and very expressive, friendly and silly, bouncing up and down in pitch. Studio quality.',
 };
 
 async function call(paths, body) {
@@ -32,7 +33,9 @@ async function audition(folder) {
   await mkdir(folder, { recursive: true });
   const takes = [];
   for (const [name, description] of Object.entries(VOICES)) {
-    const result = await call(['/text-to-voice/design', '/text-to-voice/create-previews'], { voice_description: description, model_id: MODEL, text: LINE });
+    let result;
+    try { result = await call(['/text-to-voice/design', '/text-to-voice/create-previews'], { voice_description: description, model_id: MODEL, text: LINE }); }
+    catch (error) { console.log(`${name}: skipped, ${error.message.slice(0, 160)}`); continue; }
     result.previews.forEach((preview, n) => {
       takes.push({ file: `${name}-${n + 1}.mp3`, name: `${name} ${n + 1}`, id: preview.generated_voice_id, description, audio: preview.audio_base_64 });
     });
