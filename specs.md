@@ -1,5 +1,7 @@
 # Technical specifications
 
+
+- The shared [caretaker editor](notes/caretaker-editor.md) supports free 3D scenery transforms, an adjustable flat grid, GLB upload, private drafts, atomic publishing and rollback. Its versioned package is pinned in `shared/editor/package-lock.json`.
 - Runtime: Cloudflare Worker `patchs-world`, entry [worker/index.mjs](worker/index.mjs), config [worker/wrangler.toml](worker/wrangler.toml).
 - The [asset catalog build](world/asset-catalog.mjs) publishes the inventory and the [banana grove tree definition](world/src/banana-tree.js) for Tenari’s World editor.
 - Routes: its own address, `patch.containedevolution.com` (a custom domain in [wrangler.toml](worker/wrangler.toml)), so it installs and runs as its own app apart from Contained Evolution's. The company website still forwards `containedevolution.com/patch*` to it through a service binding; those requests move to the new address, and `/patch/sw.js` there is a service worker that clears copies saved at the old address.

@@ -92,8 +92,9 @@ export function addCampRulesSign(scene, solids, { bark, wood, rope, foliage }, b
   canvas.width = 1344;
   canvas.height = 816;
   const context = canvas.getContext('2d');
-  const title = document.querySelector('#rules-title').textContent;
+  const title = document.querySelector('#rules-title')?.textContent || 'Patch’s World';
   const rules = [...document.querySelectorAll('#camp-rules li')].map(item => item.textContent);
+  if(!rules.length) rules.push('Stay inside the reef. The swimming hole is safe for swimming.', 'A green camera light means someone is watching.', 'The cave shelters you during storms.', 'Give Patch time to answer letters.', 'Offer ideas; Patch decides what to do.');
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = 4;

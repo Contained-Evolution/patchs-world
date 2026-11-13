@@ -46,3 +46,8 @@ new_sqlite_classes = ["SocialPublisher"]
 
 [browser]
 binding = "BROWSER"
+
+# Provision this bucket before deploying the editor's upload feature.
+[[r2_buckets]]
+binding = "EDITOR_ASSETS"
+bucket_name = "patchs-world-editor-assets"

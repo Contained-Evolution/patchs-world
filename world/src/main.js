@@ -1,3 +1,5 @@
+import { watchPublished } from './editor/published.js';
+import { createAssetLoader } from './editor/assets.js';
 import { createPatchMouth } from './patch-mouth.js';
 import { foragePlan } from './foraging.js';
 import { createFoodProps } from './food-props.js';
@@ -44,7 +46,7 @@ setupInstall();
 // Chris's account sees an Animations button in the menu that opens Patch's clip locker.
 const animations=setupAnimationViewer();
 
-fetch('/api/me',{credentials:'same-origin',cache:'no-store'}).then(r=>r.ok?r.json():null).then(me=>{if(me?.user?.admin||isLocalPreview(location.hostname))$('#open-animations').hidden=false;}).catch(()=>{if(isLocalPreview(location.hostname))$('#open-animations').hidden=false;});
+fetch('/api/me',{credentials:'same-origin',cache:'no-store'}).then(r=>r.ok?r.json():null).then(me=>{if(me?.user?.admin||isLocalPreview(location.hostname)){$('#open-animations').hidden=false;$('#open-world-editor').hidden=false;}}).catch(()=>{if(isLocalPreview(location.hostname)){$('#open-animations').hidden=false;$('#open-world-editor').hidden=false;}});
 let renderer;
 try { renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' }); } catch { $('#error').hidden = false; throw new Error('WebGL unavailable'); }
 const basePixelRatio=Math.min(devicePixelRatio,1.5);renderer.setPixelRatio(basePixelRatio);
@@ -69,6 +71,8 @@ const scene = new THREE.Scene();
 scene.fog = new THREE.Fog(0xadd9d4, 750, 1650);
 const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, .1, 12000);
 const scenery=createIsland(scene),solids=scenery.walkSolids;
+const loadEditorAsset=createAssetLoader('./','/api/editor');
+watchPublished('/api/editor',async layout=>{await scenery.registry.apply(layout,loadEditorAsset);scenery.setEditorLayout(layout);});
 const soundSetting = $('#island-sound'), soundShortcut = $('#sound-shortcut');
 const sound = createIslandAudio(soundSetting, $('#footsteps'));
 function syncSoundShortcut() {
@@ -482,9 +486,6 @@ const findPatch = $('#find-patch'), followPatch = $('#follow-patch');
 const sleepingInHammock = () => inFurniture && state?.patch.action === 'sleep' && state.patch.place === 'hammock';
 findPatch.onclick = () => {
   if (state) controls.findPatch(patch.position, false, sleepingInHammock());
-};
-$('#jump-to-patch').onclick = () => {
-  if (state && patch.visible) controls.jumpToPatch(patch.position);
 };
 followPatch.onchange = () => {
   if (followPatch.checked && state) controls.findPatch(patch.position, true, sleepingInHammock());

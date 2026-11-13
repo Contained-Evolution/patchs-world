@@ -32,7 +32,7 @@ test('dance keeps its base step and skips flips on cramped or wet ground', () =>
 });
 
 test('every clip in the model is played somewhere on the island, or marked spare', () => {
-  const source = readdirSync(new URL('../src/', import.meta.url)).filter(file => !['patch-clips.js', 'island-audio.js', 'animation-viewer.js'].includes(file))
+  const source = readdirSync(new URL('../src/', import.meta.url)).filter(file => file.endsWith('.js')).filter(file => !['patch-clips.js', 'island-audio.js', 'animation-viewer.js'].includes(file))
     .map(file => readFileSync(new URL(`../src/${file}`, import.meta.url), 'utf8')).join('\n')
     + readFileSync(new URL('../src/patch-clips.js', import.meta.url), 'utf8').split('export const HANG_CLIPS')[1];
   for (const [clip, info] of Object.entries(CLIPS)) {

@@ -73,9 +73,10 @@ export function bananaPickingSpots(tree, origin, solids) {
   return spots;
 }
 const trunkRadius = tree => tree.grove ? BANANA_TREE.trunkRadius : .7;
-export function createIslandCollision() {
+export function createIslandCollision(skipDecorative = false) {
   const solids = createWalkSolids();
   for (const tree of forest) {
+    if (skipDecorative && !tree.swing && !tree.grove) continue;
     const radius = trunkRadius(tree);
     solids.ellipse(tree.x, tree.z, radius, radius);
   }
@@ -114,7 +115,7 @@ export function createIslandCollision() {
       bounds.setFromObject(object, true);
       solids.box(bounds.min.x, bounds.min.z, bounds.max.x, bounds.max.z);
     },
-    rock(x, z, geometry, matrix, scattered = false) {
+    rock(x, z, geometry, matrix, scattered = false, register = true) {
       // All boulders use the same footprint derived from the transformed mesh.
       const vertices = geometry.attributes.position, point = new THREE.Vector3();
       let radius = 0;
@@ -124,7 +125,7 @@ export function createIslandCollision() {
       }
       if (scattered && bananaTrees.some(tree =>
         Math.hypot(x-tree.x,z-tree.z) < radius + BANANA_TREE.pickDistance + WALK_RADIUS)) return false;
-      solids.ellipse(x, z, radius, radius);
+      if(register) solids.ellipse(x, z, radius, radius);
       return true;
     }
   });

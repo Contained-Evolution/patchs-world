@@ -1,3 +1,5 @@
+import {verifyEditorPackage} from '../tools/editor-package.mjs';
+await verifyEditorPackage();
 import { build } from 'esbuild';
 import { writeAssetCatalog } from './asset-catalog.mjs';
 import { bananaTreeCatalogEntry } from './src/banana-tree.js';
@@ -6,6 +8,9 @@ import { join, relative, sep } from 'node:path';
 import { mkdir, copyFile, cp, rm, readdir, readFile, writeFile } from 'node:fs/promises';
 await rm('dist', {recursive:true,force:true});
 await mkdir('dist', { recursive: true });
+await build({entryPoints:['src/editor/patch-editor.js'],bundle:true,format:'esm',minify:true,outfile:'dist/editor.js'});
+await copyFile('editor.html','dist/editor.html');
+await copyFile('editor.css','dist/editor.css');
 await build({ entryPoints: ['src/main.js'], bundle: true, format: 'esm', minify: true, outfile: 'dist/main.js', sourcemap: true });
 await build({ entryPoints: ['src/community-page.js'], bundle: true, format: 'esm', outfile: 'dist/community-page.js' });
 await build({ entryPoints: ['src/memory-galaxy.js'], bundle: true, format: 'esm', minify: true, outfile: 'dist/memory-galaxy.js' });

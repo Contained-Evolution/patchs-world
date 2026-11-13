@@ -1,3 +1,5 @@
+import { editorStore } from './editor-world.mjs';
+import { editorAPI } from './editor-api.mjs';
 // Patch's World Worker, reached through the company website service binding.
 
 import { DurableObject } from 'cloudflare:workers';
@@ -108,6 +110,14 @@ export class SocialPublisher extends DurableObject {
 
 // The one Patch. Every visitor reads the same body; one alarm runs his mind.
 export class PatchWorld extends DurableObject {
+  editorPublished(){ return editorStore(this.ctx.storage).published(); }
+  editorDraft(){ return editorStore(this.ctx.storage).draft(); }
+  editorSave(data){ return editorStore(this.ctx.storage).save(data); }
+  editorPublish(data){ return editorStore(this.ctx.storage).publish(data); }
+  editorRollback(data){ return editorStore(this.ctx.storage).rollback(data); }
+  async editorUploads(){ return await this.ctx.storage.get('editor:uploads') || []; }
+  async editorAddUpload(asset){ return this.ctx.storage.transaction(async tx=>{const assets=await tx.get('editor:uploads')||[];if(assets.length>=200)throw new Error('Library upload limit reached.');await tx.put('editor:uploads',[...assets,asset]);}); }
+
   // Once, when his mind took charge of his day: delete every letter, board post and record of who wrote.
   async freshStart(now) {
     if (this.started || await this.ctx.storage.get('freshStart')) { this.started = true; return; }
@@ -632,6 +642,11 @@ export default {
       return Response.redirect('https://containedevolution.com/controller/' + url.search + '#approvals', 302);
     }
 
+    if(path==='/api/editor/published'&&request.method==='GET') return editorAPI(request,env,path,patchOf(env),false);
+    if(path.startsWith('/api/editor/')) {
+      let who;try{who=await visitor(request,env);}catch{return json({error:'Account check unavailable.'},503);}
+      return editorAPI(request,env,path,patchOf(env),Boolean(who?.admin));
+    }
     if (path === '/api/state' || path === '/api/journal' || path === '/api/memory') {
       if (request.method !== 'GET') return json({ error: 'Method not allowed.' }, 405);
       const patch = patchOf(env);

@@ -1,3 +1,5 @@
+import {boundsCollision} from '../../shared/editor/collision.mjs';
+import { WorldRegistry } from './editor/registry.js';
 import { SWING_TREE } from './swing-tree.js';
 import * as THREE from 'three';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -23,7 +25,12 @@ function surfaceTexture(base, strokes, seed=1){
 }
 function rockGeometry(){let g=mergeVertices(new THREE.IcosahedronGeometry(1,2));const p=g.attributes.position;for(let i=0;i<p.count;i++){let x=p.getX(i),y=p.getY(i),z=p.getZ(i);let f=1+.16*Math.sin(x*7+z*4)*Math.cos(y*9-z*2);p.setXYZ(i,x*f,y*f,z*f);}g.computeVertexNormals();return g;}
 export function createIsland(scene){
- const walkSolids = createIslandCollision();
+ const walkSolids = createIslandCollision(true);
+ const registry = new WorldRegistry(scene);
+ let editorBlocks=()=>false;
+ const fixedBlocks=walkSolids.blocks;
+ walkSolids.blocks=(...args)=>fixedBlocks(...args)||editorBlocks(...args);
+
  const block = walkSolids.mesh;
  const material=(color,extra={})=>new THREE.MeshStandardMaterial({color,roughness:1,...extra});
  const groundMat=material(0xffffff,{vertexColors:true,map:surfaceTexture('#dfdfdf',['#898989','#ffffff','#bbbbbb'])});
@@ -83,7 +90,7 @@ if(islandBank.x>.001){
  const stones=[];const stone=(x,z,sx,sy,sz)=>{stones.push({x,z,sx,sy,sz});};
  const boulder=rockGeometry(),blade=leafGeometry();
  // Heightfield follows the exact same coast and ground query as movement and Patch.
- for(const geometry of createTerrainTiles())add(geometry,groundMat);
+ for(const geometry of createTerrainTiles()){const mesh=add(geometry,groundMat);mesh.userData.editorTerrain=true;}
  scene.add(...createPondSteps(rock));
  addWaterfallVines(scene,blade,foliage);
  // Transparent, sunlit moving water uses the same shader idea as Tenari's valley.
@@ -151,6 +158,13 @@ if (trackingPatch) {
   });
   broadTrees.forEach((tree,i)=>{const y=groundHeight(tree.x,tree.z),w=9+rand(i+81)*5;for(let j=0;j<3;j++){pose.position.set(tree.x,y+tree.h+(tree.swing?SWING_TREE.canopyExtension:.8),tree.z);if(tree.swing){pose.position.y-=.4+j*.08;pose.rotation.set(-Math.PI/2,0,tree.angle+j*Math.PI/3);pose.scale.set(w,w*.8,1);}else{pose.rotation.set(0,tree.angle+j*Math.PI/3,0);pose.scale.set(w,w*.48,1);}pose.updateMatrix();canopyMesh.setMatrixAt(i*3+j,pose.matrix);}});
   const branches=new THREE.InstancedMesh(branchGeometry,bark,broadTrees.length*2);broadTrees.forEach((tree,i)=>{const y=groundHeight(tree.x,tree.z),height=tree.h+(tree.swing?SWING_TREE.canopyExtension:0);for(let j=0;j<2;j++){const angle=tree.angle+j*2.8,start=new THREE.Vector3(tree.x,y+height*.7,tree.z),end=new THREE.Vector3(tree.x+Math.cos(angle)*2.6,y+height+.4,tree.z+Math.sin(angle)*2.6),direction=end.clone().sub(start);pose.position.copy(start).add(end).multiplyScalar(.5);pose.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),direction.clone().normalize());pose.scale.set(1,direction.length(),1);pose.updateMatrix();branches.setMatrixAt(i*2+j,pose.matrix);}});
+  for(const tree of chunk){if(tree.swing||tree.grove)continue;
+   const id='base:tree:'+forest.indexOf(tree),origin=[tree.x,groundHeight(tree.x,tree.z),tree.z],bounds=[[-.7,0,-.7],[.7,tree.h,.7]];
+   registry.instance(id,'Forest tree',trunkMesh,chunk.indexOf(tree),origin,bounds);
+   const pi=palms.indexOf(tree),bi=broadTrees.indexOf(tree);
+   if(pi>=0)for(let j=0;j<7;j++)registry.instance(id,'Forest tree',leafMesh,pi*7+j,origin,bounds);
+   if(bi>=0){for(let j=0;j<3;j++)registry.instance(id,'Forest tree',canopyMesh,bi*3+j,origin,bounds);for(let j=0;j<2;j++)registry.instance(id,'Forest tree',branches,bi*2+j,origin,bounds);}
+  }
   for(const mesh of [trunkMesh,leafMesh,canopyMesh,branches])if(mesh.count){mesh.instanceMatrix.needsUpdate=true;mesh.computeBoundingSphere();scene.add(mesh);}
  }
  // Layered understory turns the trunks into a living forest.
@@ -180,6 +194,7 @@ if (trackingPatch) {
  // same anchor calculation, so their visible wood and Patch's grip coincide.
  const handholds=new THREE.InstancedMesh(new THREE.CylinderGeometry(.09,.18,1,7),bark,forest.length);
  forest.forEach((tree,i)=>{const {x,z,h}=tree,a=new THREE.Vector3(...anchorFor([x,z,h])),start=new THREE.Vector3(x,a.y,z),d=a.clone().sub(start);pose.position.copy(start).add(a).multiplyScalar(.5);pose.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize());pose.scale.set(1,a.distanceTo(start),1);pose.updateMatrix();handholds.setMatrixAt(i,pose.matrix);});
+ forest.forEach((tree,i)=>{if(!tree.swing&&!tree.grove)registry.instance('base:tree:'+i,'Forest tree',handholds,i,[tree.x,groundHeight(tree.x,tree.z),tree.z],[[-.7,0,-.7],[.7,tree.h,.7]]);});
  handholds.instanceMatrix.needsUpdate=true;handholds.computeBoundingSphere();scene.add(handholds);
  // Rope trees have their own visible rope even when Patch is elsewhere.
  const ropes=new Map();for(const i of ROPE_TREES){const hold=holdFor(i),geometry=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(...hold.anchor),new THREE.Vector3(...hold.grip)]),line=new THREE.Line(geometry,new THREE.LineBasicMaterial({color:0xb39a6c}));scene.add(line);ropes.set(i,line);
@@ -191,7 +206,7 @@ if (trackingPatch) {
  function setRope(i,end){const line=ropes.get(i);if(!line)return;const p=line.geometry.attributes.position,hold=holdFor(i),tip=end||[hold.anchor[0],groundHeight(hold.anchor[0],hold.anchor[2])+.3,hold.anchor[2]];p.setXYZ(1,...tip);p.needsUpdate=true;line.geometry.computeBoundingSphere();}
  // Scrub, flowers and coastal stones are instanced rather than individual meshes.
  for(let i=0;i<600;i++){let x=(rand(i+16000)*2-1)*300,z=(rand(i+18000)*2-1)*340;if(shoreFraction(x,z)>.93||reserved(x,z)||rand(i+19000)<.5)continue;const s=.4+rand(i+20000)*2;rocks.push({x,z,s});}
- const rockMesh=new THREE.InstancedMesh(boulder,rock,rocks.length);rockMesh.count=0;rocks.forEach((r,i)=>{pose.position.set(r.x,groundHeight(r.x,r.z)+r.s*.25,r.z);pose.rotation.set(.1,rand(i+41)*6,.15);pose.scale.set(r.s*1.3,r.s*.55,r.s);pose.updateMatrix();if(walkSolids.rock(r.x,r.z,boulder,pose.matrix,true))rockMesh.setMatrixAt(rockMesh.count++,pose.matrix);});rockMesh.instanceMatrix.needsUpdate=true;rockMesh.computeBoundingSphere();scene.add(rockMesh);
+ const rockMesh=new THREE.InstancedMesh(boulder,rock,rocks.length);rockMesh.count=0;rocks.forEach((r,i)=>{pose.position.set(r.x,groundHeight(r.x,r.z)+r.s*.25,r.z);pose.rotation.set(.1,rand(i+41)*6,.15);pose.scale.set(r.s*1.3,r.s*.55,r.s);pose.updateMatrix();if(walkSolids.rock(r.x,r.z,boulder,pose.matrix,true,false)){const index=rockMesh.count++;rockMesh.setMatrixAt(index,pose.matrix);registry.instance('base:scatter:'+i,'Scattered boulder',rockMesh,index,[r.x,groundHeight(r.x,r.z)+r.s*.25,r.z],[[-r.s*1.6,-r.s,-r.s*1.6],[r.s*1.6,r.s,r.s*1.6]]);}});rockMesh.instanceMatrix.needsUpdate=true;rockMesh.computeBoundingSphere();scene.add(rockMesh);
  const hy=groundHeight(hammock.x,hammock.z);
  addCampHammock(scene, rope).catch(error => console.error('Could not load the camp hammock:', error));
  for(const x of [4.2,6.2]){beam(wood,[x,hy,2],[x,hy+3.4,2],.07);walkSolids.ellipse(x,2,.07,.07);}for(const y of [hy+1.35,hy+2.5]){const shelf=add(new THREE.BoxGeometry(2.5,.13,.9),wood,5.2,y,2);shelf.rotation.y=.03;block(shelf);}
@@ -294,9 +309,10 @@ if (trackingPatch) {
  const coastalMesh=new THREE.InstancedMesh(boulder,rock,coastal.length);coastal.forEach((p,i)=>{pose.position.set(p.x,groundHeight(p.x,p.z)+.4,p.z);pose.rotation.set(.1,rand(i+75000)*6,.12);pose.scale.set(p.s*1.4,p.s*.65,p.s);pose.updateMatrix();coastalMesh.setMatrixAt(i,pose.matrix);walkSolids.rock(p.x,p.z,boulder,pose.matrix);});coastalMesh.instanceMatrix.needsUpdate=true;coastalMesh.computeBoundingSphere();scene.add(coastalMesh);
  // Tidal basins are carved into the same heightfield used by visitors.
  for(const pool of TIDE_POOLS){const [x,z,rx,rz]=pool,p=add(new THREE.CircleGeometry(1,32),water,x,tideWaterHeight(pool),z);p.rotation.x=-Math.PI/2;p.scale.set(rx*.8,rz*.8,1);for(let i=0;i<7;i++){const a=i*6.28/7,px=x+Math.cos(a)*rx*1.2,pz=z+Math.sin(a)*rz*1.2;stone(px,pz,1,.6,.8);}}
- const boulderMesh=new THREE.InstancedMesh(boulder,rock,stones.length);stones.forEach((p,i)=>{pose.position.set(p.x,groundHeight(p.x,p.z)+p.sy*.10,p.z);pose.rotation.set(rand(p.x+p.z)*.4,rand(p.x-p.z)*6,.1);pose.scale.set(p.sx,p.sy,p.sz);pose.updateMatrix();boulderMesh.setMatrixAt(i,pose.matrix);walkSolids.rock(p.x,p.z,boulder,pose.matrix);});boulderMesh.instanceMatrix.needsUpdate=true;boulderMesh.computeBoundingSphere();scene.add(boulderMesh);
+ const boulderMesh=new THREE.InstancedMesh(boulder,rock,stones.length);stones.forEach((p,i)=>{pose.position.set(p.x,groundHeight(p.x,p.z)+p.sy*.10,p.z);pose.rotation.set(rand(p.x+p.z)*.4,rand(p.x-p.z)*6,.1);pose.scale.set(p.sx,p.sy,p.sz);pose.updateMatrix();boulderMesh.setMatrixAt(i,pose.matrix);if(Math.hypot(p.x-places.cave[0],p.z-places.cave[1])<25)walkSolids.rock(p.x,p.z,boulder,pose.matrix);else registry.instance('base:rock:'+i,'Boulder',boulderMesh,i,[p.x,groundHeight(p.x,p.z)+p.sy*.10,p.z],[[-p.sx,-p.sy,-p.sz],[p.sx,p.sy,p.sz]]);});boulderMesh.instanceMatrix.needsUpdate=true;boulderMesh.computeBoundingSphere();scene.add(boulderMesh);
  // Chairs, the camp table and the coconut computer.
  const furniture=createFurniture(scene,{bark,wood},block);
  addCampRulesSign(scene, walkSolids, { bark, wood, rope, foliage }, blade);
- return { walkSolids, block, setRope, pondScenery, setTrackingTarget, setComputer:furniture.setComputer, resetRopes(){for(const i of ROPE_TREES)setRope(i,null);}, update(dt,daylight,rain=0){waterRain.value=rain;pondScenery.update(dt);furniture.update(dt,daylight);waterTime.value+=dt;waterLight.value=daylight;foliage.emissiveIntensity=.05+daylight*.3;} };
+ editorBlocks=boundsCollision(registry.collisionBoxes({objects:[]}),groundHeight);
+ return { registry, setEditorLayout(layout){editorBlocks=boundsCollision(registry.collisionBoxes(layout),groundHeight);}, walkSolids, block, setRope, pondScenery, setTrackingTarget, setComputer:furniture.setComputer, resetRopes(){for(const i of ROPE_TREES)setRope(i,null);}, update(dt,daylight,rain=0){waterRain.value=rain;pondScenery.update(dt);furniture.update(dt,daylight);waterTime.value+=dt;waterLight.value=daylight;foliage.emissiveIntensity=.05+daylight*.3;} };
 }

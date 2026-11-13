@@ -11,7 +11,6 @@ export function createVisitorControls(camera, canvas, isModalOpen, scene, walkSo
   const vineEnds = [vinePoint(0), vinePoint(1)];
   let climb = null;
   const moveStick = document.querySelector('#move-stick');
-  const jumpToPatch = document.querySelector('#jump-to-patch');
   const returnToWalk = document.querySelector('#return-to-walk');
   const follow = document.querySelector('#follow-patch');
   const mouseLock = document.querySelector('#mouse-lock');
@@ -69,7 +68,7 @@ export function createVisitorControls(camera, canvas, isModalOpen, scene, walkSo
 
   function updateLook() {
     const walking = mode === 'walk';
-    returnToWalk.hidden = jumpToPatch.hidden = walking;
+    returnToWalk.hidden = walking;
     mouseLock.hidden = !walking;
     mouseLock.setAttribute('aria-pressed', String(lockedLook));
     const label = lockedLook ? 'Mouse look on: click the island to look; Escape releases the mouse' : 'Mouse look off: drag to look';
@@ -301,17 +300,14 @@ export function createVisitorControls(camera, canvas, isModalOpen, scene, walkSo
       }
     },
     findPatch(position, tracking = false, inHammock = false) {
-      if (tracking || inHammock || insideComputerTent(position.x, position.z) || position.y > groundHeight(position.x, position.z) + 3) {
-        setMode(tracking ? 'follow' : 'watch');
+      if (tracking) {
+        setMode('follow');
         viewAngle = Math.PI / 4;
         viewOffset = viewOffsets[0];
         positionPatchView(position, 0, true, inHammock);
         return;
       }
       landNearPatch(position);
-    },
-    jumpToPatch(position) {
-      if (mode !== 'walk') landNearPatch(position);
     },
     stopFollowing() {
       setMode('walk');

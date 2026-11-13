@@ -221,10 +221,6 @@ nav button[hidden]{display:none}
 .alerts label{display:flex;align-items:center;gap:12px;padding:10px 0;cursor:pointer}.alerts input{width:22px;height:22px;accent-color:#f0c47e;flex:none}.alerts small{color:#c8dac9}
 
 
-#jump-to-patch {
-  min-height:44px; padding:8px 16px; pointer-events:auto;
-  border:1px solid #f0c47e; border-radius:12px; background:#f0c47e; color:#20382e;
-}
 #map:has(#cameras-panel:not([hidden])) {
   position:fixed; inset:max(8px, env(safe-area-inset-top)) 0 max(8px, env(safe-area-inset-bottom));
   width:min(calc(100% - 16px),1000px); height:auto; max-width:none; max-height:none;
