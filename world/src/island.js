@@ -1,3 +1,4 @@
+import {applyPondRecords} from './pond-swings.js';
 import {campRecords} from '../../shared/editor/camp.mjs';
 import {CAMP_DEFAULTS,applyCampRecords} from './furniture.js';
 import {boundsCollision} from '../../shared/editor/collision.mjs';
@@ -15,7 +16,7 @@ import { pondSwings } from './pond-swings.js';
 import { CLIMB_WALLS } from './climbing.js';
 import { createIslandCollision, bananaTrees } from './island-collision.js';
 import { BANANA_TREE, TRUNK_GEOMETRY, FRUIT_GEOMETRY, bananaFruitConnector, leafGeometry, palmLeafPose } from './banana-tree.js';
-import { hammock } from './hammock.js';
+import { hammock, applyHammockRecord } from './hammock.js';
 import { addCampHammock } from './camp-hammock.js';
 import { addCampRulesSign } from './camp-rules-sign.js';
 import { createFurniture } from './camp-furniture.js';
@@ -85,7 +86,7 @@ if(islandBank.x>.001){
  const foliage=material(0xc1d9ae,{map:leafMap,alphaTest:.35,side:THREE.DoubleSide,roughness:.9,emissive:0x334b29,emissiveMap:leafMap,emissiveIntensity:.35});
  const rockMap=new THREE.TextureLoader().load(new URL('./assets/volcanic-rock.png',document.baseURI).href);rockMap.colorSpace=THREE.SRGBColorSpace;rockMap.wrapS=rockMap.wrapT=THREE.RepeatWrapping;rockMap.anisotropy=4;const rock=material(0xbab9ad,{map:rockMap});
  const sand=material(0xd8c592),wood=material(0x725039),rope=material(0xd1c7a0);
- const pondScenery=addPondScenery(scene,rope);
+ const pondScenery=addPondScenery(scene,rope,registry);
  const wet=material(0x67836b,{roughness:.55});
  const add=(geo,mat,x=0,y=0,z=0)=>{const o=new THREE.Mesh(geo,mat);o.position.set(x,y,z);scene.add(o);return o;};
  const beam=(mat,a,b,r1,r2=r1)=>{const av=new THREE.Vector3(...a),bv=new THREE.Vector3(...b),d=bv.clone().sub(av);const o=add(new THREE.CylinderGeometry(r2,r1,d.length(),8),mat);o.position.copy(av).add(bv).multiplyScalar(.5);o.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize());return o;};
@@ -210,7 +211,7 @@ if (trackingPatch) {
  for(let i=0;i<600;i++){let x=(rand(i+16000)*2-1)*300,z=(rand(i+18000)*2-1)*340;if(shoreFraction(x,z)>.93||reserved(x,z)||rand(i+19000)<.5)continue;const s=.4+rand(i+20000)*2;rocks.push({x,z,s});}
  const rockMesh=new THREE.InstancedMesh(boulder,rock,rocks.length);rockMesh.count=0;rocks.forEach((r,i)=>{pose.position.set(r.x,groundHeight(r.x,r.z)+r.s*.25,r.z);pose.rotation.set(.1,rand(i+41)*6,.15);pose.scale.set(r.s*1.3,r.s*.55,r.s);pose.updateMatrix();if(walkSolids.rock(r.x,r.z,boulder,pose.matrix,true,false)){const index=rockMesh.count++;rockMesh.setMatrixAt(index,pose.matrix);registry.instance('base:scatter:'+i,'Scattered boulder',rockMesh,index,[r.x,groundHeight(r.x,r.z)+r.s*.25,r.z],[[-r.s*1.6,-r.s,-r.s*1.6],[r.s*1.6,r.s,r.s*1.6]]);}});rockMesh.instanceMatrix.needsUpdate=true;rockMesh.computeBoundingSphere();scene.add(rockMesh);
  const hy=groundHeight(hammock.x,hammock.z);
- addCampHammock(scene, rope).catch(error => console.error('Could not load the camp hammock:', error));
+ addCampHammock(scene, rope, registry).catch(error => console.error('Could not load the camp hammock:', error));
  for(const x of [4.2,6.2]){beam(wood,[x,hy,2],[x,hy+3.4,2],.07);walkSolids.ellipse(x,2,.07,.07);}for(const y of [hy+1.35,hy+2.5]){const shelf=add(new THREE.BoxGeometry(2.5,.13,.9),wood,5.2,y,2);shelf.rotation.y=.03;block(shelf);}
  // Simple useful objects make the clearing feel inhabited without moving Patch's anchors.
  const lamp=add(new THREE.SphereGeometry(.18,8,6),new THREE.MeshBasicMaterial({color:0xffd99c}),5,hy+2.74,2);
@@ -314,8 +315,8 @@ if (trackingPatch) {
  const boulderMesh=new THREE.InstancedMesh(boulder,rock,stones.length);stones.forEach((p,i)=>{pose.position.set(p.x,groundHeight(p.x,p.z)+p.sy*.10,p.z);pose.rotation.set(rand(p.x+p.z)*.4,rand(p.x-p.z)*6,.1);pose.scale.set(p.sx,p.sy,p.sz);pose.updateMatrix();boulderMesh.setMatrixAt(i,pose.matrix);if(Math.hypot(p.x-places.cave[0],p.z-places.cave[1])<25)walkSolids.rock(p.x,p.z,boulder,pose.matrix);else registry.instance('base:rock:'+i,'Boulder',boulderMesh,i,[p.x,groundHeight(p.x,p.z)+p.sy*.10,p.z],[[-p.sx,-p.sy,-p.sz],[p.sx,p.sy,p.sz]]);});boulderMesh.instanceMatrix.needsUpdate=true;boulderMesh.computeBoundingSphere();scene.add(boulderMesh);
  // Chairs, the camp table and the coconut computer.
  const furniture=createFurniture(scene,{bark,wood},block,registry);
- addCampRulesSign(scene, walkSolids, { bark, wood, rope, foliage }, blade);
- const updateEditorLayout=layout=>{const boxes=boundsCollision(registry.collisionBoxes(layout),groundHeight),fixtures=registry.fixtureCollision(layout,groundHeight);editorBlocks=(...args)=>boxes(...args)||fixtures(...args);applyCampRecords(campRecords(layout,CAMP_DEFAULTS));};
+ addCampRulesSign(scene, walkSolids, { bark, wood, rope, foliage }, blade, registry);
+ const updateEditorLayout=layout=>{const boxes=boundsCollision(registry.collisionBoxes(layout),groundHeight),fixtures=registry.fixtureCollision(layout,groundHeight);editorBlocks=(...args)=>boxes(...args)||fixtures(...args);applyCampRecords(campRecords(layout,CAMP_DEFAULTS));applyPondRecords(layout);applyHammockRecord(layout);};
  updateEditorLayout({objects:[]});
  return { registry, setEditorLayout:updateEditorLayout, walkSolids, block, setRope, pondScenery, setTrackingTarget, setComputer:furniture.setComputer, resetRopes(){for(const i of ROPE_TREES)setRope(i,null);}, update(dt,daylight,rain=0){waterRain.value=rain;pondScenery.update(dt);furniture.update(dt,daylight);waterTime.value+=dt;waterLight.value=daylight;foliage.emissiveIntensity=.05+daylight*.3;} };
 }

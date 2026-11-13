@@ -1,3 +1,4 @@
+import {hammock,hammockPoint} from './hammock.js';
 import * as THREE from 'three';
 import { groundHeight } from './world-state.js';
 import { inPond, nearestWalkable, visitorEyeHeight, walkStep } from './island-collision.js';
@@ -151,9 +152,10 @@ export function createVisitorControls(camera, canvas, isModalOpen, scene, walkSo
   function positionPatchView(position, dt, snap = false, inHammock = false) {
     if (inHammock) {
       // Look through the gap between the banana trees at the sleeping area.
-      destination.set(position.x + .4, groundHeight(position.x, position.z) + 2.8, position.z + 3.6);
+      const [viewX,viewZ]=hammockPoint(.4,3.6);
+      destination.set(viewX,(hammock.floor??groundHeight(hammock.x,hammock.z))+2.8,viewZ);
       patchView.position.copy(destination);
-      patchView.lookAt(position.x, groundHeight(position.x, position.z) + 1.32, position.z);
+      patchView.lookAt(hammock.x,(hammock.floor??groundHeight(hammock.x,hammock.z))+1.32,hammock.z);
       return;
     }
     target.copy(position);

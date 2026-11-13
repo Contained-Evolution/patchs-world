@@ -2,9 +2,9 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { ISLAND, pondStairs, stairPoint, stairTread, vinePoint } from './terrain.js';
-import { pondSwings } from './pond-swings.js';
+import { pondSwings, POND_SWING_BASE, POND_SWING_DEFINITIONS } from './pond-swings.js';
 
-export function addPondScenery(scene, ropeMaterial) {
+export function addPondScenery(scene, ropeMaterial, registry) {
  const group=new THREE.Group();
  group.name='Swimming hole rope swings';
  scene.add(group);
@@ -14,34 +14,30 @@ export function addPondScenery(scene, ropeMaterial) {
   fig:load('assets/pond-fig.glb'),
   palm:load('assets/camp/palm.glb')
  };
- for(const swing of pondSwings){
+ const roots=POND_SWING_BASE.map((swing,index)=>{
+  const root=new THREE.Group();
+  if(registry)registry.object(POND_SWING_DEFINITIONS[index],root);
+  else{root.position.set(swing.x,swing.y,swing.z);root.rotation.y=swing.heading-Math.PI/2;scene.add(root);}
   templates[swing.model].then(({scene:tree})=>{
-   const root=new THREE.Group(),lean=new THREE.Group(),model=tree.clone();
-   root.position.set(swing.x,swing.y,swing.z);
-   root.rotation.y=swing.heading-Math.PI/2;
-   lean.rotation.z=-swing.tilt;
-   model.scale.setScalar(swing.scale);
-   model.position.y=-swing.bottom*swing.scale;
-   root.add(lean);
-   lean.add(model);
-   group.add(root);
+   const lean=new THREE.Group(),model=tree.clone();lean.rotation.z=-swing.tilt;model.scale.setScalar(swing.scale);model.position.y=-swing.bottom*swing.scale;root.add(lean);lean.add(model);
   }).catch(error=>console.error('Unable to load swimming hole tree',error));
- }
+  return root;
+ });
  const ropeGeometry=new THREE.CylinderGeometry(.043,.052,1,8);
  const knotGeometry=new THREE.SphereGeometry(.084,9,7);
  const anchor=new THREE.Vector3(),tip=new THREE.Vector3(),direction=new THREE.Vector3(),up=new THREE.Vector3(0,1,0);
- const lines=pondSwings.map(swing=>{
+ const lines=pondSwings.map((swing,index)=>{
   const line=new THREE.Mesh(ropeGeometry,ropeMaterial);
   const tie=new THREE.Mesh(knotGeometry,ropeMaterial);
-  tie.position.set(...swing.anchor);
+  tie.position.copy(roots[index].worldToLocal(new THREE.Vector3(...swing.anchor)));
   tie.scale.set(1.6,1.1,1.6);
-  group.add(line,tie);
+  roots[index].add(line,tie);
   return line;
  });
  function moveRope(index,end=pondSwings[index].start){
   const line=lines[index];
-  anchor.set(...pondSwings[index].anchor);
-  tip.set(...end);
+  anchor.copy(roots[index].worldToLocal(new THREE.Vector3(...pondSwings[index].anchor)));
+  tip.copy(roots[index].worldToLocal(new THREE.Vector3(...end)));
   direction.subVectors(tip,anchor);
   line.position.copy(anchor).lerp(tip,.5);
   line.scale.y=direction.length();
@@ -71,6 +67,7 @@ export function addPondScenery(scene, ropeMaterial) {
    splash.visible=true;
   },
   update(dt){
+   lines.forEach((_,index)=>{if(index!==active)moveRope(index);});
    if(!splash.visible)return;
    splashAge+=dt;
    splash.scale.setScalar(.5+splashAge*3.2);

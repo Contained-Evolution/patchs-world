@@ -61,7 +61,7 @@ function paintBoard(context, title, rules) {
   }
 }
 
-export function addCampRulesSign(scene, solids, { bark, wood, rope, foliage }, blade) {
+export function addCampRulesSign(scene, solids, { bark, wood, rope, foliage }, blade, registry) {
   const sign = new THREE.Group();
   sign.name = 'Camp rules sign';
   sign.position.set(3.9, groundHeight(3.9, 6) - .32, 6);
@@ -123,5 +123,6 @@ export function addCampRulesSign(scene, solids, { bark, wood, rope, foliage }, b
   sign.updateMatrixWorld();
   const left = sign.localToWorld(new THREE.Vector3(-2.2, 0, 0));
   const right = sign.localToWorld(new THREE.Vector3(2.2, 0, 0));
-  solids.log(left.x, left.z, right.x, right.z, .25);
+  if(registry)registry.object({id:'base:camp-sign',asset:'base:camp-sign',name:'Camp rules sign',position:sign.position.toArray(),rotation:sign.rotation.toArray().slice(0,3),scale:sign.scale.toArray(),fixture:false},sign);
+  else solids.log(left.x,left.z,right.x,right.z,.25);
 }

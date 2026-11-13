@@ -12,7 +12,7 @@ import { setupIslandCameras } from './island-cameras.js';
 import { setupIslandMap } from './island-map.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { sampleState } from '../../shared/state.js';
-import { hammock } from './hammock.js';
+import { hammock, hammockPoint } from './hammock.js';
 import { createIslandAudio } from './island-audio.js';
 import { createIsland } from './island.js';
 import { setupCommunity } from './community.js';
@@ -744,8 +744,9 @@ if(riverRide&&!ropeExit){
   if(descent){descent.elapsed+=dt;const f=Math.min(1,descent.elapsed/2);patch.position.y=THREE.MathUtils.lerp(descent.start,descent.ground,f);clip='fall';heldGrip=null;if(f===1)descent=null;}
   if(sleeping){
     if(place==='hammock'){
-      patch.rotation.y=0;
-      patch.position.set(hammock.x,groundHeight(hammock.x,hammock.z)+hammock.sidePose,hammock.z+hammock.sleepOffsetZ);
+      patch.rotation.y=hammock.heading;
+      const [sleepX,sleepZ]=hammockPoint(0,hammock.sleepOffsetZ);
+      patch.position.set(sleepX,(hammock.floor??groundHeight(hammock.x,hammock.z))+hammock.sidePose,sleepZ);
     } else {
       patch.rotation.y=0;
       patch.position.set(goal[0],groundHeight(...goal),goal[1]);

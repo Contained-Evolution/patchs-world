@@ -8,5 +8,5 @@ globalThis.DOMMatrix=class {scale(){return this;}};
 globalThis.document={baseURI:'http://localhost/',createElement:()=>canvas,querySelector:()=>({textContent:'Patch’s World'}),querySelectorAll:()=>[],fonts:{ready:Promise.resolve(),load:()=>Promise.resolve()}};
 THREE.TextureLoader.prototype.load=()=>new THREE.Texture();GLTFLoader.prototype.load=()=>{};
 const {registry}=createIsland(new THREE.Scene(),true);
-const entries=[...registry.entries.values()].map(e=>({...e.base,bounds:e.bounds}));
+const entries=[...registry.entries.values()].map(e=>({...e.base,bounds:e.bounds,fixture:!!e.fixture,...(e.fixture?{colliders:e.colliders}:{})}));
 await writeFile('shared/editor/baseline.json',JSON.stringify(entries)+'\n');

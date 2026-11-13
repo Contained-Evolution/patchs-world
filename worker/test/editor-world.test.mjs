@@ -15,3 +15,10 @@ test('functional fixtures can be moved independently and published at grounded p
  await assert.rejects(()=>store.validate({...emptyLayout(),objects:[{id:tent.id,deleted:true}]}),/delet/i);
  await assert.rejects(()=>store.validate({...emptyLayout(),objects:[{...pc,scale:[2,2,2]}]}),/original size/);
 });
+test('sign and connected GLB structures can publish, while swings aimed away from water are rejected',async()=>{
+ const {POND_SWING_DEFINITIONS}=await import('../../world/src/pond-swings.js');const {HAMMOCK_DEFINITION}=await import('../../world/src/hammock.js');const baseline=(await import('../../shared/editor/baseline.json',{with:{type:'json'}})).default;
+ await store.validate({...emptyLayout(),objects:[baseline.find(b=>b.id==='base:camp-sign')]});
+ await store.validate({...emptyLayout(),objects:[HAMMOCK_DEFINITION]});
+ for(const definition of POND_SWING_DEFINITIONS)await store.validate({...emptyLayout(),objects:[definition]});
+ const wrong={...POND_SWING_DEFINITIONS[0],rotation:[0,POND_SWING_DEFINITIONS[0].rotation[1]+Math.PI,0]};await assert.rejects(()=>store.validate({...emptyLayout(),objects:[wrong]}),/bank|aim|pond/i);
+});

@@ -4,11 +4,14 @@ import {transformedBounds} from '../../../shared/editor/model.mjs';
 export class WorldRegistry {
   constructor(scene) {this.scene=scene;this.entries=new Map();this.assetCache=new Map();this.added=new Map();}
   object(definition,root){
-    const {id,name,bounds,colliders,...rest}=definition;
+    const {id,name,colliders,fixture=true,...rest}=definition;
+    let bounds=definition.bounds;
+    delete rest.bounds;
+    if(!bounds){root.updateMatrixWorld(true);const inverse=root.matrixWorld.clone().invert(),box=new THREE.Box3();root.traverse(child=>{if(child.isMesh){child.geometry.computeBoundingBox();box.union(child.geometry.boundingBox.clone().applyMatrix4(inverse.clone().multiply(child.matrixWorld)));}});bounds=[box.min.toArray(),box.max.toArray()];}
     root.userData.editorId=id;root.name=name;
     root.position.fromArray(definition.position);root.rotation.set(...definition.rotation);root.scale.fromArray(definition.scale);
     if(!root.parent)this.scene.add(root);
-    const entry={id,name,root,base:{id,name,...rest},bounds,colliders,parts:[],fixture:true};
+    const entry={id,name,root,base:{id,name,...rest},bounds,colliders,parts:[],fixture,object:true};
     this.entries.set(id,entry);return entry;
   }
   fixtureCollision(layout,height){
@@ -27,6 +30,7 @@ export class WorldRegistry {
   }
   cloneBuiltin(id) {
     const entry=this.entries.get(id);if(!entry)throw new Error('Unknown built-in scenery.');if(entry.fixture)throw new Error('Working fixtures cannot be duplicated.');
+    if(entry.object){const clone=entry.root.clone(true);clone.position.set(0,0,0);clone.rotation.set(0,0,0);clone.scale.set(1,1,1);clone.visible=true;clone.updateMatrixWorld(true);return clone;}
     const root=new THREE.Group(),inverse=new THREE.Matrix4().makeTranslation(...entry.base.position.map(n=>-n));
     for(const part of entry.parts){const mesh=new THREE.Mesh(part.mesh.geometry,part.mesh.material);mesh.matrixAutoUpdate=false;mesh.matrix.copy(inverse.clone().multiply(part.matrix));root.add(mesh);}
     root.userData.collisionBounds=entry.bounds;return root;
@@ -39,6 +43,7 @@ export class WorldRegistry {
     const inverse=new THREE.Matrix4().makeTranslation(...entry.base.position.map(n=>-n));
     const delta=root.matrixWorld.clone().multiply(inverse),zero=new THREE.Matrix4().makeScale(0,0,0);
     for(const p of entry.parts){p.mesh.setMatrixAt(p.index,r.deleted?zero:delta.clone().multiply(p.matrix));p.mesh.instanceMatrix.needsUpdate=true;p.mesh.computeBoundingSphere();}
+    root.visible=!r.deleted;
     entry.deleted=!!r.deleted;
   }
   record(entry) {return {...entry.base,position:entry.root.position.toArray(),rotation:entry.root.rotation.toArray().slice(0,3),scale:entry.root.scale.toArray()};}

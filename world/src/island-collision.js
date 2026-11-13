@@ -80,13 +80,15 @@ export function createIslandCollision(skipDecorative = false, skipCamp = false) 
     const radius = trunkRadius(tree);
     solids.ellipse(tree.x, tree.z, radius, radius);
   }
-  for (const {x,z,dx,dz,model,radius} of pondSwings) {
+  if(!skipCamp) for (const {x,z,dx,dz,model,radius} of pondSwings) {
     // The palms lean toward the water. Only the low trunk occupies walking height.
     const lean = model === 'palm' ? .5 : 0;
     solids.log(x,z,x+dx*lean,z+dz*lean,radius);
   }
+  if(!skipCamp){
   solids.ellipse(hammock.x, hammock.z, hammock.halfLength, hammock.halfWidth);
   for (const { x, z, baseRadius } of hammockSupports) solids.ellipse(x, z, baseRadius, baseRadius);
+  }
   for (const wall of CLIMB_WALLS) solids.wall(wall);
   const [x, z] = places.cave;
   solids.box(x - 7.3, z - 20, x - 5, z - 3);

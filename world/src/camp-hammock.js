@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { groundHeight } from './terrain.js';
-import { hammock, hammockSupports } from './hammock.js';
+import { HAMMOCK_SOURCE as hammock, HAMMOCK_SUPPORT_SOURCE as hammockSupports, HAMMOCK_DEFINITION } from './hammock.js';
 
 function lashCorner(group, corner, tree, tie, radii, material) {
  const toCorner = tree.worldToLocal(corner.clone()).sub(tie);
@@ -31,14 +31,17 @@ function lashCorner(group, corner, tree, tie, radii, material) {
  group.add(binding);
 }
 
-export async function addCampHammock(scene, rope) {
+export async function addCampHammock(scene, rope, registry) {
+ const root=new THREE.Group();
+ if(registry)registry.object(HAMMOCK_DEFINITION,root);
+ else{root.position.fromArray(HAMMOCK_DEFINITION.position);scene.add(root);}
  const loader = new GLTFLoader();
  const load = async name => (await loader.loadAsync(new URL(`assets/camp/${name}.glb`, document.baseURI).href)).scene;
  const [bed, palm, banana] = await Promise.all(['hammock', 'palm', 'banana'].map(load));
  const camp = new THREE.Group();
  camp.name = 'Camp hammock';
  const ground = groundHeight(hammock.x, hammock.z);
- bed.position.set(hammock.x, ground + hammock.modelHeight, hammock.z);
+ bed.position.set(0,hammock.modelHeight,0);
  bed.scale.setScalar(hammock.scale);
  camp.add(bed);
 
@@ -46,11 +49,11 @@ export async function addCampHammock(scene, rope) {
  for (const support of hammockSupports) {
   const tree = templates[support.model].clone();
   const { x, z, bottom, scale, heading, corner, tie, radius } = support;
-  tree.position.set(x, groundHeight(x, z) - bottom * scale - .025, z);
+  tree.position.set(x-hammock.x,groundHeight(x,z)-ground-bottom*scale-.025,z-hammock.z);
   tree.scale.setScalar(scale);
   tree.rotation.y = heading;
   camp.add(tree);
   lashCorner(camp, bed.localToWorld(new THREE.Vector3(...corner)), tree, new THREE.Vector3(...tie), radius, rope);
  }
- scene.add(camp);
+ root.add(camp);
 }
