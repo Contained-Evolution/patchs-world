@@ -9,26 +9,11 @@
 </head>
 <body>
   <main>
-    <header class="toolbar">
-      <a class="island" href="./">← Island</a>
-      <label>Volume <select id="volume" disabled><option>Loading…</option></select></label>
-      <label for="larger" class="size"><input id="larger" type="checkbox"> Larger text</label>
-    </header>
-    <button class="cover book" id="cover" type="button">
-      <span class="cover-kicker">Field journal</span>
-      <strong>Patch’s World</strong>
-      <span id="cover-month"></span>
-      <span class="open">Open journal <span aria-hidden="true">→</span></span>
-    </button>
-    <section class="paper book" id="reader" aria-label="Journal page" hidden>
-      <h1 id="date" tabindex="-1"></h1>
-      <div id="writing"></div>
-      <footer>
-        <button id="back" type="button">← Back</button>
-        <span id="page" aria-live="polite"></span>
-        <button id="next" type="button">Flip page →</button>
-      </footer>
-    </section>
+    <header class="top"><a class="island" href="./">← Island</a></header>
+    <div class="book" id="book">
+      <div id="stage"></div>
+      <div id="ruler" aria-hidden="true" inert></div>
+    </div>
     <p id="status" role="status"></p>
   </main>
   <script type="module" src="./journal.js"></script>

@@ -359,3 +359,7 @@ nav button[hidden]{display:none}
 @media (max-height:480px) { .hud { left:max(108px, calc(env(safe-area-inset-left) + 104px)); } .stream { height:80px; } }
 
 #camp-rules { display:grid; gap:.8em; max-width:42ch; padding-inline-start:1.35em; line-height:1.45; }
+#close-map { margin-left:auto; }
+/* The journal is a book that fills the dialog; it needs no title of its own. */
+dialog:has(#island-page[data-page="journal"]) :is(#island-menu-title, #page-title) { display:none; }
+#island-page[data-page="journal"] { height:min(46rem, calc(100dvh - 6.5rem)); border:0; background:transparent; }
