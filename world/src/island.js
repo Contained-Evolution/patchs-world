@@ -318,5 +318,5 @@ if (trackingPatch) {
  addCampRulesSign(scene, walkSolids, { bark, wood, rope, foliage }, blade, registry);
  const updateEditorLayout=layout=>{const boxes=boundsCollision(registry.collisionBoxes(layout),groundHeight),fixtures=registry.fixtureCollision(layout,groundHeight);editorBlocks=(...args)=>boxes(...args)||fixtures(...args);applyCampRecords(campRecords(layout,CAMP_DEFAULTS));applyPondRecords(layout);applyHammockRecord(layout);};
  updateEditorLayout({objects:[]});
- return { registry, setEditorLayout:updateEditorLayout, walkSolids, block, setRope, pondScenery, setTrackingTarget, setComputer:furniture.setComputer, resetRopes(){for(const i of ROPE_TREES)setRope(i,null);}, update(dt,daylight,rain=0){waterRain.value=rain;pondScenery.update(dt);furniture.update(dt,daylight);waterTime.value+=dt;waterLight.value=daylight;foliage.emissiveIntensity=.05+daylight*.3;} };
+ return { ballShelf: [5.2, hy + 1.415, 2], registry, setEditorLayout:updateEditorLayout, walkSolids, block, setRope, pondScenery, setTrackingTarget, setComputer:furniture.setComputer, resetRopes(){for(const i of ROPE_TREES)setRope(i,null);}, update(dt,daylight,rain=0){waterRain.value=rain;pondScenery.update(dt);furniture.update(dt,daylight);waterTime.value+=dt;waterLight.value=daylight;foliage.emissiveIntensity=.05+daylight*.3;} };
 }

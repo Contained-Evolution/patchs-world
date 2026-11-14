@@ -12,6 +12,7 @@ export const PLACES = ['hammock', 'shelves', 'computer', 'pond', 'banana-grove',
 // research and write: on his tablet anywhere (searching the web; writing his journal and memories), or typing when at the computer.
 export const ACTIONS = ['idle', 'walk', 'run', 'climb', 'swing', 'swim', 'fish', 'eat', 'sit', 'sleep', 'think', 'write', 'research', 'computer', 'wave', 'look', 'explore', 'watch-sky', 'archery', 'dance'];
 
+export const BALL_PLAY_DURATION = 12_000;
 export const GIFT_SOUND_DURATION = 8000;
 
 // Needs run from 0 (empty) to 1 (full).

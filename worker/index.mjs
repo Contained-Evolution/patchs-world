@@ -3,10 +3,10 @@ import { editorAPI } from './editor-api.mjs';
 // Patch's World Worker, reached through the company website service binding.
 
 import { DurableObject } from 'cloudflare:workers';
-import { GIFT_SOUND_DURATION } from '../shared/state.js';
+import { BALL_PLAY_DURATION, GIFT_SOUND_DURATION } from '../shared/state.js';
 import { advance, newBody, view, didSince, localMinutes } from './body.mjs';
 import { ponder, writeDiary, answerLetters, research, writeJournal, moderate, spend, overBudget, localDate, nextWake, allMemories, internetStatus } from './mind.mjs';
-import { giftView, useGift } from './gifts.mjs';
+import { campBalls, giftView, useGift } from './gifts.mjs';
 import { visitor, SIGN_IN } from './accounts.mjs';
 import { LIMITS, cleanText, freshLimits, checkLetter, checkPost, countLetter, countPost, pickLetters, postKey } from './letters.mjs';
 import { STARTING_CATEGORIES } from '../shared/memory.js';
@@ -165,6 +165,8 @@ export class PatchWorld extends DurableObject {
     result.patch.outfit = stored.get('outfit') || null;
     const sound = stored.get('giftSound');
     if (sound && now - sound.at < GIFT_SOUND_DURATION) result.patch.giftSound = sound;
+    const gifts = await this.ctx.storage.list({ prefix: 'gift:' });
+    result.patch.balls = campBalls([...gifts.values()], now);
     const speech = speechView(stored.get('speech'), now);
     result.patch.speech = speech;
     result.feed = feedFrom(stored.get('mind')?.thoughts);
@@ -187,6 +189,8 @@ export class PatchWorld extends DurableObject {
       return selected;
     });
     world.mind.gifts = selectedGifts.length ? [...(await this.ctx.storage.get(selectedGifts.map(id => `gift:${id}`))).values()] : [];
+    const ballEvents = () => this.ctx.storage.list({ prefix: `gift-event:${localDate(now)}:` });
+    world.mind.ballEvents = [...(await ballEvents()).values()];
     const startSpend = world.mind.spend?.total || 0;
     const people = stored.get('people') || {};
     const answered = [], replies = [], entries = [], spoken = [];
@@ -194,7 +198,7 @@ export class PatchWorld extends DurableObject {
     try {
       if (body.activity.action !== 'sleep') {
         const previousSearch = world.mind.wantSearch && await research(this.env, world, now);
-        const giftBody = { activity: { ...body.activity }, needs: body.needs };
+        const giftBody = { activity: { ...body.activity } };
         await ponder(this.env, { ...world, mail: (stored.get('unread') || []).length }, now);
         // What he says is queued with his voice instead of shown on the spot.
         if (body.activity.saysAt === now && body.activity.says) spoken.push({ text: body.activity.says, kind: 'says' });
@@ -202,8 +206,11 @@ export class PatchWorld extends DurableObject {
         delete body.activity.saysAt;
         const gift = world.mind.gifts.find(item => item.id === world.mind.giftChoice?.id);
         if (gift) {
-          const result = await this.applyGift(gift.id, world.mind.giftChoice.do, giftBody, now);
-          if (result) world.mind.thoughts = [...(world.mind.thoughts || []), { at: now, thought: result, says: null }].slice(-40);
+          const result = await this.applyGift(gift.id, world.mind.giftChoice.do, { ...giftBody, needs: body.needs }, now);
+          if (result) {
+            world.mind.thoughts = [...(world.mind.thoughts || []), { at: now, thought: result, says: null }].slice(-40);
+            world.mind.ballEvents = [...(await ballEvents()).values()];
+          }
         }
         if (!previousSearch) await research(this.env, world, now);
         const entry = await writeJournal(this.env, world, now);
@@ -237,6 +244,7 @@ export class PatchWorld extends DurableObject {
       console.error('Patch could not think:', error);
     }
     // New letters and filter costs may have arrived while he was thinking; keep them.
+    delete world.mind.ballEvents;
     delete world.mind.gifts;
     delete world.mind.giftChoice;
     delete world.mind.searchSpend;
@@ -417,6 +425,9 @@ export class PatchWorld extends DurableObject {
         if (gifts.offer?.status === 'waiting') return { status: 429, error: 'Your ball is already waiting for Patch.' };
         if (!giftView(gifts, day, now).canSendBall) return { status: 429, error: 'You can offer a replacement when your ball is worn.' };
         gifts.offer = { status: 'waiting' };
+        await txn.put(`gift-event:${day}:${now}:${id}:offered`, {
+          at: now, action: 'offered', item: 'ball', place: 'camp drop-off',
+        });
       }
       await txn.put({ [owner]: id, [key]: gifts, campGifts: [id, ...queue.filter(other => other !== id)] });
       return { status: 201, ...giftView(gifts, day, now), canOfferHoodie: who.admin };
@@ -433,9 +444,19 @@ export class PatchWorld extends DurableObject {
       const gifts = await txn.get(key);
       if (!gifts) return null;
       const copy = { activity: body.activity, needs: { ...body.needs } };
+      const priorBall = gifts.ball;
       const thought = useGift(gifts, action, copy, now);
       if (!thought) return null;
       if (action === 'wear') await txn.put('outfit', 'hoodie');
+      const confirmed = { keep: priorBall ? 'kept-old' : 'accepted', replace: 'replaced', play: 'played' }[action];
+      if (confirmed) {
+        const key = `gift-event:${localDate(now)}:${now}:${id}`;
+        await txn.put(`${key}:${confirmed}`, { at: now, action: confirmed, item: 'ball', place: body.activity.place });
+        if (confirmed !== 'kept-old') {
+          const at = confirmed === 'played' ? now + BALL_PLAY_DURATION : now;
+          await txn.put(`gift-event:${localDate(at)}:${at}:${id}:shelved`, { at, action: 'shelved', item: 'ball', place: 'shelves' });
+        }
+      }
       await txn.put({ [key]: gifts, giftSound: sound });
       return { thought, needs: copy.needs };
     });

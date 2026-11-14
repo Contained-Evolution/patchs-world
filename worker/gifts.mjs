@@ -1,3 +1,5 @@
+import { BALL_PLAY_DURATION } from '../shared/state.js';
+
 const DAY = 86_400_000;
 const CAMP = ['computer', 'shelves', 'hammock'];
 
@@ -23,15 +25,36 @@ export function giftView(gifts, day, now) {
   };
 }
 
+export function campBalls(records, now) {
+  return records.flatMap(({ offer, ball }) => {
+    const items = [];
+    if (offer?.status === 'waiting') items.push({ place: 'drop-off', wear: 0 });
+    if (ball) items.push({
+      place: 'shelves',
+      wear: ballWear(ball, now),
+      play: ball.play && now >= ball.play.at && now - ball.play.at < BALL_PLAY_DURATION ? ball.play : null,
+    });
+    return items;
+  });
+}
+
 export function giftNotes(gifts = [], now) {
   return gifts.map(({ id, meal, offer, ball, hoodie }) => {
     const options = [];
     if (hoodie?.status === 'waiting') options.push('a gray hoodie with PATCH on it, a gift from Chris. Put it on (wear)');
     if (meal?.status === 'waiting') options.push('a banana left for you (eat)');
     if (offer?.status === 'waiting') options.push(ball ? 'a new ball from the same visitor. Keep the old ball (keep) or take the new one (replace)' : 'a new ball to keep (keep)');
-    if (ball) options.push(`your ball, ${condition(ballWear(ball, now)).toLowerCase()} (play)`);
+    if (ball) {
+      const ready = now - (ball.lastPlayed || 0) >= 20 * 60_000;
+      options.push(`your ball on the rope shelf, ${condition(ballWear(ball, now)).toLowerCase()}${ready ? ' (play)' : ' (you just played with it; let it rest)'}`);
+    }
     return options.length ? `At camp (computer, shelves or hammock), gift ${id}: ${options.join('; ')}.` : '';
   }).filter(Boolean).join('\n');
+}
+
+export function canPlayBall(gifts, activity, now) {
+  return Boolean(gifts?.ball && !activity.target && CAMP.includes(activity.place)
+    && now - (gifts.ball.lastPlayed || 0) >= 20 * 60_000);
 }
 
 export function useGift(gifts, action, body, now) {
@@ -45,9 +68,10 @@ export function useGift(gifts, action, body, now) {
     body.needs.hunger = Math.min(1, body.needs.hunger + 0.24);
     return 'I ate a banana a visitor left for me at camp.';
   }
-  if (action === 'play' && gifts.ball && now - (gifts.ball.lastPlayed || 0) >= 20 * 60_000) {
+  if (action === 'play' && canPlayBall(gifts, body.activity, now)) {
     gifts.ball.plays += 1;
     gifts.ball.lastPlayed = now;
+    gifts.ball.play = { at: now, place: body.activity.place };
     const wear = ballWear(gifts.ball, now);
     body.needs.fun = Math.min(1, body.needs.fun + 0.2 - wear * 0.16);
     return wear >= 0.85 ? 'I played with my ball. It barely bounced!' : 'I bounced a ball a visitor gave me.';

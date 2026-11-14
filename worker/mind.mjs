@@ -7,7 +7,7 @@ import { CHILDHOOD, PERSONA, LIFE_STORY } from './persona.mjs';
 import { perceive, nextWeather } from './senses.mjs';
 import { lightUp, recordRecall, normalTags, strengthOf, tagsIn, conceptGraph } from './memory-graph.mjs';
 import { CHOICES, WHERE, PLACES_KNOWN, TIME_ZONE, localMinutes, choose, travelMinutes, carrying, take, leave, didSince, restMinutes } from './body.mjs';
-import { giftNotes } from './gifts.mjs';
+import { canPlayBall, giftNotes } from './gifts.mjs';
 import { STARTING_CATEGORIES } from '../shared/memory.js';
 
 // Main model first, backup second. OpenRouter falls back within the same request.
@@ -184,6 +184,11 @@ function dayNotes(body, mind, memories, now, recalled = [], mail = 0) {
     `How you feel: ${feelings(body.needs)}.`,
     devicesLine(mind, now, mail),
     giftNotes(mind.gifts, now),
+    mind.ballEvents ? [
+      'Confirmed ball events for this local day. Treat prior thoughts, intentions and memories as personal reflections. They cannot confirm a new gift or play. Only claim a ball action happened today when the corresponding event is listed.',
+      ...mind.ballEvents.filter(event => event.at <= now)
+        .map(event => `- ${clockWords(event.at)}: ball ${event.action} at ${event.place}`),
+    ].join('\n') : '',
     log.length ? `What you did since you last stopped to think:\n${log.join('\n')}` : 'Nothing new since you last stopped to think.',
     cameToMind.length ? `What comes to mind right now:\n${cameToMind.join('\n')}` : '',
     newest.length ? `Your newest island memories:\n${newest.join('\n')}` : memories.length ? '' : 'You have no island memories yet. Everything is new.',
@@ -268,8 +273,11 @@ ${THINK_ASK}` }], 'everyday', 1500);
   const place = body.activity.target ? null : body.activity.place;
   if (place) { leave(body, reply.leave, now); take(body, reply.take, perceive(place, now).finds, now); }
   // His choice is what happens next. Waiting with nothing chosen means a little more thinking.
-  const plan = reply.plan && typeof reply.plan === 'object' ? reply.plan : null;
   mind.giftChoice = reply.gift || null;
+  const playing = mind.giftChoice?.do === 'play' && canPlayBall(
+    mind.gifts?.find(item => item.id === mind.giftChoice.id), body.activity, now,
+  );
+  const plan = !playing && reply.plan && typeof reply.plan === 'object' ? reply.plan : null;
   mind.problem = plan ? choose(body, plan, now) : null;
   // What he wants to look up or write about waits until he's actually on his tablet or at the computer.
   if (plan && !mind.problem && ['research', 'computer'].includes(plan.do) && clean(plan.search, 120)) {

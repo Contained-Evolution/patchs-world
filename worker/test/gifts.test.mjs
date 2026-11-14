@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ballWear, giftView, useGift } from '../gifts.mjs';
+import { ballWear, campBalls, giftView, useGift } from '../gifts.mjs';
 
 const day = 86_400_000;
 const now = Date.UTC(2026, 10, 11, 14);
@@ -44,4 +44,19 @@ test('Patch can put on Chris’s hoodie once when he is at camp', () => {
   assert.equal(giftView(gifts, '2026-11-11', now).hoodie, 'worn');
   assert.equal(gifts.offer.status, 'waiting');
   assert.equal(useGift(gifts, 'wear', camp(), now), false);
+});
+
+test('only actual offers and kept balls show at camp, and play returns to the shelf', () => {
+  const gifts = { id: 'private', offer: { status: 'waiting' } };
+  assert.deepEqual(campBalls([gifts], now), [{ place: 'drop-off', wear: 0 }]);
+  assert.equal(useGift(gifts, 'play', camp(), now), false);
+  assert.ok(useGift(gifts, 'keep', camp(), now));
+  assert.deepEqual(campBalls([gifts], now), [{ place: 'shelves', wear: 0, play: null }]);
+  const body = camp();
+  assert.ok(useGift(gifts, 'play', body, now));
+  assert.equal(body.needs.fun, .4 + .2);
+  assert.equal(useGift(gifts, 'play', body, now + 1000), false);
+  assert.deepEqual(campBalls([gifts], now)[0].play, { at: now, place: 'computer' });
+  assert.equal(campBalls([gifts], now + 12_000)[0].play, null);
+  assert.equal(gifts.ball.plays, 1);
 });

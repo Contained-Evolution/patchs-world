@@ -15,6 +15,7 @@ import { sampleState } from '../../shared/state.js';
 import { hammock, hammockPoint } from './hammock.js';
 import { createIslandAudio } from './island-audio.js';
 import { createIsland } from './island.js';
+import { createCampBalls, activeBallPlay } from './camp-balls.js';
 import { setupCommunity } from './community.js';
 import { setupNotifications } from './notifications.js';
 import { registerApp } from './app.js';
@@ -71,6 +72,7 @@ const scene = new THREE.Scene();
 scene.fog = new THREE.Fog(0xadd9d4, 750, 1650);
 const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, .1, 12000);
 const scenery=createIsland(scene),solids=scenery.walkSolids;
+const campBalls=createCampBalls(scene,scenery.ballShelf);
 const loadEditorAsset=createAssetLoader('./','/api/editor');
 watchPublished('/api/editor',async layout=>{await scenery.registry.apply(layout,loadEditorAsset);scenery.setEditorLayout(layout);groundActivity=null;groundApproach=null;journey=null;roam=null;beats=null;inFurniture=false;});
 const soundSetting = $('#island-sound'), soundShortcut = $('#sound-shortcut');
@@ -801,6 +803,12 @@ if(dt>0)patchVelocity.subVectors(patch.position,previousPatchPosition).multiplyS
 if(currentAction&&strideSpeed[currentName]&&dt>0&&['walk','run','swing','swim','carry-walk','carry-jog','carry-run','happy-walk'].includes(currentName)){const speed=Math.hypot(patchVelocity.x,patchVelocity.z);currentAction.timeScale=speed>.05?THREE.MathUtils.clamp(speed/strideSpeed[currentName],.45,2.2):1;}
 if(patchModel)patchModel.position.set(0,0,seatShift);seatShift=0;
 interactions.reset();
+const ballPlay = activeBallPlay(state.patch.balls || [], serverNow, place, target);
+if (ballPlay && !reducedMotion.matches) {
+  const elapsed = (serverNow - ballPlay.at) / 1000;
+  if (elapsed < 1.2 || elapsed >= 10.8) poseClip('pick-fruit', Math.min(1.2, elapsed % 10.8));
+  else poseClip('pick-up', ((elapsed - 1.2) % .96) * (clips['pick-up']?.duration || 1) / .96);
+}
 if(mixer) mixer.update(dt);
 if(fishing)interactions.fish(fishing);
 if(meal)interactions.eat(meal,state.patch.food);
@@ -833,6 +841,7 @@ if(travel&&headBone&&['walk','happy-walk','run'].includes(currentName)&&Number.i
   const exposed=['beach','meadow','lookout'].includes(place)||['beach','meadow','lookout'].includes(target);
   headBone.rotateY(glance*(currentName==='run'||activityWeather==='storm'?.1:exposed?.26:.16));
 }
+campBalls.update(state.patch.balls || [], serverNow, patch, rightHandBone, place, target, reducedMotion.matches);
 patchMouth?.update(speech,timing,serverNow,action==='sleep',dt,talking?0:meal?.open);
 const caption=talking?captionAt(speech.text,timing,serverNow-Date.parse(speech.at)):'';$('#bubble').hidden=!caption;if($('#bubble').textContent!==caption)$('#bubble').textContent=caption;
 let day=Number.isFinite(state.clock.dayFraction)?state.clock.dayFraction:.5;let daylight=THREE.MathUtils.smoothstep(Math.sin((day-.25)*Math.PI*2),-.12,.2);let weather=state.clock.weather;let overcast=weather==='cloudy'||weather==='rain'||weather==='storm';sky.copy(skyNight).lerp(skyDay,daylight*(overcast?.65:1));updateSky(daylight);scene.background=skyTexture;scene.fog.color.copy(sky);hemi.intensity=1.25+daylight*(overcast?.4:1.15);sunLight.intensity=daylight*(overcast?.6:2.4)+(1-daylight)*.65;sunLight.color.copy(moonColor).lerp(sunColor,daylight);let angle=(day-.25)*Math.PI*2;sun.position.set(Math.cos(angle)*900,Math.sin(angle)*900,0);moon.position.copy(sun.position).multiplyScalar(-1);sunLight.position.copy(daylight>.05?sun.position:moon.position);stars.material.opacity=1-daylight;stars.visible=daylight<.98;clouds.forEach((c,i)=>{c.visible=overcast||i<5;c.position.x+=reducedMotion.matches?0:dt*.14;if(c.position.x>520)c.position.x=-520;});rain.visible=weather==='rain'||weather==='storm';
