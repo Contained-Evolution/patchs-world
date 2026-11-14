@@ -1,3 +1,4 @@
+import { journalMonths, journalVolume, validMonth } from './journal.mjs';
 import { editorStore } from './editor-world.mjs';
 import { editorAPI } from './editor-api.mjs';
 // Patch's World Worker, reached through the company website service binding.
@@ -361,6 +362,10 @@ export class PatchWorld extends DurableObject {
     }
   }
 
+  journalMonths() { return journalMonths(this.ctx.storage); }
+
+  journalVolume(month) { return journalVolume(this.ctx.storage, month); }
+
   async journal() {
     const mind = (await this.ctx.storage.get('mind')) || {};
     const diary = [...(await this.ctx.storage.list({ prefix: 'diary:', reverse: true, limit: 14 })).values()];
@@ -667,6 +672,14 @@ export default {
     if(path.startsWith('/api/editor/')) {
       let who;try{who=await visitor(request,env);}catch{return json({error:'Account check unavailable.'},503);}
       return editorAPI(request,env,path,patchOf(env),Boolean(who?.admin));
+    }
+    if (path === '/api/journal/archive') {
+      if (request.method !== 'GET') return json({ error: 'Method not allowed.' }, 405);
+      const patch = patchOf(env);
+      const month = url.searchParams.get('month');
+      if (month === null) return json({ months: await patch.journalMonths() });
+      if (!validMonth(month)) return json({ error: 'Choose a month in YYYY-MM format.' }, 400);
+      return json({ days: await patch.journalVolume(month) });
     }
     if (path === '/api/state' || path === '/api/journal' || path === '/api/memory') {
       if (request.method !== 'GET') return json({ error: 'Method not allowed.' }, 405);

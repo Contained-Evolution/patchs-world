@@ -14,7 +14,7 @@ await copyFile('editor.css','dist/editor.css');
 await build({ entryPoints: ['src/main.js'], bundle: true, format: 'esm', minify: true, outfile: 'dist/main.js', sourcemap: true });
 await build({ entryPoints: ['src/community-page.js'], bundle: true, format: 'esm', outfile: 'dist/community-page.js' });
 await build({ entryPoints: ['src/memory-galaxy.js'], bundle: true, format: 'esm', minify: true, outfile: 'dist/memory-galaxy.js' });
-for (const name of ['journal.html', 'journal.js', 'gifts.html', 'gifts.js', 'visits.css', 'memory.html', 'memory.css', 'index.html', 'community.html', 'community.css', 'style.css', 'Pangolin-Regular.ttf', 'manifest.webmanifest']) await copyFile(name, `dist/${name}`);
+for (const name of ['journal.html', 'journal.js', 'journal.css', 'gifts.html', 'gifts.js', 'visits.css', 'memory.html', 'memory.css', 'index.html', 'community.html', 'community.css', 'style.css', 'Pangolin-Regular.ttf', 'manifest.webmanifest']) await copyFile(name, `dist/${name}`);
 const islandScript = await readFile('dist/main.js');
 const captureScript = 'camera-' + createHash('sha256').update(islandScript).digest('hex').slice(0, 12) + '.js';
 await writeFile('dist/' + captureScript, islandScript);
